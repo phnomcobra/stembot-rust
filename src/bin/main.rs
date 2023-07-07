@@ -1,12 +1,23 @@
 use actix_web::{http::Error, rt::spawn, web, App, HttpRequest, HttpResponse, HttpServer, Result};
+use aes::Aes256;
 use base64::{engine::general_purpose as b64engine, Engine as _};
 use clokwerk::{AsyncScheduler, Interval::Seconds};
+use eax::{
+    aead::{generic_array::GenericArray, Aead, KeyInit, OsRng},
+    AeadInPlace, Eax, Nonce,
+};
 use futures_util::StreamExt;
-use reqwest::{Client, StatusCode, header::{HeaderValue, HeaderName}};
-use std::{time::Duration, str::FromStr};
+use rand::{distributions::Slice, Rng};
+use reqwest::{
+    header::{HeaderName, HeaderValue},
+    Client, StatusCode,
+};
+use std::{str::FromStr, time::Duration};
 use tokio::time::sleep;
 
 use stembot_rust::{config::Configuration, init_logger};
+
+pub type Aes256Eax = Eax<Aes256>;
 
 async fn schedule_test() {
     log::info!("scheduler test");
@@ -23,12 +34,24 @@ async fn http_request_test() {
 
     let client = Client::new();
     let body = String::from("http request body");
-    let b64_request_body = b64engine::STANDARD.encode(body);
+
+    let key = GenericArray::from_slice(configuration.secret.as_bytes());
+    let cipher = Aes256Eax::new(&key);
+
+    let nonce = rand::random::<[u8; 32]>();
+
+    let nonce_array = GenericArray::from_slice(&nonce);
+    let mut ciphertext = vec![];
+    let tag = cipher
+        .encrypt_in_place_detached(nonce_array, body.as_bytes(), &mut ciphertext)
+        .expect("encryption failure!");
+    let b64_request_body = b64engine::STANDARD.encode(ciphertext);
 
     match client
         .post(url)
         .body(b64_request_body)
-        .header("headerkey", "headervalue")
+        .header("Nonce", b64engine::STANDARD.encode(nonce))
+        .header("Tag", b64engine::STANDARD.encode(tag))
         .send()
         .await
     {
@@ -44,9 +67,7 @@ async fn http_request_test() {
                     let response_b64body = response.bytes().await.unwrap();
                     let response_body = b64engine::STANDARD.decode(response_b64body).unwrap();
 
-
                     log::info!("{}", String::from_utf8_lossy(&response_body));
-                    
                 }
                 _ => log::error!("http request test...error"),
             }
@@ -75,13 +96,13 @@ async fn index(mut payload: web::Payload, request: HttpRequest) -> Result<HttpRe
     log::info!("{}", String::from_utf8_lossy(&request_body));
 
     // Processing message
-    let response_string = String::from("response body"); 
+    let response_string = String::from("response body");
     let response_body = response_string.as_bytes();
 
     let response_b64body = b64engine::STANDARD.encode(response_body);
 
     let mut http_response = HttpResponse::Ok().body(response_b64body);
-    
+
     // Response headers
     let http_response_headers = http_response.headers_mut();
     http_response_headers.append(

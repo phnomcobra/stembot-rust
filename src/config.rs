@@ -9,6 +9,9 @@ use toml::de::Error;
 pub struct Configuration {
     pub secret: String,
     pub id: String,
+    pub host: String,
+    pub port: u16,
+    pub endpoint: String,
 }
 
 #[derive(Parser, Clone, Debug, Deserialize)]

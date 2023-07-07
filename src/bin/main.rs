@@ -1,8 +1,9 @@
-use actix_web::{http::Error, rt::spawn, web, App, HttpResponse, HttpServer, Result};
+use actix_web::{http::Error, rt::spawn, web, App, HttpRequest, HttpResponse, HttpServer, Result};
+use base64::{engine::general_purpose as b64engine, Engine as _};
 use clokwerk::{AsyncScheduler, Interval::Seconds};
 use futures_util::StreamExt;
-use reqwest::{Client, StatusCode};
-use std::time::Duration;
+use reqwest::{Client, StatusCode, header::{HeaderValue, HeaderName}};
+use std::{time::Duration, str::FromStr};
 use tokio::time::sleep;
 
 use stembot_rust::{config::Configuration, init_logger};
@@ -14,29 +15,39 @@ async fn schedule_test() {
 async fn http_request_test() {
     let configuration = Configuration::new_from_cli();
 
+    // Harden this to filter out empty tokens between the host and endpoint
     let url = format!(
         "http://{}:{}{}",
         configuration.host, configuration.port, configuration.endpoint
     );
 
     let client = Client::new();
+    let body = String::from("http request body");
+    let b64_request_body = b64engine::STANDARD.encode(body);
 
     match client
         .post(url)
-        .body("request test")
+        .body(b64_request_body)
         .header("headerkey", "headervalue")
         .send()
         .await
     {
         Ok(response) => {
             log::info!("{:?}", response);
-            
+
             match response.status() {
                 StatusCode::OK => {
                     log::info!("http request test...ok");
-                    let bytes = response.bytes().await.unwrap();
-                    log::info!("{}", String::from_utf8_lossy(&bytes))
-                },
+                    let header_value = response.headers().get("headerkey").unwrap();
+                    log::info!("HEADERKEY: {}", header_value.to_str().unwrap());
+
+                    let response_b64body = response.bytes().await.unwrap();
+                    let response_body = b64engine::STANDARD.decode(response_b64body).unwrap();
+
+
+                    log::info!("{}", String::from_utf8_lossy(&response_body));
+                    
+                }
                 _ => log::error!("http request test...error"),
             }
         }
@@ -47,16 +58,38 @@ async fn http_request_test() {
     }
 }
 
-async fn index(mut payload: web::Payload) -> Result<HttpResponse, Error> {
-    let mut body = web::BytesMut::new();
+// async fn index(mut payload: web::Payload) -> Result<HttpResponse, Error> {
+async fn index(mut payload: web::Payload, request: HttpRequest) -> Result<HttpResponse, Error> {
+    let header_key_value = request.headers().get("headerkey").unwrap();
+    log::info!("HEADERKEY: {}", header_key_value.to_str().unwrap());
+
+    let mut request_b64body = web::BytesMut::new();
 
     while let Some(chunk) = payload.next().await {
         let chunk = chunk?;
 
-        body.extend_from_slice(&chunk);
+        request_b64body.extend_from_slice(&chunk);
     }
 
-    Ok(HttpResponse::Ok().body(body))
+    let request_body = b64engine::STANDARD.decode(request_b64body).unwrap();
+    log::info!("{}", String::from_utf8_lossy(&request_body));
+
+    // Processing message
+    let response_string = String::from("response body"); 
+    let response_body = response_string.as_bytes();
+
+    let response_b64body = b64engine::STANDARD.encode(response_body);
+
+    let mut http_response = HttpResponse::Ok().body(response_b64body);
+    
+    // Response headers
+    let http_response_headers = http_response.headers_mut();
+    http_response_headers.append(
+        HeaderName::from_str("headerkey").unwrap(),
+        HeaderValue::from_str("headervalue").unwrap(),
+    );
+
+    Ok(http_response)
 }
 
 #[actix_web::main]

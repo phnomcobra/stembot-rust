@@ -1,23 +1,13 @@
 use actix_web::{http::Error, rt::spawn, web, App, HttpRequest, HttpResponse, HttpServer, Result};
-use aes::Aes256;
 use base64::{engine::general_purpose as b64engine, Engine as _};
 use clokwerk::{AsyncScheduler, Interval::Seconds};
-use eax::{
-    aead::{generic_array::GenericArray, Aead, KeyInit, OsRng},
-    AeadInPlace, Eax, Nonce,
-};
+
 use futures_util::StreamExt;
-use rand::{distributions::Slice, Rng};
-use reqwest::{
-    header::{HeaderName, HeaderValue},
-    Client, StatusCode,
-};
+use reqwest::{header::HeaderName, Client, StatusCode};
 use std::{str::FromStr, time::Duration};
 use tokio::time::sleep;
 
 use stembot_rust::{config::Configuration, init_logger};
-
-pub type Aes256Eax = Eax<Aes256>;
 
 async fn schedule_test() {
     log::info!("scheduler test");
@@ -35,20 +25,10 @@ async fn http_request_test() {
     let client = Client::new();
     let body = String::from("http request body");
 
-    let key = GenericArray::from_slice(configuration.secret.as_bytes());
-    let cipher = Aes256Eax::new(&key);
-
     let nonce = rand::random::<[u8; 32]>();
+    let tag = rand::random::<[u8; 32]>();
 
-    let nonce_array = GenericArray::from_slice(&nonce);
-    let mut buffer = vec![];
-    buffer.extend(body.as_bytes());
-
-    let tag = cipher
-        .encrypt_in_place_detached(nonce_array, b"", &mut buffer)
-        .expect("encryption failure!");
-
-    let b64_request_body = b64engine::STANDARD.encode(buffer);
+    let b64_request_body = b64engine::STANDARD.encode(&body);
 
     match client
         .post(url)
@@ -64,8 +44,6 @@ async fn http_request_test() {
             match response.status() {
                 StatusCode::OK => {
                     log::info!("http request test...ok");
-                    let header_value = response.headers().get("headerkey").unwrap();
-                    log::info!("HEADERKEY: {}", header_value.to_str().unwrap());
 
                     let response_b64body = response.bytes().await.unwrap();
                     let response_body = b64engine::STANDARD.decode(response_b64body).unwrap();
@@ -82,10 +60,9 @@ async fn http_request_test() {
     }
 }
 
-// async fn index(mut payload: web::Payload) -> Result<HttpResponse, Error> {
 async fn index(mut payload: web::Payload, request: HttpRequest) -> Result<HttpResponse, Error> {
-    let header_key_value = request.headers().get("headerkey").unwrap();
-    log::info!("HEADERKEY: {}", header_key_value.to_str().unwrap());
+    let nonce = request.headers().get("Nonce").unwrap();
+    let tag = request.headers().get("Tag").unwrap();
 
     let mut request_b64body = web::BytesMut::new();
 
@@ -108,10 +85,10 @@ async fn index(mut payload: web::Payload, request: HttpRequest) -> Result<HttpRe
 
     // Response headers
     let http_response_headers = http_response.headers_mut();
-    http_response_headers.append(
-        HeaderName::from_str("headerkey").unwrap(),
-        HeaderValue::from_str("headervalue").unwrap(),
-    );
+
+    http_response_headers.append(HeaderName::from_str("Tag").unwrap(), tag.clone());
+
+    http_response_headers.append(HeaderName::from_str("Nonce").unwrap(), nonce.clone());
 
     Ok(http_response)
 }

@@ -41,11 +41,14 @@ async fn http_request_test() {
     let nonce = rand::random::<[u8; 32]>();
 
     let nonce_array = GenericArray::from_slice(&nonce);
-    let mut ciphertext = vec![];
+    let mut buffer = vec![];
+    buffer.extend(body.as_bytes());
+
     let tag = cipher
-        .encrypt_in_place_detached(nonce_array, body.as_bytes(), &mut ciphertext)
+        .encrypt_in_place_detached(nonce_array, b"", &mut buffer)
         .expect("encryption failure!");
-    let b64_request_body = b64engine::STANDARD.encode(ciphertext);
+
+    let b64_request_body = b64engine::STANDARD.encode(buffer);
 
     match client
         .post(url)

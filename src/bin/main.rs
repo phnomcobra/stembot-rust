@@ -3,9 +3,14 @@ use base64::{engine::general_purpose as b64engine, Engine as _};
 use clokwerk::{AsyncScheduler, Interval::Seconds};
 
 use futures_util::StreamExt;
-use reqwest::{header::HeaderName, Client, StatusCode};
+use reqwest::{
+    header::{HeaderName, HeaderValue},
+    Client, StatusCode,
+};
 use std::{str::FromStr, time::Duration};
 use tokio::time::sleep;
+
+use magic_crypt::{new_magic_crypt, MagicCryptTrait};
 
 use stembot_rust::{config::Configuration, init_logger};
 
@@ -25,16 +30,21 @@ async fn http_request_test() {
     let client = Client::new();
     let body = String::from("http request body");
 
-    let nonce = rand::random::<[u8; 32]>();
-    let tag = rand::random::<[u8; 32]>();
+    let mut nonce = b64engine::STANDARD.encode(rand::random::<[u8; 32]>());
 
-    let b64_request_body = b64engine::STANDARD.encode(&body);
+    let mut cipher = new_magic_crypt!(&configuration.secret, 256, &nonce);
+
+    let mut tag = b64engine::STANDARD.encode(rand::random::<[u8; 32]>());
+
+    let body_as_bytes = body.as_bytes();
+
+    let b64_request_body = cipher.encrypt_bytes_to_base64(body_as_bytes);
 
     match client
         .post(url)
         .body(b64_request_body)
-        .header("Nonce", b64engine::STANDARD.encode(nonce))
-        .header("Tag", b64engine::STANDARD.encode(tag))
+        .header("Nonce", nonce)
+        .header("Tag", tag)
         .send()
         .await
     {
@@ -45,8 +55,18 @@ async fn http_request_test() {
                 StatusCode::OK => {
                     log::info!("http request test...ok");
 
+                    nonce =
+                        String::from(response.headers().get("Nonce").unwrap().to_str().unwrap());
+                    tag = String::from(response.headers().get("Tag").unwrap().to_str().unwrap());
+
+                    cipher = new_magic_crypt!(&configuration.secret, 256, &nonce);
+
                     let response_b64body = response.bytes().await.unwrap();
-                    let response_body = b64engine::STANDARD.decode(response_b64body).unwrap();
+                    let response_body = cipher
+                        .decrypt_base64_to_bytes(
+                            String::from_utf8(response_b64body.to_vec()).unwrap(),
+                        )
+                        .unwrap();
 
                     log::info!("{}", String::from_utf8_lossy(&response_body));
                 }
@@ -61,34 +81,62 @@ async fn http_request_test() {
 }
 
 async fn index(mut payload: web::Payload, request: HttpRequest) -> Result<HttpResponse, Error> {
-    let nonce = request.headers().get("Nonce").unwrap();
-    let tag = request.headers().get("Tag").unwrap();
+    let configuration = Configuration::new_from_cli();
 
-    let mut request_b64body = web::BytesMut::new();
+    let mut nonce = request
+        .headers()
+        .get("Nonce")
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
+    let mut tag = request
+        .headers()
+        .get("Tag")
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
+
+    let mut cipher = new_magic_crypt!(&configuration.secret, 256, &nonce);
+
+    let mut request_body_as_bytes = web::BytesMut::new();
 
     while let Some(chunk) = payload.next().await {
         let chunk = chunk?;
 
-        request_b64body.extend_from_slice(&chunk);
+        request_body_as_bytes.extend_from_slice(&chunk);
     }
+    let request_body = String::from_utf8(request_body_as_bytes.as_ref().to_vec()).unwrap();
 
-    let request_body = b64engine::STANDARD.decode(request_b64body).unwrap();
+    let request_body = cipher.decrypt_base64_to_bytes(request_body).unwrap();
     log::info!("{}", String::from_utf8_lossy(&request_body));
+
+    nonce = b64engine::STANDARD.encode(rand::random::<[u8; 32]>());
+    tag = b64engine::STANDARD.encode(rand::random::<[u8; 32]>());
+
+    cipher = new_magic_crypt!(&configuration.secret, 256, &nonce);
 
     // Processing message
     let response_string = String::from("response body");
     let response_body = response_string.as_bytes();
 
-    let response_b64body = b64engine::STANDARD.encode(response_body);
+    let response_b64body = cipher.encrypt_bytes_to_base64(response_body);
 
     let mut http_response = HttpResponse::Ok().body(response_b64body);
 
     // Response headers
     let http_response_headers = http_response.headers_mut();
 
-    http_response_headers.append(HeaderName::from_str("Tag").unwrap(), tag.clone());
+    http_response_headers.append(
+        HeaderName::from_str("Tag").unwrap(),
+        HeaderValue::from_str(&tag).unwrap(),
+    );
 
-    http_response_headers.append(HeaderName::from_str("Nonce").unwrap(), nonce.clone());
+    http_response_headers.append(
+        HeaderName::from_str("Nonce").unwrap(),
+        HeaderValue::from_str(&nonce).unwrap(),
+    );
 
     Ok(http_response)
 }

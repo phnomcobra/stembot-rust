@@ -20,3 +20,4 @@ url = "2.3.0"
 futures-util = { version = "0.3.17", default-features = false, features = ["std"] }
 base64 = { version = "0.21.2", features = ["std", "alloc"] }
 rand = "0.8.5"
+magic-crypt = "3.1.12"

@@ -1,11 +1,15 @@
+use std::error::Error;
+
 use reqwest::{Client, StatusCode};
 
 use magic_crypt::{new_magic_crypt, MagicCryptTrait};
 
 use crate::config::Configuration;
 
-pub async fn send_message() {
+pub async fn send_message<T: Into<Vec<u8>>>(message: T) -> Result<Vec<u8>, Box<dyn Error>> {
     let configuration = Configuration::new_from_cli();
+
+    let body_as_bytes: Vec<u8> = message.into();
 
     // Harden this to filter out empty tokens between the host and endpoint
     let url = format!(
@@ -14,17 +18,14 @@ pub async fn send_message() {
     );
 
     let client = Client::new();
-    let body = String::from("http request body");
 
     let mut nonce = sha256::digest(rand::random::<[u8; 32]>().as_ref());
 
     let mut cipher = new_magic_crypt!(&configuration.secret, 256, &nonce);
 
-    let body_as_bytes = body.as_bytes();
+    let mut tag = sha256::digest(body_as_bytes.as_slice());
 
-    let mut tag = sha256::digest(body_as_bytes);
-
-    let b64_request_body = cipher.encrypt_bytes_to_base64(body_as_bytes);
+    let b64_request_body = cipher.encrypt_bytes_to_base64(body_as_bytes.as_slice());
 
     match client
         .post(url)
@@ -34,36 +35,32 @@ pub async fn send_message() {
         .send()
         .await
     {
-        Ok(response) => {
-            log::info!("{:?}", response);
+        Ok(response) => match response.status() {
+            StatusCode::OK => {
+                nonce = String::from(response.headers().get("Nonce").unwrap().to_str().unwrap());
+                tag = String::from(response.headers().get("Tag").unwrap().to_str().unwrap());
 
-            match response.status() {
-                StatusCode::OK => {
-                    log::info!("http request test...ok");
+                cipher = new_magic_crypt!(&configuration.secret, 256, &nonce);
 
-                    nonce =
-                        String::from(response.headers().get("Nonce").unwrap().to_str().unwrap());
-                    tag = String::from(response.headers().get("Tag").unwrap().to_str().unwrap());
+                let response_b64body = response.bytes().await.unwrap();
+                let response_body = cipher
+                    .decrypt_base64_to_bytes(String::from_utf8(response_b64body.to_vec()).unwrap())
+                    .unwrap();
 
-                    cipher = new_magic_crypt!(&configuration.secret, 256, &nonce);
+                assert_eq!(tag, sha256::digest(response_body.as_slice()));
 
-                    let response_b64body = response.bytes().await.unwrap();
-                    let response_body = cipher
-                        .decrypt_base64_to_bytes(
-                            String::from_utf8(response_b64body.to_vec()).unwrap(),
-                        )
-                        .unwrap();
-
-                    assert_eq!(tag, sha256::digest(response_body.as_slice()));
-
-                    log::info!("{}", String::from_utf8_lossy(&response_body));
-                }
-                _ => log::error!("http request test...error"),
+                Ok(response_body)
             }
-        }
+            _ => {
+                let error_str = format!("HTTP Status: {}", response.status());
+                log::error!("{}", &error_str);
+                Err(error_str.into())
+            }
+        },
         Err(error) => {
-            log::error!("http request test...error");
-            log::error!("{:?}", error);
+            let error_str = format!("HTTP Failure: {}", error);
+            log::error!("{}", &error_str);
+            Err(error_str.into())
         }
     }
 }

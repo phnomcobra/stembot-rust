@@ -11,7 +11,11 @@ use stembot_rust::{
 };
 
 async fn schedule_send_test() {
-    send_message().await;
+    let message_to_send = String::from("request body");
+    match send_message(message_to_send).await {
+        Ok(message_received) => log::info!("{}", String::from_utf8_lossy(&message_received)),
+        Err(error) => log::error!("{}", error),
+    }
 }
 
 #[actix_web::main]

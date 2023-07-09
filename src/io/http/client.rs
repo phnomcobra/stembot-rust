@@ -37,30 +37,46 @@ pub async fn send_message<T: Into<Vec<u8>>>(message: T) -> Result<Vec<u8>, Box<d
     {
         Ok(response) => match response.status() {
             StatusCode::OK => {
-                nonce = String::from(response.headers().get("Nonce").unwrap().to_str().unwrap());
-                tag = String::from(response.headers().get("Tag").unwrap().to_str().unwrap());
+                nonce = String::from(
+                    response
+                        .headers()
+                        .get("Nonce")
+                        .expect("nonce missing from response header")
+                        .to_str()
+                        .expect("failed to read nonce from response header"),
+                );
+                tag = String::from(
+                    response
+                        .headers()
+                        .get("Tag")
+                        .expect("tag missing from response header")
+                        .to_str()
+                        .expect("failed to read tag from response header"),
+                );
 
                 cipher = new_magic_crypt!(&configuration.secret, 256, &nonce);
 
-                let response_b64body = response.bytes().await.unwrap();
+                let response_b64body = response
+                    .bytes()
+                    .await
+                    .expect("failed to receive http response body");
                 let response_body = cipher
-                    .decrypt_base64_to_bytes(String::from_utf8(response_b64body.to_vec()).unwrap())
-                    .unwrap();
+                    .decrypt_base64_to_bytes(
+                        String::from_utf8(response_b64body.to_vec())
+                            .expect("failed to read http response body"),
+                    )
+                    .expect("failed to decrypt http response body");
 
-                assert_eq!(tag, sha256::digest(response_body.as_slice()));
+                assert_eq!(
+                    tag,
+                    sha256::digest(response_body.as_slice()),
+                    "http response body digest mismatch"
+                );
 
                 Ok(response_body)
             }
-            _ => {
-                let error_str = format!("HTTP Status: {}", response.status());
-                log::error!("{}", &error_str);
-                Err(error_str.into())
-            }
+            _ => Err(format!("HTTP Status: {}", response.status()).into()),
         },
-        Err(error) => {
-            let error_str = format!("HTTP Failure: {}", error);
-            log::error!("{}", &error_str);
-            Err(error_str.into())
-        }
+        Err(error) => Err(format!("HTTP Failure: {}", error).into()),
     }
 }

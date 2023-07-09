@@ -34,9 +34,9 @@ async fn http_request_test() {
 
     let mut cipher = new_magic_crypt!(&configuration.secret, 256, &nonce);
 
-    let mut tag = b64engine::STANDARD.encode(rand::random::<[u8; 32]>());
-
     let body_as_bytes = body.as_bytes();
+
+    let mut tag = b64engine::STANDARD.encode(sha256::digest(body_as_bytes));
 
     let b64_request_body = cipher.encrypt_bytes_to_base64(body_as_bytes);
 
@@ -67,6 +67,8 @@ async fn http_request_test() {
                             String::from_utf8(response_b64body.to_vec()).unwrap(),
                         )
                         .unwrap();
+
+                    assert_eq!(tag, sha256::digest(response_body.as_slice()));
 
                     log::info!("{}", String::from_utf8_lossy(&response_body));
                 }

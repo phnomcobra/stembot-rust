@@ -3,6 +3,7 @@ use log::LevelFilter;
 use std::{io::Write, thread};
 
 pub mod config;
+pub mod io;
 
 pub fn init_logger() {
     env_logger::builder()

@@ -1,5 +1,4 @@
 use actix_web::{http::Error, rt::spawn, web, App, HttpRequest, HttpResponse, HttpServer, Result};
-use base64::{engine::general_purpose as b64engine, Engine as _};
 use clokwerk::{AsyncScheduler, Interval::Seconds};
 
 use futures_util::StreamExt;
@@ -30,13 +29,13 @@ async fn http_request_test() {
     let client = Client::new();
     let body = String::from("http request body");
 
-    let mut nonce = b64engine::STANDARD.encode(rand::random::<[u8; 32]>());
+    let mut nonce = sha256::digest(rand::random::<[u8; 32]>().as_ref());
 
     let mut cipher = new_magic_crypt!(&configuration.secret, 256, &nonce);
 
     let body_as_bytes = body.as_bytes();
 
-    let mut tag = b64engine::STANDARD.encode(sha256::digest(body_as_bytes));
+    let mut tag = sha256::digest(body_as_bytes);
 
     let b64_request_body = cipher.encrypt_bytes_to_base64(body_as_bytes);
 
@@ -112,16 +111,20 @@ async fn index(mut payload: web::Payload, request: HttpRequest) -> Result<HttpRe
     let request_body = String::from_utf8(request_body_as_bytes.as_ref().to_vec()).unwrap();
 
     let request_body = cipher.decrypt_base64_to_bytes(request_body).unwrap();
+
+    assert_eq!(tag, sha256::digest(request_body.as_slice()));
+
     log::info!("{}", String::from_utf8_lossy(&request_body));
 
-    nonce = b64engine::STANDARD.encode(rand::random::<[u8; 32]>());
-    tag = b64engine::STANDARD.encode(rand::random::<[u8; 32]>());
+    nonce = sha256::digest(rand::random::<[u8; 32]>().as_ref());
 
     cipher = new_magic_crypt!(&configuration.secret, 256, &nonce);
 
     // Processing message
     let response_string = String::from("response body");
     let response_body = response_string.as_bytes();
+
+    tag = sha256::digest(response_body);
 
     let response_b64body = cipher.encrypt_bytes_to_base64(response_body);
 

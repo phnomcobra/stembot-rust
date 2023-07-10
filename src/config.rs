@@ -6,12 +6,21 @@ use toml::de::Error;
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct Peer {
+    pub url: String,
+    pub polling: bool,
+}
+
+#[allow(clippy::struct_excessive_bools)]
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Configuration {
     pub secret: String,
     pub id: String,
     pub host: String,
     pub port: u16,
     pub endpoint: String,
+    pub peer: Vec<Peer>,
 }
 
 #[derive(Parser, Clone, Debug, Deserialize)]

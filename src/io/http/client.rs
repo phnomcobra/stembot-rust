@@ -25,7 +25,8 @@ pub async fn send_message<T: Into<Vec<u8>>>(message: T) -> Result<Vec<u8>, Box<d
 
     let tag_string = sha256::digest(unencrypted_request_body.as_slice());
 
-    let encrypted_request_body = cipher.encrypt_bytes_to_base64(unencrypted_request_body.as_slice());
+    let encrypted_request_body =
+        cipher.encrypt_bytes_to_base64(unencrypted_request_body.as_slice());
 
     match client
         .post(url)
@@ -57,29 +58,28 @@ pub async fn send_message<T: Into<Vec<u8>>>(message: T) -> Result<Vec<u8>, Box<d
                     Err(_) => return Err("failed to read tag from response header".into()),
                 };
 
-                let encrypted_response_body_bytes = match response
-                    .bytes()
-                    .await {
-                        Ok(bytes) => bytes.to_vec(),
-                        Err(_) => return Err("failed to receive encrypted http response body".into()),
-                    };
-
-                let encrypted_response_body_string = match String::from_utf8(encrypted_response_body_bytes) {
-                    Ok(string) => string,
-                    Err(_) => return Err("failed to read encrypted response body".into()),
+                let encrypted_response_body_bytes = match response.bytes().await {
+                    Ok(bytes) => bytes.to_vec(),
+                    Err(_) => return Err("failed to receive encrypted http response body".into()),
                 };
+
+                let encrypted_response_body_string =
+                    match String::from_utf8(encrypted_response_body_bytes) {
+                        Ok(string) => string,
+                        Err(_) => return Err("failed to read encrypted response body".into()),
+                    };
 
                 let cipher = new_magic_crypt!(&configuration.secret, 256, &nonce_string);
 
-                let decrypted_response_body = match cipher
-                    .decrypt_base64_to_bytes(encrypted_response_body_string) {
+                let decrypted_response_body =
+                    match cipher.decrypt_base64_to_bytes(encrypted_response_body_string) {
                         Ok(bytes) => bytes,
-                        Err(_) => return Err("failed to decrypt http response body".into())
+                        Err(_) => return Err("failed to decrypt http response body".into()),
                     };
 
                 match tag_string == sha256::digest(decrypted_response_body.as_slice()) {
                     true => Ok(decrypted_response_body),
-                    false => Err("http response body digest mismatch".into()),
+                    false => return Err("http response body digest mismatch".into()),
                 }
             }
             _ => Err(format!("HTTP Status: {}", response.status()).into()),

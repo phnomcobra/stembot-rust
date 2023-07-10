@@ -1,5 +1,6 @@
 use actix_web::{rt::spawn, web, App, HttpServer, Result};
 use clokwerk::{AsyncScheduler, Interval::Seconds};
+use tracing_actix_web::TracingLogger;
 
 use std::time::Duration;
 use tokio::time::sleep;
@@ -11,7 +12,7 @@ use stembot_rust::{
 };
 
 async fn schedule_send_test() {
-    let message_to_send = String::from("request body");
+    let message_to_send = String::from("test message as a string");
     match send_message(message_to_send).await {
         Ok(message_received) => log::info!("{}", String::from_utf8_lossy(&message_received)),
         Err(error) => log::error!("{}", error),
@@ -48,7 +49,11 @@ async fn main() -> Result<(), std::io::Error> {
     HttpServer::new({
         let configuration = configuration.clone();
 
-        move || App::new().route(&configuration.endpoint, web::post().to(message_handler))
+        move || {
+            App::new()
+                .wrap(TracingLogger::default())
+                .route(&configuration.endpoint, web::post().to(message_handler))
+        }
     })
     .bind((configuration.host, configuration.port))?
     .run()

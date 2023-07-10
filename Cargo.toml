@@ -17,7 +17,7 @@ serde = { version = "1.0.150", features = ["derive"] }
 tokio = { version = "1.23.0", features = ["full"] }
 toml = "0.5.9"
 url = "2.3.0"
-futures-util = { version = "0.3.17", default-features = false, features = ["std"] }
 rand = "0.8.5"
 magic-crypt = "3.1.12"
 sha256 = "1.1.4"
+tracing-actix-web = "0.7.5"

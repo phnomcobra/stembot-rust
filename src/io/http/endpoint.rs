@@ -1,77 +1,87 @@
-use actix_web::{http::Error, web, HttpRequest, HttpResponse, Result};
-use futures_util::StreamExt;
+use actix_web::{web, HttpRequest, HttpResponse, Result};
 use reqwest::header::{HeaderName, HeaderValue};
-use std::str::FromStr;
+use std::error::Error;
 
 use magic_crypt::{new_magic_crypt, MagicCryptTrait};
 
 use crate::config::Configuration;
 
 pub async fn message_handler(
-    mut payload: web::Payload,
+    encrypted_request_body_bytes: web::Bytes,
     request: HttpRequest,
-) -> Result<HttpResponse, Error> {
+) -> Result<HttpResponse, Box<dyn Error>> {
     let configuration = Configuration::new_from_cli();
 
-    let mut nonce = request
-        .headers()
-        .get("Nonce")
-        .unwrap()
-        .to_str()
-        .unwrap()
-        .to_string();
+    let request_nonce_header_value: &HeaderValue = match request.headers().get("Nonce") {
+        Some(value) => value,
+        None => return Err("nonce missing from request headers".into()),
+    };
 
-    let mut tag = request
-        .headers()
-        .get("Tag")
-        .unwrap()
-        .to_str()
-        .unwrap()
-        .to_string();
+    let request_nonce_string = match request_nonce_header_value.to_str() {
+        Ok(value) => String::from(value),
+        Err(_) => return Err("failed to read nonce from request header".into()),
+    };
 
-    let mut cipher = new_magic_crypt!(&configuration.secret, 256, &nonce);
+    let request_tag_header_value = match request.headers().get("Tag") {
+        Some(value) => value,
+        None => return Err("tag missing from request headers".into()),
+    };
 
-    let mut request_body_as_bytes = web::BytesMut::new();
+    let request_tag_string = match request_tag_header_value.to_str() {
+        Ok(value) => String::from(value),
+        Err(_) => return Err("failed to read tag from request header".into()),
+    };
 
-    while let Some(chunk) = payload.next().await {
-        let chunk = chunk?;
+    let request_cipher = new_magic_crypt!(&configuration.secret, 256, &request_nonce_string);
 
-        request_body_as_bytes.extend_from_slice(&chunk);
-    }
-    let request_body = String::from_utf8(request_body_as_bytes.as_ref().to_vec()).unwrap();
+    let encrypted_request_body_string =
+        match String::from_utf8(encrypted_request_body_bytes.to_vec()) {
+            Ok(bytes) => bytes,
+            Err(_) => return Err("failed to read encrypted request body".into()),
+        };
 
-    let request_body = cipher.decrypt_base64_to_bytes(request_body).unwrap();
-
-    assert_eq!(tag, sha256::digest(request_body.as_slice()));
-
-    log::info!("{}", String::from_utf8_lossy(&request_body));
-
-    nonce = sha256::digest(rand::random::<[u8; 32]>().as_ref());
-
-    cipher = new_magic_crypt!(&configuration.secret, 256, &nonce);
+    let decrypted_request_body =
+        match request_cipher.decrypt_base64_to_bytes(encrypted_request_body_string) {
+            Ok(bytes) => bytes,
+            Err(_) => return Err("failed to decrypt http request body".into()),
+        };
 
     // Processing message
-    let response_string = String::from("response body");
-    let response_body = response_string.as_bytes();
+    let decrypted_response_body_bytes =
+        match request_tag_string == sha256::digest(decrypted_request_body.as_slice()) {
+            true => {
+                // Function call to actually process a body goes here
+                decrypted_request_body.clone().to_ascii_uppercase()
+            }
+            false => return Err("http request body digest mismatch".into()),
+        };
 
-    tag = sha256::digest(response_body);
+    let response_nonce_string = sha256::digest(rand::random::<[u8; 32]>().as_ref());
 
-    let response_b64body = cipher.encrypt_bytes_to_base64(response_body);
+    let response_nonce_header = match HeaderValue::from_str(&response_nonce_string) {
+        Ok(header) => header,
+        Err(_) => return Err("failed to instantiate response header value for nonce".into()),
+    };
 
-    let mut http_response = HttpResponse::Ok().body(response_b64body);
+    let response_cipher = new_magic_crypt!(&configuration.secret, 256, &response_nonce_string);
 
-    // Response headers
+    let response_tag_string = sha256::digest(decrypted_response_body_bytes.as_slice());
+
+    let response_tag_header = match HeaderValue::from_str(&response_tag_string) {
+        Ok(header) => header,
+        Err(_) => return Err("failed to instantiate response header value for tag".into()),
+    };
+
+    let encrypted_response_body_string =
+        response_cipher.encrypt_bytes_to_base64(&decrypted_response_body_bytes);
+
+    let mut http_response = HttpResponse::Ok().body(encrypted_response_body_string);
+
     let http_response_headers = http_response.headers_mut();
 
-    http_response_headers.append(
-        HeaderName::from_str("Tag").unwrap(),
-        HeaderValue::from_str(&tag).unwrap(),
-    );
+    http_response_headers.append(HeaderName::from_static("tag"), response_tag_header);
 
-    http_response_headers.append(
-        HeaderName::from_str("Nonce").unwrap(),
-        HeaderValue::from_str(&nonce).unwrap(),
-    );
+    http_response_headers.append(HeaderName::from_static("nonce"), response_nonce_header);
 
     Ok(http_response)
 }

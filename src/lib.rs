@@ -4,6 +4,8 @@ use std::{io::Write, thread};
 
 pub mod config;
 pub mod io;
+pub mod message;
+pub mod routing;
 
 pub fn init_logger() {
     env_logger::builder()

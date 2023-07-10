@@ -1,0 +1,9 @@
+secret="01234567890123456789012345678901"
+id="id0"
+host="0.0.0.0"
+port=8080
+endpoint="/"
+
+[peer.0]
+url="http://0.0.0.0:8081/"
+polling=false

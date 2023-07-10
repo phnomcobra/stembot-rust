@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use clap::Parser;
 use serde::Deserialize;
 
@@ -20,7 +22,7 @@ pub struct Configuration {
     pub host: String,
     pub port: u16,
     pub endpoint: String,
-    pub peer: Vec<Peer>,
+    pub peer: HashMap<String, Peer>,
 }
 
 #[derive(Parser, Clone, Debug, Deserialize)]

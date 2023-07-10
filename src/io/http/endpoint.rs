@@ -51,7 +51,7 @@ pub async fn message_handler(
         match request_tag_string == sha256::digest(decrypted_request_body.as_slice()) {
             true => {
                 // Function call to actually process a body goes here
-                decrypted_request_body.clone().to_ascii_uppercase()
+                decrypted_request_body.to_ascii_uppercase()
             }
             false => return Err("http request body digest mismatch".into()),
         };

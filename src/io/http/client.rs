@@ -79,7 +79,7 @@ pub async fn send_message<T: Into<Vec<u8>>>(message: T) -> Result<Vec<u8>, Box<d
 
                 match tag_string == sha256::digest(decrypted_response_body.as_slice()) {
                     true => Ok(decrypted_response_body),
-                    false => return Err("http response body digest mismatch".into()),
+                    false => Err("http response body digest mismatch".into()),
                 }
             }
             _ => Err(format!("HTTP Status: {}", response.status()).into()),

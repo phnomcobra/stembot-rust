@@ -4,7 +4,7 @@ use std::error::Error;
 
 use magic_crypt::{new_magic_crypt, MagicCryptTrait};
 
-use crate::config::Configuration;
+use crate::{config::Configuration, processor::process_message_collection};
 
 pub async fn message_handler(
     encrypted_request_body_bytes: web::Bytes,
@@ -45,15 +45,13 @@ pub async fn message_handler(
             Err(_) => return Err("failed to decrypt http request body".into()),
         };
 
-    // Processing message
-    let decrypted_response_body_bytes =
-        match request_tag_string == sha256::digest(decrypted_request_body.as_slice()) {
-            true => {
-                // Function call to actually process a body goes here
-                decrypted_request_body
-            }
-            false => return Err("http request body digest mismatch".into()),
-        };
+    let decrypted_response_body_bytes: Vec<u8> = match request_tag_string
+        == sha256::digest(decrypted_request_body.as_slice())
+    {
+        true => process_message_collection(decrypted_request_body, configuration.get_ref().clone())
+            .into(),
+        false => return Err("http request body digest mismatch".into()),
+    };
 
     let response_nonce_string = sha256::digest(rand::random::<[u8; 32]>().as_ref());
 

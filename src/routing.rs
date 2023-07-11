@@ -25,4 +25,3 @@ pub struct Peer {
 pub struct PeerTable {
     pub peers: Vec<Peer>,
 }
-

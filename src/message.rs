@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crate::routing::Route;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct RouteAdvertisement {
@@ -7,21 +7,14 @@ pub struct RouteAdvertisement {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub enum MessageType {
+pub enum Message {
     RouteAdvertisement(RouteAdvertisement),
     Ping,
     Pong,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct Message {
-    pub destination_id: Option<String>,
-    pub origin_id: String,
-    pub message: MessageType,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct MessageCollection {
     pub messages: Vec<Message>,
-    pub origin_id: String,         
+    pub origin_id: String,
 }

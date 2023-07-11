@@ -6,16 +6,16 @@ use magic_crypt::{new_magic_crypt, MagicCryptTrait};
 
 use crate::config::Configuration;
 
-pub async fn send_message<T: Into<Vec<u8>>>(message: T) -> Result<Vec<u8>, Box<dyn Error>> {
-    let configuration = Configuration::new_from_cli();
+pub async fn send_message<T: Into<Vec<u8>>, U: Into<String>, V: Into<Configuration>>(
+    message: T,
+    url: U,
+    configuration: V,
+) -> Result<Vec<u8>, Box<dyn Error>> {
+    let configuration = configuration.into();
 
     let unencrypted_request_body: Vec<u8> = message.into();
 
-    // Harden this to filter out empty tokens between the host and endpoint
-    let url = format!(
-        "http://{}:{}{}",
-        configuration.host, configuration.port, configuration.endpoint
-    );
+    let url = url.into();
 
     let client = Client::new();
 

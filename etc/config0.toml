@@ -5,5 +5,5 @@ port=8080
 endpoint="/"
 
 [peer.0]
-url="http://0.0.0.0:8081/"
+url="http://0.0.0.0:8080/"
 polling=false

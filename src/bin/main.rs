@@ -9,13 +9,32 @@ use stembot_rust::{
     config::Configuration,
     init_logger,
     io::http::{client::send_message, endpoint::message_handler},
+    message::{Message, MessageCollection},
 };
 
-async fn schedule_send_test() {
-    let message_to_send = String::from("test message as a string");
-    match send_message(message_to_send).await {
-        Ok(message_received) => log::info!("{}", String::from_utf8_lossy(&message_received)),
-        Err(error) => log::error!("{}", error),
+async fn advertise(configuration: Configuration) {
+    for peer in configuration.clone().peer.into_values() {
+        let configuration = configuration.clone();
+
+        let message = Message::Ping;
+        let message_collection = MessageCollection {
+            messages: vec![message],
+            origin_id: configuration.id.clone(),
+        };
+
+        match send_message(
+            bincode::serialize(&message_collection).unwrap(),
+            peer.url,
+            configuration,
+        )
+        .await
+        {
+            Ok(bytes) => {
+                let message_collection: MessageCollection = bincode::deserialize(&bytes).unwrap();
+                log::info!("{:?}", message_collection);
+            }
+            Err(error) => log::error!("{}", error),
+        };
     }
 }
 
@@ -35,7 +54,10 @@ async fn main() -> Result<(), std::io::Error> {
 
     let mut scheduler = AsyncScheduler::new();
 
-    scheduler.every(Seconds(1)).run(schedule_send_test);
+    scheduler.every(Seconds(1)).run({
+        let configuration = configuration.clone();
+        move || advertise(configuration.clone())
+    });
 
     log::info!("Starting scheduler...");
     spawn(async move {
@@ -52,6 +74,7 @@ async fn main() -> Result<(), std::io::Error> {
         move || {
             App::new()
                 .wrap(TracingLogger::default())
+                .app_data(web::Data::new(configuration.clone()))
                 .route(&configuration.endpoint, web::post().to(message_handler))
         }
     })

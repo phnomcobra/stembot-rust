@@ -8,10 +8,9 @@ use crate::config::Configuration;
 
 pub async fn message_handler(
     encrypted_request_body_bytes: web::Bytes,
+    configuration: web::Data<Configuration>,
     request: HttpRequest,
 ) -> Result<HttpResponse, Box<dyn Error>> {
-    let configuration = Configuration::new_from_cli();
-
     let request_nonce_header_value: &HeaderValue = match request.headers().get("Nonce") {
         Some(value) => value,
         None => return Err("nonce missing from request headers".into()),
@@ -51,7 +50,7 @@ pub async fn message_handler(
         match request_tag_string == sha256::digest(decrypted_request_body.as_slice()) {
             true => {
                 // Function call to actually process a body goes here
-                decrypted_request_body.to_ascii_uppercase()
+                decrypted_request_body
             }
             false => return Err("http request body digest mismatch".into()),
         };

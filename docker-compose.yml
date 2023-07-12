@@ -1,0 +1,48 @@
+version: "3"
+
+services:
+  bot0:
+    image: rust:latest
+    volumes:
+      - ./:/src
+    command:
+      - bash
+      - -c
+      - |
+        set -e
+        mkdir -p /app
+        cp -rf /src/* /app/
+        cd /app
+        cargo run --bin bot -- --config-path /app/etc/config-docker-bot0.toml
+    ports:
+      - "8080:8080"
+  bot1:
+    image: rust:latest
+    volumes:
+      - ./:/src
+    command:
+      - bash
+      - -c
+      - |
+        set -e
+        mkdir -p /app
+        cp -rf /src/* /app/
+        cd /app
+        cargo run --bin bot -- --config-path /app/etc/config-docker-bot1.toml
+    ports:
+      - "8081:8080"
+  bot2:
+    image: rust:latest
+    volumes:
+      - ./:/src
+    command:
+      - bash
+      - -c
+      - |
+        set -e
+        mkdir -p /app
+        cp -rf /src/* /app/
+        cd /app
+        cargo run --bin bot -- --config-path /app/etc/config-docker-bot2.toml
+    ports:
+      - "8082:8080"

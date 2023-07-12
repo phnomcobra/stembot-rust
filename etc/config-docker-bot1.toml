@@ -1,0 +1,13 @@
+secret="01234567890123456789012345678901"
+id="docker-bot1"
+host="0.0.0.0"
+port=8080
+endpoint="/"
+
+[peer.docker-bot0]
+url="http://bot0:8080/"
+polling=false
+
+[peer.docker-bot2]
+url="http://bot2:8080/"
+polling=false

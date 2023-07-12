@@ -19,7 +19,7 @@ use stembot_rust::{
 async fn advertise(configuration: Configuration, peering_table: Arc<RwLock<Vec<Peer>>>) {
     let mut local_peering_table = peering_table.read().unwrap().clone();
 
-    for peer in local_peering_table.iter_mut() {
+    for peer in local_peering_table.iter_mut().filter(|x| x.url.is_some()) {
         let configuration = configuration.clone();
 
         let message = Message::Ping;
@@ -30,7 +30,7 @@ async fn advertise(configuration: Configuration, peering_table: Arc<RwLock<Vec<P
 
         match send_message(
             bincode::serialize(&message_collection).unwrap(),
-            peer.url.clone(),
+            peer.url.as_ref().unwrap(),
             configuration,
         )
         .await

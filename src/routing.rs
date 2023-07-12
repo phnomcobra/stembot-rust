@@ -17,7 +17,7 @@ pub struct RouteTable {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Peer {
     pub id: Option<String>,
-    pub url: String,
+    pub url: Option<String>,
     pub polling: bool,
 }
 

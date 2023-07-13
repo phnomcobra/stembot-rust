@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     config::Configuration,
-    message::{send_message_collection_to_url, Message, MessageCollection},
+    message::{send_message_collection_to_url, Message, MessageCollection, RouteAdvertisement},
 };
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -40,11 +40,14 @@ pub async fn advertise(
     routing_table: Arc<RwLock<Vec<Route>>>,
 ) {
     let mut local_peering_table = peering_table.read().unwrap().clone();
+    let static_peering_table = peering_table.read().unwrap().clone();
 
     for peer in local_peering_table.iter_mut().filter(|x| x.url.is_some()) {
         let configuration = configuration.clone();
 
-        let message = Message::Ping;
+        let message = Message::RouteAdvertisement(RouteAdvertisement::from_peers(
+            static_peering_table.clone(),
+        ));
         let message_collection = MessageCollection {
             messages: vec![message],
             origin_id: configuration.id.clone(),
@@ -65,6 +68,49 @@ pub async fn advertise(
     let mut shared_peering_table = peering_table.write().unwrap();
     shared_peering_table.clear();
     shared_peering_table.append(&mut local_peering_table);
+}
+
+impl RouteAdvertisement {
+    pub fn default() -> Self {
+        Self { routes: vec![] }
+    }
+
+    pub fn from_peers<T: Into<Vec<Peer>>>(peers: T) -> Self {
+        let peers = peers.into();
+
+        let mut advertisement = Self::default();
+
+        for peer in peers.iter() {
+            let id = match &peer.id {
+                Some(id) => id.clone(),
+                None => continue,
+            };
+
+            advertisement.routes.push(Route {
+                destination_id: id.clone(),
+                gateway_id: id,
+                weight: 0,
+            })
+        }
+
+        advertisement
+    }
+
+    pub fn from_routes<T: Into<Vec<Route>>>(routes: T) -> Self {
+        let routes = routes.into();
+
+        let mut advertisement = Self::default();
+
+        for route in routes.iter() {
+            advertisement.routes.push(Route {
+                destination_id: route.destination_id.clone(),
+                gateway_id: route.gateway_id.clone(),
+                weight: &route.weight + 1,
+            })
+        }
+
+        advertisement
+    }
 }
 
 pub fn initialize_peers(configuration: Configuration, peering_table: Arc<RwLock<Vec<Peer>>>) {

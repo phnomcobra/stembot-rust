@@ -1,12 +1,13 @@
 use std::error::Error;
 
-use reqwest::{Client, StatusCode};
+use reqwest::Client;
+use reqwest::StatusCode;
 
 use magic_crypt::{new_magic_crypt, MagicCryptTrait};
 
 use crate::config::Configuration;
 
-pub async fn send_message<T: Into<Vec<u8>>, U: Into<String>, V: Into<Configuration>>(
+pub async fn send_raw_message<T: Into<Vec<u8>>, U: Into<String>, V: Into<Configuration>>(
     message: T,
     url: U,
     configuration: V,

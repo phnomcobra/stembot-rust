@@ -1,7 +1,6 @@
-use std::error::Error;
-
-use crate::routing::Route;
+use crate::{config::Configuration, io::http::client::send_raw_message, routing::Route};
 use serde::{Deserialize, Serialize};
+use std::error::Error;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct RouteAdvertisement {
@@ -40,5 +39,31 @@ impl TryInto<Vec<u8>> for MessageCollection {
             Ok(bytes) => Ok(bytes),
             Err(_) => Err("failed to serialize message collection".into()),
         }
+    }
+}
+
+pub async fn send_message_collection_to_url<U: Into<String>, V: Into<Configuration>>(
+    outgoing_message_collection: MessageCollection,
+    url: U,
+    configuration: V,
+) -> Result<MessageCollection, Box<dyn Error>> {
+    let url = url.into();
+    let configuration = configuration.into();
+
+    let outgoing_message_bytes: Vec<u8> = match outgoing_message_collection.try_into() {
+        Ok(collection) => collection,
+        Err(error) => return Err(error.into()),
+    };
+
+    match send_raw_message(outgoing_message_bytes, url, configuration).await {
+        Ok(bytes) => {
+            let incoming_message_collection: MessageCollection = match bytes.try_into() {
+                Ok(collection) => collection,
+                Err(error) => return Err(error.into()),
+            };
+
+            Ok(incoming_message_collection)
+        }
+        Err(error) => Err(error),
     }
 }

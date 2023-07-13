@@ -2,7 +2,8 @@ version: "3"
 
 services:
   bot0:
-    image: rust:latest
+    build:
+      dockerfile: ./Dockerfile
     volumes:
       - ./:/src
     command:
@@ -11,13 +12,14 @@ services:
       - |
         set -e
         mkdir -p /app
-        cp -rf /src/* /app/
+        rsync -a --exclude 'target' /src/* /app/
         cd /app
         cargo run --bin bot -- --config-path /app/etc/config-docker-bot0.toml
     ports:
       - "8080:8080"
   bot1:
-    image: rust:latest
+    build:
+      dockerfile: ./Dockerfile
     volumes:
       - ./:/src
     command:
@@ -26,13 +28,14 @@ services:
       - |
         set -e
         mkdir -p /app
-        cp -rf /src/* /app/
+        rsync -a --exclude 'target' /src/* /app/
         cd /app
         cargo run --bin bot -- --config-path /app/etc/config-docker-bot1.toml
     ports:
       - "8081:8080"
   bot2:
-    image: rust:latest
+    build:
+      dockerfile: ./Dockerfile
     volumes:
       - ./:/src
     command:
@@ -41,7 +44,7 @@ services:
       - |
         set -e
         mkdir -p /app
-        cp -rf /src/* /app/
+        rsync -a --exclude 'target' /src/* /app/
         cd /app
         cargo run --bin bot -- --config-path /app/etc/config-docker-bot2.toml
     ports:

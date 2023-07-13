@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    ops::Add,
     sync::{Arc, RwLock},
 };
 
@@ -42,14 +43,17 @@ pub async fn advertise(
     let mut local_peering_table = peering_table.read().unwrap().clone();
     let static_peering_table = peering_table.read().unwrap().clone();
 
+    let advertisement_message: Message =
+        Message::RouteAdvertisement(RouteAdvertisement::from_peers_and_routes(
+            routing_table.read().unwrap().clone(),
+            static_peering_table.clone(),
+        ));
+
     for peer in local_peering_table.iter_mut().filter(|x| x.url.is_some()) {
         let configuration = configuration.clone();
 
-        let message = Message::RouteAdvertisement(RouteAdvertisement::from_peers(
-            static_peering_table.clone(),
-        ));
         let message_collection = MessageCollection {
-            messages: vec![message],
+            messages: vec![Message::Ping, advertisement_message.clone()],
             origin_id: configuration.id.clone(),
         };
 
@@ -110,6 +114,24 @@ impl RouteAdvertisement {
         }
 
         advertisement
+    }
+
+    pub fn from_peers_and_routes<T: Into<Vec<Route>>, U: Into<Vec<Peer>>>(
+        routes: T,
+        peers: U,
+    ) -> Self {
+        Self::from_peers(peers.into().clone()) + Self::from_routes(routes.into().clone())
+    }
+}
+
+impl Add for RouteAdvertisement {
+    type Output = Self;
+
+    fn add(self, other: RouteAdvertisement) -> Self {
+        let mut routes: Vec<Route> = self.routes.clone();
+        let mut others: Vec<Route> = other.routes.clone();
+        routes.append(&mut others);
+        RouteAdvertisement { routes }
     }
 }
 

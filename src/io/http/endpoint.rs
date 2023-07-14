@@ -8,14 +8,17 @@ use std::{
 use magic_crypt::{new_magic_crypt, MagicCryptTrait};
 
 use crate::{
-    config::Configuration, message::MessageCollection, processor::process_message_collection,
-    routing::Peer,
+    config::Configuration,
+    message::MessageCollection,
+    processor::process_message_collection,
+    routing::{Peer, Route},
 };
 
 pub async fn message_handler(
     encrypted_request_body_bytes: web::Bytes,
     configuration: web::Data<Configuration>,
     peering_table: web::Data<Arc<RwLock<Vec<Peer>>>>,
+    routing_table: web::Data<Arc<RwLock<Vec<Route>>>>,
     request: HttpRequest,
 ) -> Result<HttpResponse, Box<dyn Error>> {
     let request_nonce_header_value: &HeaderValue = match request.headers().get("Nonce") {
@@ -65,6 +68,7 @@ pub async fn message_handler(
                     inbound_message_collection,
                     configuration.get_ref().clone(),
                     peering_table.get_ref().clone(),
+                    routing_table.get_ref().clone(),
                 )
                 .try_into()
                 {

@@ -5,7 +5,7 @@ use serde::Deserialize;
 
 use toml::de::Error;
 
-use crate::routing::Peer;
+use crate::peering::Peer;
 
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Clone, Debug, Deserialize)]

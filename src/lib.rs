@@ -4,8 +4,9 @@ use std::{io::Write, thread};
 
 pub mod config;
 pub mod io;
-pub mod message;
-pub mod processor;
+pub mod messaging;
+pub mod peering;
+pub mod processing;
 pub mod routing;
 
 pub fn init_logger() {

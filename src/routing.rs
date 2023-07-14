@@ -1,5 +1,4 @@
 use std::{
-    collections::HashMap,
     ops::Add,
     sync::{Arc, RwLock},
 };
@@ -8,8 +7,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     config::Configuration,
-    message::{send_message_collection_to_url, Message, MessageCollection, RouteAdvertisement},
-    processor::process_message_collection,
+    messaging::{send_message_collection_to_url, Message, MessageCollection, RouteAdvertisement},
+    peering::Peer,
+    processing::process_message_collection,
 };
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -19,21 +19,30 @@ pub struct Route {
     pub weight: Option<usize>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct RouteTable {
-    pub routes: HashMap<String, Vec<Route>>,
-}
+pub fn resolve_gateway_id(
+    destination_id: String,
+    routing_table: Arc<RwLock<Vec<Route>>>,
+) -> Option<String> {
+    let routing_table = routing_table.read().unwrap().clone();
+    let mut best_weight: Option<usize> = None;
+    let mut best_gateway_id: Option<String> = None;
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct Peer {
-    pub id: Option<String>,
-    pub url: Option<String>,
-    pub polling: bool,
-}
+    for route in routing_table
+        .iter()
+        .filter(|x| x.destination_id == destination_id)
+    {
+        let weight = route.weight.unwrap_or(0);
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct PeerTable {
-    pub peers: Vec<Peer>,
+        if best_weight.is_none() {
+            best_weight = Some(weight);
+            best_gateway_id = Some(route.gateway_id.clone())
+        } else if weight < best_weight.unwrap() {
+            best_weight = Some(weight);
+            best_gateway_id = Some(route.gateway_id.clone())
+        }
+    }
+
+    best_gateway_id
 }
 
 pub async fn advertise(
@@ -148,8 +157,6 @@ impl RouteAdvertisement {
                 }
             };
         }
-
-        log::warn!("{:?}", routing_table);
     }
 
     pub fn from_peers<T: Into<Vec<Peer>>>(peers: T) -> Self {
@@ -213,17 +220,6 @@ impl Add for RouteAdvertisement {
     }
 }
 
-pub fn initialize_peers(configuration: Configuration, peering_table: Arc<RwLock<Vec<Peer>>>) {
-    let mut peering_table = peering_table.write().unwrap();
-    for peer in configuration.clone().peer.into_values() {
-        peering_table.push(Peer {
-            id: None,
-            url: peer.url.clone(),
-            polling: peer.polling,
-        })
-    }
-}
-
 pub fn initialize_routes(configuration: Configuration, routing_table: Arc<RwLock<Vec<Route>>>) {
     let mut routing_table = routing_table.write().unwrap();
     routing_table.push(Route {
@@ -253,28 +249,5 @@ pub async fn age_routes(configuration: Configuration, routing_table: Arc<RwLock<
 
     for i in stale_indices {
         routing_table.remove(i);
-    }
-}
-
-pub fn check_peer(id: &String, peering_table: Arc<RwLock<Vec<Peer>>>) {
-    let peering_table_read = peering_table.read().unwrap();
-
-    let peers: Vec<&Peer> = peering_table_read
-        .iter()
-        .filter(|x| x.id == Some(id.to_string()))
-        .collect();
-    let present = peers.len() > 0;
-
-    drop(peers);
-    drop(peering_table_read);
-
-    if !present {
-        let mut peering_table_write = peering_table.write().unwrap();
-        peering_table_write.push(Peer {
-            id: Some(id.to_string()),
-            url: None,
-            polling: false,
-        });
-        log::warn!("detected peer: {}", &id);
     }
 }

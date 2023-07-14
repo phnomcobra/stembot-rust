@@ -12,11 +12,15 @@ use stembot_rust::{
     config::Configuration,
     init_logger,
     io::http::endpoint::message_handler,
-    routing::{advertise, age_routes, initialize_peers, initialize_routes, Peer, Route},
+    peering::{initialize_peers, Peer},
+    routing::{advertise, age_routes, initialize_routes, Route},
 };
 
-async fn test(peering_table: Arc<RwLock<Vec<Peer>>>) {
-    log::warn!("{:?}", peering_table.read().unwrap());
+async fn test(table: Arc<RwLock<Vec<Route>>>) {
+    let table = table.read().unwrap();
+    for item in table.iter() {
+        log::warn!("{:?}", item);
+    }
 }
 
 #[actix_web::main]
@@ -62,8 +66,8 @@ async fn main() -> Result<(), std::io::Error> {
     });
 
     scheduler.every(Seconds(1)).run({
-        let peering_table = peering_table.clone();
-        move || test(peering_table.clone())
+        let table = routing_table.clone();
+        move || test(table.clone())
     });
 
     log::info!("Starting scheduler...");

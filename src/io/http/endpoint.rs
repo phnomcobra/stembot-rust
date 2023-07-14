@@ -8,10 +8,8 @@ use std::{
 use magic_crypt::{new_magic_crypt, MagicCryptTrait};
 
 use crate::{
-    config::Configuration,
-    message::MessageCollection,
-    processor::process_message_collection,
-    routing::{Peer, Route},
+    config::Configuration, messaging::MessageCollection, peering::Peer,
+    processing::process_message_collection, routing::Route,
 };
 
 pub async fn message_handler(

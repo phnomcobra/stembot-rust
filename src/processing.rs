@@ -2,8 +2,9 @@ use std::sync::{Arc, RwLock};
 
 use crate::{
     config::Configuration,
-    message::{Message, MessageCollection},
-    routing::{check_peer, Peer, Route},
+    messaging::{Message, MessageCollection},
+    peering::{check_peer, Peer},
+    routing::Route,
 };
 
 pub fn process_message_collection<T: Into<MessageCollection>, U: Into<Configuration>>(

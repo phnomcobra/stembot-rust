@@ -16,7 +16,7 @@ use crate::{
 pub struct Route {
     pub gateway_id: String,
     pub destination_id: String,
-    pub weight: usize,
+    pub weight: Option<usize>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -89,14 +89,30 @@ impl RouteAdvertisement {
         Self { routes: vec![] }
     }
 
-    pub fn process(&self, routing_table: Arc<RwLock<Vec<Route>>>, origin_id: String) {
+    pub fn process(
+        &self,
+        configuration: Configuration,
+        routing_table: Arc<RwLock<Vec<Route>>>,
+        origin_id: String,
+    ) {
         let mut routing_table = routing_table.write().unwrap();
 
-        for route in self.routes.iter() {
+        for route in self
+            .routes
+            .iter()
+            .filter(|x| x.destination_id != configuration.id)
+            .map(|x| Route {
+                weight: Some(x.weight.unwrap_or(0)),
+                destination_id: x.destination_id.clone(),
+                gateway_id: x.gateway_id.clone(),
+            })
+        {
             let weights: Vec<usize> = routing_table
                 .iter()
-                .filter(|x| x.destination_id == route.destination_id && x.gateway_id == origin_id)
-                .map(|x| x.weight)
+                .filter(|x| x.destination_id == route.destination_id)
+                .filter(|x| x.gateway_id == origin_id)
+                .filter(|x| x.weight.is_some())
+                .map(|x| x.weight.unwrap())
                 .collect();
 
             match weights.iter().min() {
@@ -108,14 +124,15 @@ impl RouteAdvertisement {
                     });
                 }
                 Some(weight) => {
-                    if route.weight < *weight {
+                    if route.weight.unwrap() < *weight {
                         let mut indices: Vec<usize> = routing_table
                             .iter()
                             .enumerate()
-                            .filter(|x| x.1.destination_id != route.destination_id)
-                            .filter(|x| x.1.gateway_id != origin_id)
+                            .filter(|x| x.1.destination_id == route.destination_id)
+                            .filter(|x| x.1.gateway_id == origin_id)
                             .map(|x| x.0)
                             .collect();
+
                         indices.sort_by(|a, b| b.cmp(a));
 
                         for i in indices.iter() {
@@ -149,7 +166,7 @@ impl RouteAdvertisement {
             advertisement.routes.push(Route {
                 destination_id: id.clone(),
                 gateway_id: id,
-                weight: 0,
+                weight: Some(0),
             })
         }
 
@@ -162,11 +179,16 @@ impl RouteAdvertisement {
         let mut advertisement = Self::default();
 
         for route in routes.iter() {
+            let weight = match route.weight {
+                Some(x) => Some(x + 1),
+                None => None,
+            };
+
             advertisement.routes.push(Route {
                 destination_id: route.destination_id.clone(),
                 gateway_id: route.gateway_id.clone(),
-                weight: &route.weight + 1,
-            })
+                weight,
+            });
         }
 
         advertisement
@@ -199,6 +221,38 @@ pub fn initialize_peers(configuration: Configuration, peering_table: Arc<RwLock<
             url: peer.url.clone(),
             polling: peer.polling,
         })
+    }
+}
+
+pub fn initialize_routes(configuration: Configuration, routing_table: Arc<RwLock<Vec<Route>>>) {
+    let mut routing_table = routing_table.write().unwrap();
+    routing_table.push(Route {
+        destination_id: configuration.id.clone(),
+        gateway_id: configuration.id.clone(),
+        weight: None,
+    });
+}
+
+pub async fn age_routes(configuration: Configuration, routing_table: Arc<RwLock<Vec<Route>>>) {
+    let mut routing_table = routing_table.write().unwrap();
+
+    let mut stale_indices: Vec<usize> = vec![];
+
+    for (i, route) in routing_table
+        .iter_mut()
+        .enumerate()
+        .filter(|x| x.1.weight.is_some())
+    {
+        route.weight = Some(route.weight.unwrap() + 1);
+        if route.weight.unwrap() > configuration.maxrouteweight {
+            stale_indices.push(i)
+        }
+    }
+
+    stale_indices.sort_by(|a, b| b.cmp(a));
+
+    for i in stale_indices {
+        routing_table.remove(i);
     }
 }
 

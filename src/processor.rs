@@ -27,11 +27,11 @@ pub fn process_message_collection<T: Into<MessageCollection>, U: Into<Configurat
         match message {
             Message::Ping => outbound_message_collection.messages.push(Message::Pong),
             Message::RouteAdvertisement(advertisement) => advertisement.process(
+                configuration.clone(),
                 routing_table.clone(),
                 inbound_message_collection.origin_id.clone(),
             ),
             Message::Pong => log::info!("pong received"),
-            _ => log::error!("processor not implemented for {:?}", &message),
         }
     }
 

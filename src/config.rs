@@ -17,6 +17,7 @@ pub struct Configuration {
     pub port: u16,
     pub endpoint: String,
     pub peer: HashMap<String, Peer>,
+    pub maxrouteweight: usize,
 }
 
 #[derive(Parser, Clone, Debug, Deserialize)]

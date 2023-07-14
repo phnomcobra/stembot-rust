@@ -3,6 +3,7 @@ id="docker-bot2"
 host="0.0.0.0"
 port=8080
 endpoint="/"
+maxrouteweight=10
 
 [peer.docker-bot1]
 url="http://bot1:8080/"

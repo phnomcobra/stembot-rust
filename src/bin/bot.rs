@@ -12,7 +12,7 @@ use stembot_rust::{
     config::Configuration,
     init_logger,
     io::http::endpoint::message_handler,
-    routing::{advertise, initialize_peers, Peer, Route},
+    routing::{advertise, age_routes, initialize_peers, initialize_routes, Peer, Route},
 };
 
 async fn test(peering_table: Arc<RwLock<Vec<Peer>>>) {
@@ -37,6 +37,9 @@ async fn main() -> Result<(), std::io::Error> {
     log::info!("Initializing peer table...");
     initialize_peers(configuration.clone(), peering_table.clone());
 
+    log::info!("Initializing routing table...");
+    initialize_routes(configuration.clone(), routing_table.clone());
+
     let mut scheduler = AsyncScheduler::new();
 
     scheduler.every(Seconds(1)).run({
@@ -50,6 +53,12 @@ async fn main() -> Result<(), std::io::Error> {
                 routing_table.clone(),
             )
         }
+    });
+
+    scheduler.every(Seconds(1)).run({
+        let configuration = configuration.clone();
+        let routing_table = routing_table.clone();
+        move || age_routes(configuration.clone(), routing_table.clone())
     });
 
     scheduler.every(Seconds(1)).run({

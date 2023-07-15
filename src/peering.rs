@@ -48,3 +48,17 @@ pub fn check_peer(id: &String, peering_table: Arc<RwLock<Vec<Peer>>>) {
         });
     }
 }
+
+pub fn lookup_peer_url(id: &String, peering_table: Arc<RwLock<Vec<Peer>>>) -> Option<String> {
+    let peering_table = peering_table.read().unwrap();
+
+    for peer in peering_table
+        .iter()
+        .filter(|x| Some(id.to_string()) == x.id)
+        .filter(|x| x.url.is_some())
+    {
+        return peer.url.clone();
+    }
+
+    None
+}

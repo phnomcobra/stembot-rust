@@ -18,6 +18,7 @@ pub enum Message {
 pub struct MessageCollection {
     pub messages: Vec<Message>,
     pub origin_id: String,
+    pub destination_id: Option<String>,
 }
 
 impl TryFrom<Vec<u8>> for MessageCollection {

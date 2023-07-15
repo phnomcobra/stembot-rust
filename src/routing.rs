@@ -65,6 +65,7 @@ pub async fn advertise(
         let outgoing_message_collection = MessageCollection {
             messages: vec![Message::Ping, advertisement_message.clone()],
             origin_id: configuration.id.clone(),
+            destination_id: peer.id.clone(),
         };
 
         match send_message_collection_to_url(

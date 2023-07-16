@@ -2,12 +2,12 @@ use std::sync::{Arc, RwLock};
 
 use crate::{
     config::Configuration,
-    messaging::{Message, MessageCollection},
-    peering::{check_peer, Peer, lookup_peer_url},
+    messaging::{send_message_collection_to_url, Message, MessageCollection},
+    peering::{check_peer, lookup_peer_url, Peer},
     routing::{resolve_gateway_id, Route},
 };
 
-pub fn process_message_collection<T: Into<MessageCollection>, U: Into<Configuration>>(
+pub async fn process_message_collection<T: Into<MessageCollection>, U: Into<Configuration>>(
     inbound_message_collection: T,
     configuration: U,
     peering_table: Arc<RwLock<Vec<Peer>>>,
@@ -51,14 +51,25 @@ pub fn process_message_collection<T: Into<MessageCollection>, U: Into<Configurat
         // Forwarding stuff happens here
         match gateway_id {
             Some(gateway_id) => {
-                let url = lookup_peer_url(&gateway_id, peering_table);
+                let url = lookup_peer_url(&gateway_id, peering_table.clone());
                 match url {
                     // Forward the message collection
-                    Some(url) => {},
+                    Some(url) => {
+                        match send_message_collection_to_url(
+                            inbound_message_collection.clone(),
+                            url,
+                            configuration.clone(),
+                        )
+                        .await
+                        {
+                            Ok(_message) => {}
+                            Err(_) => {}
+                        }
+                    }
                     // Know where to forward to but not how
-                    None => {},
+                    None => {}
                 }
-            },
+            }
             // Don't know where to forward to
             None => {}
         }

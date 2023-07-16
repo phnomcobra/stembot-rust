@@ -83,7 +83,8 @@ pub async fn advertise(
                     configuration.clone(),
                     peering_table.clone(),
                     routing_table.clone(),
-                );
+                )
+                .await;
             }
             Err(error) => log::error!("{}", error),
         };

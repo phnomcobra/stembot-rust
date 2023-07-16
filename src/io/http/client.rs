@@ -11,7 +11,7 @@ pub async fn send_raw_message<T: Into<Vec<u8>>, U: Into<String>, V: Into<Configu
     message: T,
     url: U,
     configuration: V,
-) -> Result<Vec<u8>, Box<dyn Error>> {
+) -> Result<Vec<u8>, Box<dyn Error + Send + Sync + 'static>> {
     let configuration = configuration.into();
 
     let unencrypted_request_body: Vec<u8> = message.into();

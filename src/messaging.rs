@@ -22,9 +22,9 @@ pub struct MessageCollection {
 }
 
 impl TryFrom<Vec<u8>> for MessageCollection {
-    type Error = Box<dyn Error>;
+    type Error = Box<dyn Error + Send + Sync + 'static>;
 
-    fn try_from(bytes: Vec<u8>) -> Result<Self, Box<dyn Error>> {
+    fn try_from(bytes: Vec<u8>) -> Result<Self, Box<dyn Error + Send + Sync + 'static>> {
         match bincode::deserialize::<MessageCollection>(&bytes) {
             Ok(message_collection) => Ok(message_collection),
             Err(_) => Err("failed to deserialize message collection".into()),
@@ -33,9 +33,9 @@ impl TryFrom<Vec<u8>> for MessageCollection {
 }
 
 impl TryInto<Vec<u8>> for MessageCollection {
-    type Error = Box<dyn Error>;
+    type Error = Box<dyn Error + Send + Sync + 'static>;
 
-    fn try_into(self) -> Result<Vec<u8>, Box<dyn Error>> {
+    fn try_into(self) -> Result<Vec<u8>, Box<dyn Error + Send + Sync + 'static>> {
         match bincode::serialize::<MessageCollection>(&self) {
             Ok(bytes) => Ok(bytes),
             Err(_) => Err("failed to serialize message collection".into()),
@@ -47,7 +47,7 @@ pub async fn send_message_collection_to_url<U: Into<String>, V: Into<Configurati
     outgoing_message_collection: MessageCollection,
     url: U,
     configuration: V,
-) -> Result<MessageCollection, Box<dyn Error>> {
+) -> Result<MessageCollection, Box<dyn Error + Send + Sync + 'static>> {
     let url = url.into();
     let configuration = configuration.into();
 

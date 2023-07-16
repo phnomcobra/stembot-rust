@@ -68,6 +68,7 @@ pub async fn message_handler(
                     peering_table.get_ref().clone(),
                     routing_table.get_ref().clone(),
                 )
+                .await
                 .try_into()
                 {
                     Ok(bytes) => bytes,

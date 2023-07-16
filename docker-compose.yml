@@ -49,3 +49,35 @@ services:
         cargo run --bin bot -- --config-path /app/etc/config-docker-bot2.toml
     ports:
       - "8082:8080"
+  bot3:
+    build:
+      dockerfile: ./Dockerfile
+    volumes:
+      - ./:/src
+    command:
+      - bash
+      - -c
+      - |
+        set -e
+        mkdir -p /app
+        rsync -a --exclude 'target' /src/* /app/
+        cd /app
+        cargo run --bin bot -- --config-path /app/etc/config-docker-bot3.toml
+    ports:
+      - "8083:8080"
+  bot4:
+    build:
+      dockerfile: ./Dockerfile
+    volumes:
+      - ./:/src
+    command:
+      - bash
+      - -c
+      - |
+        set -e
+        mkdir -p /app
+        rsync -a --exclude 'target' /src/* /app/
+        cd /app
+        cargo run --bin bot -- --config-path /app/etc/config-docker-bot4.toml
+    ports:
+      - "8084:8080"

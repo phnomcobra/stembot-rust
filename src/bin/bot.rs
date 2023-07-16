@@ -59,11 +59,13 @@ async fn main() -> Result<(), std::io::Error> {
         }
     });
 
+    /*
     scheduler.every(Seconds(1)).run({
         let configuration = configuration.clone();
         let routing_table = routing_table.clone();
         move || age_routes(configuration.clone(), routing_table.clone())
     });
+    */
 
     scheduler.every(Seconds(1)).run({
         let table = routing_table.clone();

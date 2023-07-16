@@ -1,14 +1,14 @@
 secret="01234567890123456789012345678901"
-id="docker-bot2"
+id="docker-bot3"
 host="0.0.0.0"
 port=8080
 endpoint="/"
 maxrouteweight=10
 
-[peer.docker-bot1]
-url="http://bot1:8080/"
+[peer.docker-bot2]
+url="http://bot2:8080/"
 polling=false
 
-[peer.docker-bot3]
-url="http://bot3:8080/"
+[peer.docker-bot4]
+url="http://bot4:8080/"
 polling=false

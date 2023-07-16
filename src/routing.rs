@@ -206,7 +206,7 @@ impl RouteAdvertisement {
             advertisement.routes.push(Route {
                 destination_id: id.clone(),
                 gateway_id: id,
-                weight: Some(0),
+                weight: Some(1),
             })
         }
 

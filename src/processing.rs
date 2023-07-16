@@ -4,7 +4,7 @@ use crate::{
     config::Configuration,
     messaging::{send_message_collection_to_url, Message, MessageCollection},
     peering::{check_peer, lookup_peer_url, Peer},
-    routing::{resolve_gateway_id, Route},
+    routing::{remove_routes_by_url, resolve_gateway_id, Route},
 };
 
 pub async fn process_message_collection<T: Into<MessageCollection>, U: Into<Configuration>>(
@@ -57,13 +57,29 @@ pub async fn process_message_collection<T: Into<MessageCollection>, U: Into<Conf
                     Some(url) => {
                         match send_message_collection_to_url(
                             inbound_message_collection.clone(),
-                            url,
+                            url.clone(),
                             configuration.clone(),
                         )
                         .await
                         {
                             Ok(_message) => {}
-                            Err(_) => {}
+                            Err(_) => {
+                                remove_routes_by_url(
+                                    url.clone(),
+                                    routing_table.clone(),
+                                    peering_table.clone(),
+                                );
+
+                                /*
+                                process_message_collection(
+                                    inbound_message_collection,
+                                    configuration.clone(),
+                                    peering_table.clone(),
+                                    routing_table.clone(),
+                                )
+                                .await;
+                                */
+                            }
                         }
                     }
                     // Know where to forward to but not how

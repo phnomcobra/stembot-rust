@@ -45,6 +45,30 @@ pub fn resolve_gateway_id(
     best_gateway_id
 }
 
+pub fn remove_routes_by_url(
+    url: String,
+    routing_table: Arc<RwLock<Vec<Route>>>,
+    peering_table: Arc<RwLock<Vec<Peer>>>,
+) {
+    let peering_table = peering_table.read().unwrap().clone();
+    let peer_ids: Vec<String> = peering_table
+        .iter()
+        .filter(|x| x.url == Some(url.clone()))
+        .filter(|x| x.id.is_some())
+        .map(|x| x.id.clone().unwrap())
+        .collect();
+    drop(peering_table);
+
+    let mut routing_table = routing_table.write().unwrap().clone();
+    let mut updated_routing_table: Vec<Route> = routing_table
+        .iter()
+        .filter(|x| !peer_ids.contains(&x.destination_id))
+        .map(|x| x.clone())
+        .collect();
+    routing_table.clear();
+    routing_table.append(&mut updated_routing_table);
+}
+
 pub async fn advertise(
     configuration: Configuration,
     peering_table: Arc<RwLock<Vec<Peer>>>,
@@ -86,7 +110,14 @@ pub async fn advertise(
                 )
                 .await;
             }
-            Err(error) => log::error!("{}", error),
+            Err(error) => {
+                remove_routes_by_url(
+                    peer.url.clone().unwrap(),
+                    routing_table.clone(),
+                    peering_table.clone(),
+                );
+                log::error!("{}", error)
+            }
         };
     }
 

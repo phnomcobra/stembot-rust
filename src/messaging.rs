@@ -8,8 +8,14 @@ pub struct RouteAdvertisement {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct RouteRecall {
+    pub destination_id: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum Message {
     RouteAdvertisement(RouteAdvertisement),
+    RouteRecall(RouteRecall),
     Ping,
     Pong,
 }

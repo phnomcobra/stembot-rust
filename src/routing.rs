@@ -60,9 +60,25 @@ pub fn remove_routes_by_url(
     drop(peering_table);
 
     let mut routing_table = routing_table.write().unwrap().clone();
+
     let mut updated_routing_table: Vec<Route> = routing_table
         .iter()
         .filter(|x| !peer_ids.contains(&x.destination_id))
+        .map(|x| x.clone())
+        .collect();
+    routing_table.clear();
+    routing_table.append(&mut updated_routing_table);
+}
+
+pub fn remove_routes_by_gateway_and_destination(
+    gateway_id: String,
+    destination_id: String,
+    routing_table: Arc<RwLock<Vec<Route>>>,
+) {
+    let mut routing_table = routing_table.write().unwrap().clone();
+    let mut updated_routing_table: Vec<Route> = routing_table
+        .iter()
+        .filter(|x| x.destination_id != destination_id && x.gateway_id != gateway_id)
         .map(|x| x.clone())
         .collect();
     routing_table.clear();
@@ -73,6 +89,7 @@ pub async fn advertise(
     configuration: Configuration,
     peering_table: Arc<RwLock<Vec<Peer>>>,
     routing_table: Arc<RwLock<Vec<Route>>>,
+    message_backlog: Arc<RwLock<Vec<MessageCollection>>>,
 ) {
     let mut local_peering_table = peering_table.read().unwrap().clone();
     let static_peering_table = peering_table.read().unwrap().clone();
@@ -107,6 +124,7 @@ pub async fn advertise(
                     configuration.clone(),
                     peering_table.clone(),
                     routing_table.clone(),
+                    message_backlog.clone(),
                 )
                 .await;
             }

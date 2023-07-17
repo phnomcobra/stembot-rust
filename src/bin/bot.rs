@@ -12,6 +12,7 @@ use stembot_rust::{
     config::Configuration,
     init_logger,
     io::http::endpoint::message_handler,
+    messaging::MessageCollection,
     peering::{initialize_peers, Peer},
     routing::{advertise, age_routes, initialize_routes, Route},
 };
@@ -33,6 +34,7 @@ async fn main() -> Result<(), std::io::Error> {
 
     let peering_table: Arc<RwLock<Vec<Peer>>> = Arc::new(RwLock::new(vec![]));
     let routing_table: Arc<RwLock<Vec<Route>>> = Arc::new(RwLock::new(vec![]));
+    let message_backlog: Arc<RwLock<Vec<MessageCollection>>> = Arc::new(RwLock::new(vec![]));
 
     log::info!("Starting stembot...");
 
@@ -50,22 +52,22 @@ async fn main() -> Result<(), std::io::Error> {
         let configuration = configuration.clone();
         let peering_table = peering_table.clone();
         let routing_table = routing_table.clone();
+        let message_backlog = message_backlog.clone();
         move || {
             advertise(
                 configuration.clone(),
                 peering_table.clone(),
                 routing_table.clone(),
+                message_backlog.clone(),
             )
         }
     });
 
-    /*
     scheduler.every(Seconds(1)).run({
         let configuration = configuration.clone();
         let routing_table = routing_table.clone();
         move || age_routes(configuration.clone(), routing_table.clone())
     });
-    */
 
     scheduler.every(Seconds(1)).run({
         let table = routing_table.clone();
@@ -90,6 +92,7 @@ async fn main() -> Result<(), std::io::Error> {
                 .app_data(web::Data::new(configuration.clone()))
                 .app_data(web::Data::new(peering_table.clone()))
                 .app_data(web::Data::new(routing_table.clone()))
+                .app_data(web::Data::new(message_backlog.clone()))
                 .route(&configuration.endpoint, web::post().to(message_handler))
         }
     })

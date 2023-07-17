@@ -17,6 +17,7 @@ pub async fn message_handler(
     configuration: web::Data<Configuration>,
     peering_table: web::Data<Arc<RwLock<Vec<Peer>>>>,
     routing_table: web::Data<Arc<RwLock<Vec<Route>>>>,
+    message_backlog: web::Data<Arc<RwLock<Vec<MessageCollection>>>>,
     request: HttpRequest,
 ) -> Result<HttpResponse, Box<dyn Error>> {
     let request_nonce_header_value: &HeaderValue = match request.headers().get("Nonce") {
@@ -67,6 +68,7 @@ pub async fn message_handler(
                     configuration.get_ref().clone(),
                     peering_table.get_ref().clone(),
                     routing_table.get_ref().clone(),
+                    message_backlog.get_ref().clone(),
                 )
                 .await
                 .try_into()

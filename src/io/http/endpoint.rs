@@ -1,9 +1,7 @@
 use actix_web::{web, HttpRequest, HttpResponse, Result};
 use reqwest::header::{HeaderName, HeaderValue};
-use std::{
-    error::Error,
-    sync::{Arc, RwLock},
-};
+use std::{error::Error, sync::Arc};
+use tokio::sync::RwLock;
 
 use magic_crypt::{new_magic_crypt, MagicCryptTrait};
 

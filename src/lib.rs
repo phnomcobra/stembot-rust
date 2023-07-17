@@ -2,6 +2,7 @@ use chrono::{SecondsFormat, Utc};
 use log::LevelFilter;
 use std::{io::Write, thread};
 
+pub mod backlog;
 pub mod config;
 pub mod io;
 pub mod messaging;

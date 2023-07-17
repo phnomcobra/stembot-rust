@@ -1,6 +1,7 @@
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
+use tokio::sync::RwLock;
 
 use crate::config::Configuration;
 
@@ -16,8 +17,8 @@ pub struct PeerTable {
     pub peers: Vec<Peer>,
 }
 
-pub fn initialize_peers(configuration: Configuration, peering_table: Arc<RwLock<Vec<Peer>>>) {
-    let mut peering_table = peering_table.write().unwrap();
+pub async fn initialize_peers(configuration: Configuration, peering_table: Arc<RwLock<Vec<Peer>>>) {
+    let mut peering_table = peering_table.write().await;
     for peer in configuration.clone().peer.into_values() {
         peering_table.push(Peer {
             id: None,
@@ -27,8 +28,8 @@ pub fn initialize_peers(configuration: Configuration, peering_table: Arc<RwLock<
     }
 }
 
-pub fn check_peer(id: &String, peering_table: Arc<RwLock<Vec<Peer>>>) {
-    let peering_table_read = peering_table.read().unwrap();
+pub async fn check_peer(id: &String, peering_table: Arc<RwLock<Vec<Peer>>>) {
+    let peering_table_read = peering_table.read().await;
 
     let peers: Vec<&Peer> = peering_table_read
         .iter()
@@ -40,7 +41,7 @@ pub fn check_peer(id: &String, peering_table: Arc<RwLock<Vec<Peer>>>) {
     drop(peering_table_read);
 
     if !present {
-        let mut peering_table_write = peering_table.write().unwrap();
+        let mut peering_table_write = peering_table.write().await;
         peering_table_write.push(Peer {
             id: Some(id.to_string()),
             url: None,
@@ -49,8 +50,8 @@ pub fn check_peer(id: &String, peering_table: Arc<RwLock<Vec<Peer>>>) {
     }
 }
 
-pub fn lookup_peer_url(id: &String, peering_table: Arc<RwLock<Vec<Peer>>>) -> Option<String> {
-    let peering_table = peering_table.read().unwrap();
+pub async fn lookup_peer_url(id: &String, peering_table: Arc<RwLock<Vec<Peer>>>) -> Option<String> {
+    let peering_table = peering_table.read().await;
 
     for peer in peering_table
         .iter()

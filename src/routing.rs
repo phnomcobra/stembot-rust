@@ -1,9 +1,7 @@
-use std::{
-    ops::Add,
-    sync::{Arc, RwLock},
-};
+use std::{ops::Add, sync::Arc};
 
 use serde::{Deserialize, Serialize};
+use tokio::sync::RwLock;
 
 use crate::{
     config::Configuration,
@@ -19,11 +17,11 @@ pub struct Route {
     pub weight: Option<usize>,
 }
 
-pub fn resolve_gateway_id(
+pub async fn resolve_gateway_id(
     destination_id: String,
     routing_table: Arc<RwLock<Vec<Route>>>,
 ) -> Option<String> {
-    let routing_table = routing_table.read().unwrap().clone();
+    let routing_table = routing_table.read().await.clone();
     let mut best_weight: Option<usize> = None;
     let mut best_gateway_id: Option<String> = None;
 
@@ -45,12 +43,12 @@ pub fn resolve_gateway_id(
     best_gateway_id
 }
 
-pub fn remove_routes_by_url(
+pub async fn remove_routes_by_url(
     url: String,
     routing_table: Arc<RwLock<Vec<Route>>>,
     peering_table: Arc<RwLock<Vec<Peer>>>,
 ) {
-    let peering_table = peering_table.read().unwrap().clone();
+    let peering_table = peering_table.read().await.clone();
     let peer_ids: Vec<String> = peering_table
         .iter()
         .filter(|x| x.url == Some(url.clone()))
@@ -59,7 +57,7 @@ pub fn remove_routes_by_url(
         .collect();
     drop(peering_table);
 
-    let mut routing_table = routing_table.write().unwrap().clone();
+    let mut routing_table = routing_table.write().await.clone();
 
     let mut updated_routing_table: Vec<Route> = routing_table
         .iter()
@@ -70,12 +68,12 @@ pub fn remove_routes_by_url(
     routing_table.append(&mut updated_routing_table);
 }
 
-pub fn remove_routes_by_gateway_and_destination(
+pub async fn remove_routes_by_gateway_and_destination(
     gateway_id: String,
     destination_id: String,
     routing_table: Arc<RwLock<Vec<Route>>>,
 ) {
-    let mut routing_table = routing_table.write().unwrap().clone();
+    let mut routing_table = routing_table.write().await.clone();
     let mut updated_routing_table: Vec<Route> = routing_table
         .iter()
         .filter(|x| x.destination_id != destination_id && x.gateway_id != gateway_id)
@@ -91,12 +89,12 @@ pub async fn advertise(
     routing_table: Arc<RwLock<Vec<Route>>>,
     message_backlog: Arc<RwLock<Vec<MessageCollection>>>,
 ) {
-    let mut local_peering_table = peering_table.read().unwrap().clone();
-    let static_peering_table = peering_table.read().unwrap().clone();
+    let mut local_peering_table = peering_table.read().await.clone();
+    let static_peering_table = peering_table.read().await.clone();
 
     let advertisement_message: Message =
         Message::RouteAdvertisement(RouteAdvertisement::from_peers_and_routes(
-            routing_table.read().unwrap().clone(),
+            routing_table.read().await.clone(),
             static_peering_table.clone(),
         ));
 
@@ -133,13 +131,13 @@ pub async fn advertise(
                     peer.url.clone().unwrap(),
                     routing_table.clone(),
                     peering_table.clone(),
-                );
+                ).await;
                 log::error!("{}", error)
             }
         };
     }
 
-    let mut shared_peering_table = peering_table.write().unwrap();
+    let mut shared_peering_table = peering_table.write().await;
     shared_peering_table.clear();
     shared_peering_table.append(&mut local_peering_table);
 }
@@ -149,13 +147,13 @@ impl RouteAdvertisement {
         Self { routes: vec![] }
     }
 
-    pub fn process(
+    pub async fn process(
         &self,
         configuration: Configuration,
         routing_table: Arc<RwLock<Vec<Route>>>,
         origin_id: String,
     ) {
-        let mut routing_table = routing_table.write().unwrap();
+        let mut routing_table = routing_table.write().await;
 
         for route in self
             .routes
@@ -271,8 +269,11 @@ impl Add for RouteAdvertisement {
     }
 }
 
-pub fn initialize_routes(configuration: Configuration, routing_table: Arc<RwLock<Vec<Route>>>) {
-    let mut routing_table = routing_table.write().unwrap();
+pub async fn initialize_routes(
+    configuration: Configuration,
+    routing_table: Arc<RwLock<Vec<Route>>>,
+) {
+    let mut routing_table = routing_table.write().await;
     routing_table.push(Route {
         destination_id: configuration.id.clone(),
         gateway_id: configuration.id.clone(),
@@ -281,7 +282,7 @@ pub fn initialize_routes(configuration: Configuration, routing_table: Arc<RwLock
 }
 
 pub async fn age_routes(configuration: Configuration, routing_table: Arc<RwLock<Vec<Route>>>) {
-    let mut routing_table = routing_table.write().unwrap();
+    let mut routing_table = routing_table.write().await;
 
     let mut stale_indices: Vec<usize> = vec![];
 

@@ -2,13 +2,11 @@ use actix_web::{rt::spawn, web, App, HttpServer, Result};
 use clokwerk::{AsyncScheduler, Interval::Seconds};
 use tracing_actix_web::TracingLogger;
 
-use std::{
-    sync::{Arc, RwLock},
-    time::Duration,
-};
-use tokio::time::sleep;
+use std::{sync::Arc, time::Duration};
+use tokio::{sync::RwLock, time::sleep};
 
 use stembot_rust::{
+    backlog::process_backlog,
     config::Configuration,
     init_logger,
     io::http::endpoint::message_handler,
@@ -18,7 +16,7 @@ use stembot_rust::{
 };
 
 async fn test(table: Arc<RwLock<Vec<Route>>>) {
-    let table = table.read().unwrap();
+    let table = table.read().await;
     for item in table.iter() {
         log::warn!("{:?}", item);
     }
@@ -41,10 +39,10 @@ async fn main() -> Result<(), std::io::Error> {
     let configuration = Configuration::new_from_cli();
 
     log::info!("Initializing peer table...");
-    initialize_peers(configuration.clone(), peering_table.clone());
+    initialize_peers(configuration.clone(), peering_table.clone()).await;
 
     log::info!("Initializing routing table...");
-    initialize_routes(configuration.clone(), routing_table.clone());
+    initialize_routes(configuration.clone(), routing_table.clone()).await;
 
     let mut scheduler = AsyncScheduler::new();
 
@@ -75,10 +73,24 @@ async fn main() -> Result<(), std::io::Error> {
     });
 
     log::info!("Starting scheduler...");
-    spawn(async move {
-        loop {
-            scheduler.run_pending().await;
-            sleep(Duration::from_millis(10)).await;
+    spawn({
+        let configuration = configuration.clone();
+        let routing_table = routing_table.clone();
+        let peering_table = peering_table.clone();
+        let message_backlog = message_backlog.clone();
+
+        async move {
+            loop {
+                scheduler.run_pending().await;
+                process_backlog(
+                    configuration.clone(),
+                    peering_table.clone(),
+                    routing_table.clone(),
+                    message_backlog.clone(),
+                )
+                .await;
+                sleep(Duration::from_millis(10)).await;
+            }
         }
     });
 

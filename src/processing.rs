@@ -1,4 +1,6 @@
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
+
+use tokio::sync::RwLock;
 
 use crate::{
     config::Configuration,
@@ -20,7 +22,7 @@ pub async fn process_message_collection<T: Into<MessageCollection>, U: Into<Conf
 
     let inbound_message_collection = inbound_message_collection.into();
 
-    check_peer(&inbound_message_collection.origin_id, peering_table.clone());
+    check_peer(&inbound_message_collection.origin_id, peering_table.clone()).await;
 
     let mut outbound_message_collection = MessageCollection {
         messages: vec![],
@@ -36,30 +38,37 @@ pub async fn process_message_collection<T: Into<MessageCollection>, U: Into<Conf
         None => configuration.id.clone(),
     };
 
-    let gateway_id = resolve_gateway_id(destination_id.clone(), routing_table.clone());
+    let gateway_id = resolve_gateway_id(destination_id.clone(), routing_table.clone()).await;
 
     if gateway_id == Some(configuration.id.clone()) {
         for message in inbound_message_collection.messages {
             match message {
                 Message::Ping => outbound_message_collection.messages.push(Message::Pong),
-                Message::RouteAdvertisement(advertisement) => advertisement.process(
-                    configuration.clone(),
-                    routing_table.clone(),
-                    inbound_message_collection.origin_id.clone(),
-                ),
+                Message::RouteAdvertisement(advertisement) => {
+                    advertisement
+                        .process(
+                            configuration.clone(),
+                            routing_table.clone(),
+                            inbound_message_collection.origin_id.clone(),
+                        )
+                        .await
+                }
                 Message::Pong => log::info!("pong received"),
-                Message::RouteRecall(route_recall) => remove_routes_by_gateway_and_destination(
-                    inbound_message_collection.origin_id.clone(),
-                    route_recall.destination_id,
-                    routing_table.clone(),
-                ),
+                Message::RouteRecall(route_recall) => {
+                    remove_routes_by_gateway_and_destination(
+                        inbound_message_collection.origin_id.clone(),
+                        route_recall.destination_id,
+                        routing_table.clone(),
+                    )
+                    .await
+                }
             }
         }
     } else {
         // Forwarding stuff happens here
         match gateway_id {
             Some(gateway_id) => {
-                let url = lookup_peer_url(&gateway_id, peering_table.clone());
+                let url = lookup_peer_url(&gateway_id, peering_table.clone()).await;
                 match url {
                     // Forward the message collection
                     Some(url) => {
@@ -70,7 +79,7 @@ pub async fn process_message_collection<T: Into<MessageCollection>, U: Into<Conf
                         )
                         .await
                         {
-                            Ok(message) => message_backlog.write().unwrap().push(message),
+                            Ok(message) => message_backlog.write().await.push(message),
                             Err(_) => {
                                 // Encountered dead url
                                 // Remove all routes using that url and push message into backlog
@@ -78,11 +87,12 @@ pub async fn process_message_collection<T: Into<MessageCollection>, U: Into<Conf
                                     url.clone(),
                                     routing_table.clone(),
                                     peering_table.clone(),
-                                );
+                                )
+                                .await;
 
                                 message_backlog
                                     .write()
-                                    .unwrap()
+                                    .await
                                     .push(inbound_message_collection);
                             }
                         }
@@ -91,25 +101,24 @@ pub async fn process_message_collection<T: Into<MessageCollection>, U: Into<Conf
                     // Message will have to be pulled
                     None => message_backlog
                         .write()
-                        .unwrap()
+                        .await
                         .push(inbound_message_collection),
                 }
             }
             // Don't know where to forward to
-            // Will drop the message collection
             None => {
-                log::error!("no route found for message collection");
+                log::warn!("no route found for message collection");
 
                 let destination_ids: Vec<String> = peering_table
                     .read()
-                    .unwrap()
+                    .await
                     .iter()
                     .filter(|x| x.id.is_some())
                     .filter(|x| x.id != inbound_message_collection.destination_id)
                     .map(|x| x.id.clone().unwrap())
                     .collect();
 
-                let mut message_backlog = message_backlog.write().unwrap();
+                let mut message_backlog = message_backlog.write().await;
 
                 if inbound_message_collection.destination_id.is_some() {
                     for id in destination_ids.iter() {

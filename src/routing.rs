@@ -31,10 +31,7 @@ pub async fn resolve_gateway_id(
     {
         let weight = route.weight.unwrap_or(0);
 
-        if best_weight.is_none() {
-            best_weight = Some(weight);
-            best_gateway_id = Some(route.gateway_id.clone())
-        } else if weight < best_weight.unwrap() {
+        if weight < best_weight.unwrap_or(usize::MAX) {
             best_weight = Some(weight);
             best_gateway_id = Some(route.gateway_id.clone())
         }
@@ -52,8 +49,7 @@ pub async fn remove_routes_by_url(
     let peer_ids: Vec<String> = peering_table
         .iter()
         .filter(|x| x.url == Some(url.clone()))
-        .filter(|x| x.id.is_some())
-        .map(|x| x.id.clone().unwrap())
+        .filter_map(|x| x.id.clone())
         .collect();
     drop(peering_table);
 
@@ -62,7 +58,7 @@ pub async fn remove_routes_by_url(
     let mut updated_routing_table: Vec<Route> = routing_table
         .iter()
         .filter(|x| !peer_ids.contains(&x.destination_id) || x.destination_id == x.gateway_id)
-        .map(|x| x.clone())
+        .cloned()
         .collect();
     routing_table.clear();
     routing_table.append(&mut updated_routing_table);
@@ -77,7 +73,7 @@ pub async fn remove_routes_by_gateway_and_destination(
     let mut updated_routing_table: Vec<Route> = routing_table
         .iter()
         .filter(|x| x.destination_id != destination_id && x.gateway_id != gateway_id)
-        .map(|x| x.clone())
+        .cloned()
         .collect();
     routing_table.clear();
     routing_table.append(&mut updated_routing_table);
@@ -179,7 +175,7 @@ impl RouteAdvertisement {
                     });
                 }
                 Some(weight) => {
-                    if advertised_route.weight.unwrap() < weight.clone() {
+                    if advertised_route.weight.unwrap() < *weight {
                         let mut indices: Vec<usize> = routing_table
                             .iter()
                             .enumerate()
@@ -208,7 +204,7 @@ impl RouteAdvertisement {
     pub fn from_routes<T: Into<Vec<Route>>>(routes: T) -> Self {
         let routes = routes.into();
         let mut advertisement = Self::default();
-        advertisement.routes = routes.clone();
+        advertisement.routes = routes;
         advertisement
     }
 }

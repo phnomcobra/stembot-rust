@@ -1,6 +1,6 @@
 use chrono::{SecondsFormat, Utc};
 use log::Level;
-use std::{io::Write, thread, str::FromStr};
+use std::{io::Write, str::FromStr, thread};
 
 pub mod backlog;
 pub mod config;
@@ -12,7 +12,11 @@ pub mod routing;
 
 pub fn init_logger(loglevel: String) {
     env_logger::builder()
-        .filter_level(Level::from_str(&loglevel).expect("invalid log level filter specified").to_level_filter())
+        .filter_level(
+            Level::from_str(&loglevel)
+                .expect("invalid log level filter specified")
+                .to_level_filter(),
+        )
         .format(move |buf, record| {
             writeln!(
                 buf,

@@ -35,7 +35,7 @@ pub async fn check_peer(id: &String, peering_table: Arc<RwLock<Vec<Peer>>>) {
         .iter()
         .filter(|x| x.id == Some(id.to_string()))
         .collect();
-    let present = peers.len() > 0;
+    let present = !peers.is_empty();
 
     drop(peers);
     drop(peering_table_read);
@@ -53,13 +53,15 @@ pub async fn check_peer(id: &String, peering_table: Arc<RwLock<Vec<Peer>>>) {
 pub async fn lookup_peer_url(id: &String, peering_table: Arc<RwLock<Vec<Peer>>>) -> Option<String> {
     let peering_table = peering_table.read().await;
 
-    for peer in peering_table
+    let peers: Vec<Peer> = peering_table
         .iter()
         .filter(|x| Some(id.to_string()) == x.id)
         .filter(|x| x.url.is_some())
-    {
-        return peer.url.clone();
-    }
+        .cloned()
+        .collect();
 
-    None
+    match peers.first() {
+        Some(peer) => peer.url.clone(),
+        None => None,
+    }
 }

@@ -59,14 +59,14 @@ pub async fn send_message_collection_to_url<U: Into<String>, V: Into<Configurati
 
     let outgoing_message_bytes: Vec<u8> = match outgoing_message_collection.try_into() {
         Ok(collection) => collection,
-        Err(error) => return Err(error.into()),
+        Err(error) => return Err(error),
     };
 
     match send_raw_message(outgoing_message_bytes, url, configuration).await {
         Ok(bytes) => {
             let incoming_message_collection: MessageCollection = match bytes.try_into() {
                 Ok(collection) => collection,
-                Err(error) => return Err(error.into()),
+                Err(error) => return Err(error),
             };
 
             Ok(incoming_message_collection)

@@ -1,4 +1,4 @@
-use std::{ops::Add, sync::Arc};
+use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
@@ -61,7 +61,7 @@ pub async fn remove_routes_by_url(
 
     let mut updated_routing_table: Vec<Route> = routing_table
         .iter()
-        .filter(|x| !peer_ids.contains(&x.destination_id))
+        .filter(|x| !peer_ids.contains(&x.destination_id) || x.destination_id == x.gateway_id)
         .map(|x| x.clone())
         .collect();
     routing_table.clear();
@@ -90,19 +90,16 @@ pub async fn advertise(
     message_backlog: Arc<RwLock<Vec<MessageCollection>>>,
 ) {
     let mut local_peering_table = peering_table.read().await.clone();
-    let static_peering_table = peering_table.read().await.clone();
 
-    let advertisement_message: Message =
-        Message::RouteAdvertisement(RouteAdvertisement::from_peers_and_routes(
-            routing_table.read().await.clone(),
-            static_peering_table.clone(),
-        ));
+    let advertisement_message: Message = Message::RouteAdvertisement(
+        RouteAdvertisement::from_routes(routing_table.read().await.clone()),
+    );
 
     for peer in local_peering_table.iter_mut().filter(|x| x.url.is_some()) {
         let configuration = configuration.clone();
 
         let outgoing_message_collection = MessageCollection {
-            messages: vec![Message::Ping, advertisement_message.clone()],
+            messages: vec![advertisement_message.clone()],
             origin_id: configuration.id.clone(),
             destination_id: peer.id.clone(),
         };
@@ -131,7 +128,8 @@ pub async fn advertise(
                     peer.url.clone().unwrap(),
                     routing_table.clone(),
                     peering_table.clone(),
-                ).await;
+                )
+                .await;
                 log::error!("{}", error)
             }
         };
@@ -155,38 +153,37 @@ impl RouteAdvertisement {
     ) {
         let mut routing_table = routing_table.write().await;
 
-        for route in self
+        for advertised_route in self
             .routes
             .iter()
             .filter(|x| x.destination_id != configuration.id)
             .map(|x| Route {
-                weight: Some(x.weight.unwrap_or(0)),
+                weight: Some(x.weight.unwrap_or(0) + 1),
                 destination_id: x.destination_id.clone(),
                 gateway_id: x.gateway_id.clone(),
             })
         {
             let weights: Vec<usize> = routing_table
                 .iter()
-                .filter(|x| x.destination_id == route.destination_id)
+                .filter(|x| x.destination_id == advertised_route.destination_id)
                 .filter(|x| x.gateway_id == origin_id)
-                .filter(|x| x.weight.is_some())
-                .map(|x| x.weight.unwrap())
+                .map(|x| x.weight.unwrap_or(0))
                 .collect();
 
             match weights.iter().min() {
                 None => {
                     routing_table.push(Route {
                         gateway_id: origin_id.clone(),
-                        destination_id: route.destination_id.clone(),
-                        weight: route.weight,
+                        destination_id: advertised_route.destination_id.clone(),
+                        weight: advertised_route.weight,
                     });
                 }
                 Some(weight) => {
-                    if route.weight.unwrap() < *weight {
+                    if advertised_route.weight.unwrap() < weight.clone() {
                         let mut indices: Vec<usize> = routing_table
                             .iter()
                             .enumerate()
-                            .filter(|x| x.1.destination_id == route.destination_id)
+                            .filter(|x| x.1.destination_id == advertised_route.destination_id)
                             .filter(|x| x.1.gateway_id == origin_id)
                             .map(|x| x.0)
                             .collect();
@@ -199,8 +196,8 @@ impl RouteAdvertisement {
 
                         routing_table.push(Route {
                             gateway_id: origin_id.clone(),
-                            destination_id: route.destination_id.clone(),
-                            weight: route.weight,
+                            destination_id: advertised_route.destination_id.clone(),
+                            weight: advertised_route.weight,
                         });
                     }
                 }
@@ -208,64 +205,11 @@ impl RouteAdvertisement {
         }
     }
 
-    pub fn from_peers<T: Into<Vec<Peer>>>(peers: T) -> Self {
-        let peers = peers.into();
-
-        let mut advertisement = Self::default();
-
-        for peer in peers.iter() {
-            let id = match &peer.id {
-                Some(id) => id.clone(),
-                None => continue,
-            };
-
-            advertisement.routes.push(Route {
-                destination_id: id.clone(),
-                gateway_id: id,
-                weight: Some(1),
-            })
-        }
-
-        advertisement
-    }
-
     pub fn from_routes<T: Into<Vec<Route>>>(routes: T) -> Self {
         let routes = routes.into();
-
         let mut advertisement = Self::default();
-
-        for route in routes.iter() {
-            let weight = match route.weight {
-                Some(x) => Some(x + 1),
-                None => None,
-            };
-
-            advertisement.routes.push(Route {
-                destination_id: route.destination_id.clone(),
-                gateway_id: route.gateway_id.clone(),
-                weight,
-            });
-        }
-
+        advertisement.routes = routes.clone();
         advertisement
-    }
-
-    pub fn from_peers_and_routes<T: Into<Vec<Route>>, U: Into<Vec<Peer>>>(
-        routes: T,
-        peers: U,
-    ) -> Self {
-        Self::from_peers(peers.into().clone()) + Self::from_routes(routes.into().clone())
-    }
-}
-
-impl Add for RouteAdvertisement {
-    type Output = Self;
-
-    fn add(self, other: RouteAdvertisement) -> Self {
-        let mut routes: Vec<Route> = self.routes.clone();
-        let mut others: Vec<Route> = other.routes.clone();
-        routes.append(&mut others);
-        RouteAdvertisement { routes }
     }
 }
 

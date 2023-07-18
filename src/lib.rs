@@ -1,6 +1,6 @@
 use chrono::{SecondsFormat, Utc};
-use log::LevelFilter;
-use std::{io::Write, thread};
+use log::Level;
+use std::{io::Write, thread, str::FromStr};
 
 pub mod backlog;
 pub mod config;
@@ -10,9 +10,9 @@ pub mod peering;
 pub mod processing;
 pub mod routing;
 
-pub fn init_logger() {
+pub fn init_logger(loglevel: String) {
     env_logger::builder()
-        .filter_level(LevelFilter::Info)
+        .filter_level(Level::from_str(&loglevel).expect("invalid log level filter specified").to_level_filter())
         .format(move |buf, record| {
             writeln!(
                 buf,

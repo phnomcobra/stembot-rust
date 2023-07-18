@@ -3,6 +3,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use crate::{
+    backlog::push_message_collection_to_backlog,
     config::Configuration,
     messaging::{send_message_collection_to_url, Message, MessageCollection, RouteRecall},
     peering::{check_peer, lookup_peer_url, Peer},
@@ -43,8 +44,12 @@ pub async fn process_message_collection<T: Into<MessageCollection>, U: Into<Conf
     if gateway_id == Some(configuration.id.clone()) {
         for message in inbound_message_collection.messages {
             match message {
-                Message::Ping => outbound_message_collection.messages.push(Message::Pong),
+                Message::Ping => {
+                    log::warn!("ping received");
+                    outbound_message_collection.messages.push(Message::Pong)
+                }
                 Message::RouteAdvertisement(advertisement) => {
+                    //log::warn!("route advertisement received");
                     advertisement
                         .process(
                             configuration.clone(),
@@ -53,8 +58,11 @@ pub async fn process_message_collection<T: Into<MessageCollection>, U: Into<Conf
                         )
                         .await
                 }
-                Message::Pong => log::info!("pong received"),
+                Message::Pong => {
+                    log::warn!("pong received")
+                }
                 Message::RouteRecall(route_recall) => {
+                    //log::warn!("route recall received");
                     remove_routes_by_gateway_and_destination(
                         inbound_message_collection.origin_id.clone(),
                         route_recall.destination_id,
@@ -79,7 +87,10 @@ pub async fn process_message_collection<T: Into<MessageCollection>, U: Into<Conf
                         )
                         .await
                         {
-                            Ok(message) => message_backlog.write().await.push(message),
+                            Ok(message) => {
+                                push_message_collection_to_backlog(message, message_backlog.clone())
+                                    .await
+                            }
                             Err(_) => {
                                 // Encountered dead url
                                 // Remove all routes using that url and push message into backlog
@@ -90,25 +101,27 @@ pub async fn process_message_collection<T: Into<MessageCollection>, U: Into<Conf
                                 )
                                 .await;
 
-                                message_backlog
-                                    .write()
-                                    .await
-                                    .push(inbound_message_collection);
+                                push_message_collection_to_backlog(
+                                    inbound_message_collection,
+                                    message_backlog.clone(),
+                                )
+                                .await;
                             }
                         }
                     }
                     // Know where to forward to but not how
                     // Message will have to be pulled
-                    None => message_backlog
-                        .write()
+                    None => {
+                        push_message_collection_to_backlog(
+                            inbound_message_collection,
+                            message_backlog.clone(),
+                        )
                         .await
-                        .push(inbound_message_collection),
+                    }
                 }
             }
             // Don't know where to forward to
             None => {
-                log::warn!("no route found for message collection");
-
                 let destination_ids: Vec<String> = peering_table
                     .read()
                     .await
@@ -118,24 +131,30 @@ pub async fn process_message_collection<T: Into<MessageCollection>, U: Into<Conf
                     .map(|x| x.id.clone().unwrap())
                     .collect();
 
-                let mut message_backlog = message_backlog.write().await;
-
                 if inbound_message_collection.destination_id.is_some() {
                     for id in destination_ids.iter() {
-                        message_backlog.push(MessageCollection {
-                            messages: vec![Message::RouteRecall(RouteRecall {
-                                destination_id: inbound_message_collection
-                                    .destination_id
-                                    .clone()
-                                    .unwrap(),
-                            })],
-                            origin_id: configuration.id.clone(),
-                            destination_id: Some(id.clone()),
-                        });
+                        push_message_collection_to_backlog(
+                            MessageCollection {
+                                messages: vec![Message::RouteRecall(RouteRecall {
+                                    destination_id: inbound_message_collection
+                                        .destination_id
+                                        .clone()
+                                        .unwrap(),
+                                })],
+                                origin_id: configuration.id.clone(),
+                                destination_id: Some(id.clone()),
+                            },
+                            message_backlog.clone(),
+                        )
+                        .await;
                     }
                 }
 
-                message_backlog.push(inbound_message_collection);
+                push_message_collection_to_backlog(
+                    inbound_message_collection,
+                    message_backlog.clone(),
+                )
+                .await;
             }
         }
     }

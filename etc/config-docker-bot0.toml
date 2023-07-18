@@ -4,7 +4,15 @@ host="0.0.0.0"
 port=8080
 endpoint="/"
 maxrouteweight=10
+tracing=false
+loglevel="info"
+# panicroutingthreshold
+# dropthreshold
 
 [peer.docker-bot1]
 url="http://bot1:8080/"
 polling=false
+
+[ping.docker-bot4]
+delay=1
+destination_id="docker-bot4"

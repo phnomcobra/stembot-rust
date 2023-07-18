@@ -2,22 +2,33 @@ use std::collections::HashMap;
 
 use clap::Parser;
 use serde::Deserialize;
-
 use toml::de::Error;
 
 use crate::peering::Peer;
 
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Clone, Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct Configuration {
     pub secret: String,
     pub id: String,
     pub host: String,
     pub port: u16,
     pub endpoint: String,
+    #[serde(default)]
     pub peer: HashMap<String, Peer>,
+    #[serde(default)]
+    pub ping: HashMap<String, Ping>,
     pub maxrouteweight: usize,
+    pub tracing: bool,
+    pub loglevel: String,
+}
+
+#[allow(clippy::struct_excessive_bools)]
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Ping {
+    pub destination_id: String,
+    pub delay: u32,
 }
 
 #[derive(Parser, Clone, Debug, Deserialize)]

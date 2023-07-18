@@ -4,6 +4,8 @@ host="0.0.0.0"
 port=8080
 endpoint="/"
 maxrouteweight=10
+tracing=false
+loglevel="info"
 
 [peer.docker-bot2]
 url="http://bot2:8080/"

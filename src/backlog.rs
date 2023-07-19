@@ -4,9 +4,38 @@ use actix_web::rt::spawn;
 use tokio::sync::RwLock;
 
 use crate::{
-    config::Configuration, messaging::MessageCollection, peering::Peer,
-    processing::process_message_collection, routing::Route,
+    config::Configuration,
+    messaging::{BacklogRequest, BacklogResponse, Message, MessageCollection},
+    peering::Peer,
+    processing::process_message_collection,
+    routing::{resolve_gateway_id, Route},
 };
+
+pub async fn poll_backlogs<T: Into<Configuration>>(
+    configuration: T,
+    peering_table: Arc<RwLock<Vec<Peer>>>,
+    message_backlog: Arc<RwLock<Vec<MessageCollection>>>,
+) {
+    let configuration = configuration.into();
+    let peering_table = peering_table.read().await;
+    let backlog_request = BacklogRequest {
+        gateway_id: configuration.id.clone(),
+    };
+
+    for peer in peering_table
+        .iter()
+        .filter(|x| x.polling)
+        .filter(|x| x.url.is_some())
+    {
+        let message_collection = MessageCollection {
+            messages: vec![Message::BacklogRequest(backlog_request.clone())],
+            origin_id: configuration.id.clone(),
+            destination_id: peer.id.clone(),
+        };
+
+        push_message_collection_to_backlog(message_collection, message_backlog.clone()).await
+    }
+}
 
 pub async fn push_message_collection_to_backlog(
     message_collection: MessageCollection,
@@ -15,6 +44,45 @@ pub async fn push_message_collection_to_backlog(
     if !message_collection.messages.is_empty() {
         message_backlog.write().await.push(message_collection);
     }
+}
+
+pub async fn request_backlog<T: Into<Configuration>>(
+    configuration: T,
+    routing_table: Arc<RwLock<Vec<Route>>>,
+    message_backlog: Arc<RwLock<Vec<MessageCollection>>>,
+    backlog_request: BacklogRequest,
+) -> BacklogResponse {
+    let configuration = configuration.into();
+    let mut message_backlog = message_backlog.write().await;
+    let mut backlog_indices_to_remove: Vec<usize> = vec![];
+    let mut backlog_response = BacklogResponse {
+        message_collections: vec![],
+    };
+
+    for (i, message_collection) in message_backlog.iter().enumerate() {
+        let resovled_gateway_id = resolve_gateway_id(
+            message_collection
+                .destination_id
+                .clone()
+                .unwrap_or_else(|| configuration.id.clone()),
+            routing_table.clone(),
+        )
+        .await;
+
+        if resovled_gateway_id == Some(backlog_request.gateway_id.clone()) {
+            backlog_indices_to_remove.push(i);
+            backlog_response
+                .message_collections
+                .push(message_collection.clone())
+        }
+    }
+
+    backlog_indices_to_remove.sort_by(|a, b| b.cmp(a));
+    for i in backlog_indices_to_remove {
+        message_backlog.remove(i);
+    }
+
+    backlog_response
 }
 
 pub async fn process_backlog<T: Into<Configuration>>(

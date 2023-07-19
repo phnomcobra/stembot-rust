@@ -13,9 +13,21 @@ pub struct RouteRecall {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct BacklogResponse {
+    pub message_collections: Vec<MessageCollection>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct BacklogRequest {
+    pub gateway_id: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum Message {
     RouteAdvertisement(RouteAdvertisement),
     RouteRecall(RouteRecall),
+    BacklogResponse(BacklogResponse),
+    BacklogRequest(BacklogRequest),
     Ping,
     Pong,
 }

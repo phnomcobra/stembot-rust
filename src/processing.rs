@@ -3,10 +3,12 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use crate::{
-    backlog::push_message_collection_to_backlog,
+    backlog::{push_message_collection_to_backlog, request_backlog},
     config::Configuration,
-    messaging::{send_message_collection_to_url, Message, MessageCollection, RouteRecall},
-    peering::{lookup_peer_url, Peer, touch_peer},
+    messaging::{
+        send_message_collection_to_url, Message, MessageCollection, RouteAdvertisement, RouteRecall,
+    },
+    peering::{lookup_peer_url, touch_peer, Peer},
     routing::{
         remove_routes_by_gateway_and_destination, remove_routes_by_url, resolve_gateway_id, Route,
     },
@@ -56,7 +58,12 @@ pub async fn process_message_collection<T: Into<MessageCollection>, U: Into<Conf
                             routing_table.clone(),
                             inbound_message_collection.origin_id.clone(),
                         )
-                        .await
+                        .await;
+                    outbound_message_collection
+                        .messages
+                        .push(Message::RouteAdvertisement(
+                            RouteAdvertisement::from_routes(routing_table.read().await.clone()),
+                        ));
                 }
                 Message::Pong => {
                     log::warn!("pong received")
@@ -69,6 +76,29 @@ pub async fn process_message_collection<T: Into<MessageCollection>, U: Into<Conf
                         routing_table.clone(),
                     )
                     .await
+                }
+                Message::BacklogRequest(backlog_request) => {
+                    log::warn!("backlog request received");
+                    let backlog_response = request_backlog(
+                        configuration.clone(),
+                        routing_table.clone(),
+                        message_backlog.clone(),
+                        backlog_request.clone(),
+                    )
+                    .await;
+                    outbound_message_collection
+                        .messages
+                        .push(Message::BacklogResponse(backlog_response));
+                }
+                Message::BacklogResponse(backlog_response) => {
+                    log::warn!("backlog response received");
+                    for message_collection in backlog_response.message_collections {
+                        push_message_collection_to_backlog(
+                            message_collection.clone(),
+                            message_backlog.clone(),
+                        )
+                        .await;
+                    }
                 }
             }
         }

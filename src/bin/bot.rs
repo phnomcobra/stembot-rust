@@ -6,7 +6,7 @@ use std::{sync::Arc, time::Duration};
 use tokio::{sync::RwLock, time::sleep};
 
 use stembot_rust::{
-    backlog::{process_backlog, push_message_collection_to_backlog},
+    backlog::{poll_backlogs, process_backlog, push_message_collection_to_backlog},
     config::Configuration,
     init_logger,
     io::http::endpoint::message_handler,
@@ -15,12 +15,19 @@ use stembot_rust::{
     routing::{advertise, age_routes, initialize_routes, Route},
 };
 
-async fn test(_table: Arc<RwLock<Vec<Route>>>, _backlog: Arc<RwLock<Vec<MessageCollection>>>) {
-
-    //let table = _table.read().await;
-    //for item in table.iter() {
-    //    log::warn!("{:?}", item);
+async fn test(
+    _peers: Arc<RwLock<Vec<Peer>>>,
+    _routes: Arc<RwLock<Vec<Route>>>,
+    _backlog: Arc<RwLock<Vec<MessageCollection>>>,
+) {
+    // for item in _peers.read().await.iter() {
+    //     log::warn!("{:?}", item);
     // }
+
+    // for item in _routes.read().await.iter() {
+    //     log::warn!("{:?}", item);
+    // }
+
     // log::warn!("backlog length: {}", _backlog.read().await.len());
     // for item in _backlog.read().await.iter() {
     //     log::warn!("{:?}", item);
@@ -79,6 +86,19 @@ async fn main() -> Result<(), std::io::Error> {
     scheduler.every(Seconds(1)).run({
         let configuration = configuration.clone();
         let peering_table = peering_table.clone();
+        let message_backlog = message_backlog.clone();
+        move || {
+            poll_backlogs(
+                configuration.clone(),
+                peering_table.clone(),
+                message_backlog.clone(),
+            )
+        }
+    });
+
+    scheduler.every(Seconds(1)).run({
+        let configuration = configuration.clone();
+        let peering_table = peering_table.clone();
         let routing_table = routing_table.clone();
         let message_backlog = message_backlog.clone();
         move || {
@@ -98,9 +118,16 @@ async fn main() -> Result<(), std::io::Error> {
     });
 
     scheduler.every(Seconds(1)).run({
-        let table = routing_table.clone();
+        let peering_table = peering_table.clone();
+        let routing_table = routing_table.clone();
         let backlog = message_backlog.clone();
-        move || test(table.clone(), backlog.clone())
+        move || {
+            test(
+                peering_table.clone(),
+                routing_table.clone(),
+                backlog.clone(),
+            )
+        }
     });
 
     log::info!("Starting scheduler...");

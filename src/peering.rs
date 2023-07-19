@@ -19,7 +19,12 @@ pub struct PeerTable {
 
 pub async fn initialize_peers(configuration: Configuration, peering_table: Arc<RwLock<Vec<Peer>>>) {
     let mut peering_table = peering_table.write().await;
-    for peer in configuration.clone().peer.into_values() {
+    for peer in configuration
+        .clone()
+        .peer
+        .into_values()
+        .filter(|x| x.url.is_some())
+    {
         peering_table.push(Peer {
             id: None,
             url: peer.url.clone(),

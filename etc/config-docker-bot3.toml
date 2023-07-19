@@ -9,7 +9,7 @@ loglevel="info"
 
 [peer.docker-bot2]
 url="http://bot2:8080/"
-polling=false
+polling=true
 
 [peer.docker-bot4]
 url="http://bot4:8080/"

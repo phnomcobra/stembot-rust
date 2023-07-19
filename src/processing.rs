@@ -49,7 +49,7 @@ pub async fn process_message_collection<T: Into<MessageCollection>, U: Into<Conf
                     outbound_message_collection.messages.push(Message::Pong)
                 }
                 Message::RouteAdvertisement(advertisement) => {
-                    //log::warn!("route advertisement received");
+                    log::warn!("route advertisement received");
                     advertisement
                         .process(
                             configuration.clone(),
@@ -62,7 +62,7 @@ pub async fn process_message_collection<T: Into<MessageCollection>, U: Into<Conf
                     log::warn!("pong received")
                 }
                 Message::RouteRecall(route_recall) => {
-                    //log::warn!("route recall received");
+                    log::warn!("route recall received");
                     remove_routes_by_gateway_and_destination(
                         inbound_message_collection.origin_id.clone(),
                         route_recall.destination_id,

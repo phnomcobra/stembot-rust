@@ -15,14 +15,14 @@ use stembot_rust::{
     routing::{advertise, age_routes, initialize_routes, Route},
 };
 
-async fn test(table: Arc<RwLock<Vec<Route>>>, backlog: Arc<RwLock<Vec<MessageCollection>>>) {
+async fn test(_table: Arc<RwLock<Vec<Route>>>, _backlog: Arc<RwLock<Vec<MessageCollection>>>) {
 
-    //let table = table.read().await;
+    //let table = _table.read().await;
     //for item in table.iter() {
     //    log::warn!("{:?}", item);
     // }
-    // log::warn!("backlog length: {}", backlog.read().await.len());
-    // for item in backlog.read().await.iter() {
+    // log::warn!("backlog length: {}", _backlog.read().await.len());
+    // for item in _backlog.read().await.iter() {
     //     log::warn!("{:?}", item);
     // }
 }

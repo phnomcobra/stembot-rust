@@ -6,7 +6,7 @@ use crate::{
     backlog::push_message_collection_to_backlog,
     config::Configuration,
     messaging::{send_message_collection_to_url, Message, MessageCollection, RouteRecall},
-    peering::{check_peer, lookup_peer_url, Peer},
+    peering::{lookup_peer_url, Peer, touch_peer},
     routing::{
         remove_routes_by_gateway_and_destination, remove_routes_by_url, resolve_gateway_id, Route,
     },
@@ -22,8 +22,6 @@ pub async fn process_message_collection<T: Into<MessageCollection>, U: Into<Conf
     let configuration = configuration.into();
 
     let inbound_message_collection = inbound_message_collection.into();
-
-    check_peer(&inbound_message_collection.origin_id, peering_table.clone()).await;
 
     let mut outbound_message_collection = MessageCollection {
         messages: vec![],
@@ -42,6 +40,8 @@ pub async fn process_message_collection<T: Into<MessageCollection>, U: Into<Conf
     let gateway_id = resolve_gateway_id(destination_id.clone(), routing_table.clone()).await;
 
     if gateway_id == Some(configuration.id.clone()) {
+        touch_peer(&inbound_message_collection.origin_id, peering_table.clone()).await;
+
         for message in inbound_message_collection.messages {
             match message {
                 Message::Ping => {

@@ -28,7 +28,7 @@ pub async fn initialize_peers(configuration: Configuration, peering_table: Arc<R
     }
 }
 
-pub async fn check_peer(id: &String, peering_table: Arc<RwLock<Vec<Peer>>>) {
+pub async fn touch_peer(id: &String, peering_table: Arc<RwLock<Vec<Peer>>>) {
     let peering_table_read = peering_table.read().await;
 
     let peers: Vec<&Peer> = peering_table_read

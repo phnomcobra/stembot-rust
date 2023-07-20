@@ -10,7 +10,7 @@ use stembot_rust::{
     config::Configuration,
     init_logger,
     io::http::endpoint::message_handler,
-    messaging::{Message, MessageCollection},
+    messaging::{Message, MessageCollection, TraceRequest},
     peering::{initialize_peers, Peer},
     routing::{advertise, age_routes, initialize_routes, Route},
 };
@@ -77,6 +77,39 @@ async fn main() -> Result<(), std::io::Error> {
             move || {
                 push_message_collection_to_backlog(
                     message_collection.clone(),
+                    message_backlog.clone(),
+                )
+            }
+        });
+    }
+
+    for trace in configuration.trace.iter() {
+        log::info!(
+            "Registering trace \"{}\" to \"{}\" every {} seconds...",
+            trace.1.request_id.clone().unwrap_or_else(|| "default".to_string()),
+            trace.1.destination_id.clone(),
+            trace.1.delay.clone(),
+        );
+
+        scheduler.every(Seconds(trace.1.delay)).run({
+            let trace = trace.1.clone();
+            let configuration = configuration.clone();
+            let message_backlog = message_backlog.clone();
+
+            move || {
+                let trace_request_message = match trace.request_id.clone() {
+                    Some(id) => Message::TraceRequest(TraceRequest::new(id)),
+                    None => Message::TraceRequest(TraceRequest::default()),
+                };
+
+                let message_collection = MessageCollection {
+                    origin_id: configuration.id.clone(),
+                    destination_id: Some(trace.destination_id.clone()),
+                    messages: vec![trace_request_message],
+                };
+
+                push_message_collection_to_backlog(
+                    message_collection,
                     message_backlog.clone(),
                 )
             }

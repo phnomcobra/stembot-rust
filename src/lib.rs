@@ -9,6 +9,7 @@ pub mod messaging;
 pub mod peering;
 pub mod processing;
 pub mod routing;
+pub mod trace;
 
 pub fn init_logger(loglevel: String) {
     env_logger::builder()

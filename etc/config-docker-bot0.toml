@@ -16,3 +16,8 @@ polling=false
 [ping.docker-bot4]
 delay=1
 destination_id="docker-bot4"
+
+[trace.docker-bot4]
+delay=10
+destination_id="docker-bot4"
+request_id="bot4"

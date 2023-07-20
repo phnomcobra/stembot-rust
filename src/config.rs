@@ -18,6 +18,8 @@ pub struct Configuration {
     pub peer: HashMap<String, Peer>,
     #[serde(default)]
     pub ping: HashMap<String, Ping>,
+    #[serde(default)]
+    pub trace: HashMap<String, Trace>,
     pub maxrouteweight: usize,
     pub tracing: bool,
     pub loglevel: String,
@@ -29,6 +31,14 @@ pub struct Configuration {
 pub struct Ping {
     pub destination_id: String,
     pub delay: u32,
+}
+
+#[allow(clippy::struct_excessive_bools)]
+#[derive(Clone, Debug, Deserialize)]
+pub struct Trace {
+    pub destination_id: String,
+    pub delay: u32,
+    pub request_id: Option<String>,
 }
 
 #[derive(Parser, Clone, Debug, Deserialize)]

@@ -6,7 +6,8 @@ use crate::{
     backlog::{push_message_collection_to_backlog, request_backlog},
     config::Configuration,
     messaging::{
-        send_message_collection_to_url, Message, MessageCollection, RouteAdvertisement, RouteRecall,
+        send_message_collection_to_url, Message, MessageCollection, RouteAdvertisement,
+        RouteRecall, TraceResponse,
     },
     peering::{lookup_peer_url, touch_peer, Peer},
     routing::{
@@ -23,7 +24,7 @@ pub async fn process_message_collection<T: Into<MessageCollection>, U: Into<Conf
 ) -> MessageCollection {
     let configuration = configuration.into();
 
-    let inbound_message_collection = inbound_message_collection.into();
+    let mut inbound_message_collection = inbound_message_collection.into();
 
     let mut outbound_message_collection = MessageCollection {
         messages: vec![],
@@ -38,6 +39,39 @@ pub async fn process_message_collection<T: Into<MessageCollection>, U: Into<Conf
         Some(id) => id,
         None => configuration.id.clone(),
     };
+
+    // Process trace messages
+    for message in inbound_message_collection.messages.iter_mut() {
+        match message {
+            Message::TraceRequest(trace_request) => {
+                let trace_event = trace_request.process(configuration.clone());
+
+                let message_collection = MessageCollection {
+                    messages: vec![Message::TraceEvent(trace_event)],
+                    destination_id: Some(inbound_message_collection.origin_id.clone()),
+                    origin_id: configuration.id.clone(),
+                };
+
+                push_message_collection_to_backlog(message_collection, message_backlog.clone())
+                    .await
+            }
+            Message::TraceResponse(trace_response) => {
+                let trace_event = trace_response.process(configuration.clone());
+
+                if inbound_message_collection.destination_id.is_some() {
+                    let message_collection = MessageCollection {
+                        messages: vec![Message::TraceEvent(trace_event)],
+                        destination_id: inbound_message_collection.destination_id.clone(),
+                        origin_id: configuration.id.clone(),
+                    };
+
+                    push_message_collection_to_backlog(message_collection, message_backlog.clone())
+                        .await
+                }
+            }
+            _ => {}
+        }
+    }
 
     let gateway_id = resolve_gateway_id(destination_id.clone(), routing_table.clone()).await;
 
@@ -99,6 +133,17 @@ pub async fn process_message_collection<T: Into<MessageCollection>, U: Into<Conf
                         )
                         .await;
                     }
+                }
+                Message::TraceRequest(trace_request) => {
+                    outbound_message_collection
+                        .messages
+                        .push(Message::TraceResponse(TraceResponse::from(trace_request)));
+                }
+                Message::TraceResponse(trace_response) => {
+                    log::warn!("{trace_response}")
+                }
+                Message::TraceEvent(trace_event) => {
+                    log::warn!("{trace_event}")
                 }
             }
         }

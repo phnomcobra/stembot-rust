@@ -1,6 +1,9 @@
 use crate::{config::Configuration, io::http::client::send_raw_message, routing::Route};
 use serde::{Deserialize, Serialize};
-use std::error::Error;
+use std::{
+    error::Error,
+    fmt::{self, Display},
+};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct RouteAdvertisement {
@@ -23,6 +26,44 @@ pub struct BacklogRequest {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct TraceRequest {
+    pub hop_count: usize,
+    pub request_id: String,
+    pub start_time: u128,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct TraceResponse {
+    pub hop_count: usize,
+    pub request_id: String,
+    pub start_time: u128,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum Direction {
+    Outbound,
+    Inbound,
+}
+
+impl Display for Direction {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Inbound => write!(f, "inbound"),
+            Self::Outbound => write!(f, "outbound"),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct TraceEvent {
+    pub hop_count: usize,
+    pub request_id: String,
+    pub local_time: u128,
+    pub id: String,
+    pub direction: Direction,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum Message {
     RouteAdvertisement(RouteAdvertisement),
     RouteRecall(RouteRecall),
@@ -30,6 +71,9 @@ pub enum Message {
     BacklogRequest(BacklogRequest),
     Ping,
     Pong,
+    TraceRequest(TraceRequest),
+    TraceResponse(TraceResponse),
+    TraceEvent(TraceEvent),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

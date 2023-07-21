@@ -12,7 +12,7 @@ use crate::{
     peering::{lookup_peer_url, touch_peer, Peer},
     routing::{
         remove_routes_by_gateway_and_destination, remove_routes_by_url, resolve_gateway_id, Route,
-    },
+    }, ticket::{process_ticket_request, process_ticket_response},
 };
 
 pub async fn process_message_collection<T: Into<MessageCollection>, U: Into<Configuration>>(
@@ -144,6 +144,16 @@ pub async fn process_message_collection<T: Into<MessageCollection>, U: Into<Conf
                 }
                 Message::TraceEvent(trace_event) => {
                     log::warn!("{trace_event}")
+                }
+                Message::TicketRequest(ticket_request) => {
+                    log::warn!("ticket request received");
+                    outbound_message_collection
+                        .messages
+                        .push(Message::TicketResponse(process_ticket_request(ticket_request).await));
+                }
+                Message::TicketResponse(ticket_response) => {
+                    log::warn!("ticket response received");
+                    process_ticket_response(ticket_response).await;
                 }
             }
         }

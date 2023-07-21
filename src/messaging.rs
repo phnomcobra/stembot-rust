@@ -64,6 +64,24 @@ pub struct TraceEvent {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum Ticket {
+    Test
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct TicketRequest {
+    pub ticket: Ticket,
+    pub ticket_id: String,
+    pub start_time: u128,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct TicketResponse {
+    pub ticket: Ticket,
+    pub ticket_id: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum Message {
     RouteAdvertisement(RouteAdvertisement),
     RouteRecall(RouteRecall),
@@ -74,6 +92,8 @@ pub enum Message {
     TraceRequest(TraceRequest),
     TraceResponse(TraceResponse),
     TraceEvent(TraceEvent),
+    TicketRequest(TicketRequest),
+    TicketResponse(TicketResponse),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

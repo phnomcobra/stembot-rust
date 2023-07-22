@@ -1,8 +1,11 @@
-use crate::messaging::{TicketRequest, TicketResponse, Ticket};
+use crate::messaging::{Ticket, TicketRequest, TicketResponse};
 
 pub async fn process_ticket_request(ticket_request: TicketRequest) -> TicketResponse {
     match ticket_request.ticket {
-        Ticket::Test => TicketResponse { ticket: ticket_request.ticket, ticket_id: ticket_request.ticket_id }
+        Ticket::Test => TicketResponse {
+            ticket: ticket_request.ticket,
+            ticket_id: ticket_request.ticket_id,
+        },
     }
 }
 

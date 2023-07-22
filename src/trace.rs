@@ -4,8 +4,8 @@ use std::{
 };
 
 use crate::{
-    config::Configuration,
     messaging::{Direction, TraceEvent, TraceRequest, TraceResponse},
+    state::Singleton,
 };
 
 impl TraceRequest {
@@ -36,7 +36,7 @@ impl TraceRequest {
         }
     }
 
-    pub fn process(&mut self, configuration: Configuration) -> TraceEvent {
+    pub fn process(&mut self, singleton: Singleton) -> TraceEvent {
         self.hop_count += 1;
 
         let local_time = SystemTime::now()
@@ -48,7 +48,7 @@ impl TraceRequest {
             hop_count: self.hop_count,
             request_id: self.request_id.clone(),
             local_time,
-            id: configuration.id,
+            id: singleton.configuration.id,
             direction: Direction::Outbound,
         }
     }
@@ -73,7 +73,7 @@ impl TraceResponse {
         }
     }
 
-    pub fn process(&mut self, configuration: Configuration) -> TraceEvent {
+    pub fn process(&mut self, singleton: Singleton) -> TraceEvent {
         self.hop_count += 1;
 
         let local_time = SystemTime::now()
@@ -85,7 +85,7 @@ impl TraceResponse {
             hop_count: self.hop_count,
             request_id: self.request_id.clone(),
             local_time,
-            id: configuration.id,
+            id: singleton.configuration.id,
             direction: Direction::Inbound,
         }
     }

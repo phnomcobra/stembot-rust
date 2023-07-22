@@ -1,34 +1,22 @@
-use std::sync::Arc;
-
-use tokio::sync::RwLock;
-
 use crate::{
     backlog::{push_message_collection_to_backlog, request_backlog},
-    config::Configuration,
     messaging::{
         send_message_collection_to_url, Message, MessageCollection, RouteAdvertisement,
         RouteRecall, TraceResponse,
     },
-    peering::{lookup_peer_url, touch_peer, Peer},
-    routing::{
-        remove_routes_by_gateway_and_destination, remove_routes_by_url, resolve_gateway_id, Route,
-    }, ticket::{process_ticket_request, process_ticket_response},
+    peering::{lookup_peer_url, touch_peer},
+    routing::{remove_routes_by_gateway_and_destination, remove_routes_by_url, resolve_gateway_id},
+    state::Singleton,
+    ticket::{process_ticket_request, process_ticket_response},
 };
 
-pub async fn process_message_collection<T: Into<MessageCollection>, U: Into<Configuration>>(
-    inbound_message_collection: T,
-    configuration: U,
-    peering_table: Arc<RwLock<Vec<Peer>>>,
-    routing_table: Arc<RwLock<Vec<Route>>>,
-    message_backlog: Arc<RwLock<Vec<MessageCollection>>>,
+pub async fn process_message_collection(
+    mut inbound_message_collection: MessageCollection,
+    singleton: Singleton,
 ) -> MessageCollection {
-    let configuration = configuration.into();
-
-    let mut inbound_message_collection = inbound_message_collection.into();
-
     let mut outbound_message_collection = MessageCollection {
         messages: vec![],
-        origin_id: configuration.id.clone(),
+        origin_id: singleton.configuration.id.clone(),
         destination_id: Some(inbound_message_collection.origin_id.clone()),
     };
 
@@ -37,46 +25,44 @@ pub async fn process_message_collection<T: Into<MessageCollection>, U: Into<Conf
     // at this id.
     let destination_id = match inbound_message_collection.destination_id.clone() {
         Some(id) => id,
-        None => configuration.id.clone(),
+        None => singleton.configuration.id.clone(),
     };
 
     // Process trace messages
     for message in inbound_message_collection.messages.iter_mut() {
         match message {
             Message::TraceRequest(trace_request) => {
-                let trace_event = trace_request.process(configuration.clone());
+                let trace_event = trace_request.process(singleton.clone());
 
                 let message_collection = MessageCollection {
                     messages: vec![Message::TraceEvent(trace_event)],
                     destination_id: Some(inbound_message_collection.origin_id.clone()),
-                    origin_id: configuration.id.clone(),
+                    origin_id: singleton.configuration.id.clone(),
                 };
 
-                push_message_collection_to_backlog(message_collection, message_backlog.clone())
-                    .await
+                push_message_collection_to_backlog(message_collection, singleton.clone()).await
             }
             Message::TraceResponse(trace_response) => {
-                let trace_event = trace_response.process(configuration.clone());
+                let trace_event = trace_response.process(singleton.clone());
 
                 if inbound_message_collection.destination_id.is_some() {
                     let message_collection = MessageCollection {
                         messages: vec![Message::TraceEvent(trace_event)],
                         destination_id: inbound_message_collection.destination_id.clone(),
-                        origin_id: configuration.id.clone(),
+                        origin_id: singleton.configuration.id.clone(),
                     };
 
-                    push_message_collection_to_backlog(message_collection, message_backlog.clone())
-                        .await
+                    push_message_collection_to_backlog(message_collection, singleton.clone()).await
                 }
             }
             _ => {}
         }
     }
 
-    let gateway_id = resolve_gateway_id(destination_id.clone(), routing_table.clone()).await;
+    let gateway_id = resolve_gateway_id(destination_id.clone(), singleton.clone()).await;
 
-    if gateway_id == Some(configuration.id.clone()) {
-        touch_peer(&inbound_message_collection.origin_id, peering_table.clone()).await;
+    if gateway_id == Some(singleton.configuration.id.clone()) {
+        touch_peer(&inbound_message_collection.origin_id, singleton.clone()).await;
 
         for message in inbound_message_collection.messages {
             match message {
@@ -88,15 +74,16 @@ pub async fn process_message_collection<T: Into<MessageCollection>, U: Into<Conf
                     log::warn!("route advertisement received");
                     advertisement
                         .process(
-                            configuration.clone(),
-                            routing_table.clone(),
+                            singleton.clone(),
                             inbound_message_collection.origin_id.clone(),
                         )
                         .await;
                     outbound_message_collection
                         .messages
                         .push(Message::RouteAdvertisement(
-                            RouteAdvertisement::from_routes(routing_table.read().await.clone()),
+                            RouteAdvertisement::from_routes(
+                                singleton.routing_table.read().await.clone(),
+                            ),
                         ));
                 }
                 Message::Pong => {
@@ -107,19 +94,14 @@ pub async fn process_message_collection<T: Into<MessageCollection>, U: Into<Conf
                     remove_routes_by_gateway_and_destination(
                         inbound_message_collection.origin_id.clone(),
                         route_recall.destination_id,
-                        routing_table.clone(),
+                        singleton.clone(),
                     )
                     .await
                 }
                 Message::BacklogRequest(backlog_request) => {
                     log::warn!("backlog request received");
-                    let backlog_response = request_backlog(
-                        configuration.clone(),
-                        routing_table.clone(),
-                        message_backlog.clone(),
-                        backlog_request.clone(),
-                    )
-                    .await;
+                    let backlog_response =
+                        request_backlog(singleton.clone(), backlog_request).await;
                     outbound_message_collection
                         .messages
                         .push(Message::BacklogResponse(backlog_response));
@@ -129,7 +111,7 @@ pub async fn process_message_collection<T: Into<MessageCollection>, U: Into<Conf
                     for message_collection in backlog_response.message_collections {
                         push_message_collection_to_backlog(
                             message_collection.clone(),
-                            message_backlog.clone(),
+                            singleton.clone(),
                         )
                         .await;
                     }
@@ -149,7 +131,9 @@ pub async fn process_message_collection<T: Into<MessageCollection>, U: Into<Conf
                     log::warn!("ticket request received");
                     outbound_message_collection
                         .messages
-                        .push(Message::TicketResponse(process_ticket_request(ticket_request).await));
+                        .push(Message::TicketResponse(
+                            process_ticket_request(ticket_request).await,
+                        ));
                 }
                 Message::TicketResponse(ticket_response) => {
                     log::warn!("ticket response received");
@@ -161,34 +145,28 @@ pub async fn process_message_collection<T: Into<MessageCollection>, U: Into<Conf
         // Forwarding stuff happens here
         match gateway_id {
             Some(gateway_id) => {
-                let url = lookup_peer_url(&gateway_id, peering_table.clone()).await;
+                let url = lookup_peer_url(&gateway_id, singleton.clone()).await;
                 match url {
                     // Forward the message collection
                     Some(url) => {
                         match send_message_collection_to_url(
                             inbound_message_collection.clone(),
                             url.clone(),
-                            configuration.clone(),
+                            singleton.clone(),
                         )
                         .await
                         {
                             Ok(message) => {
-                                push_message_collection_to_backlog(message, message_backlog.clone())
-                                    .await
+                                push_message_collection_to_backlog(message, singleton.clone()).await
                             }
                             Err(_) => {
                                 // Encountered dead url
                                 // Remove all routes using that url and push message into backlog
-                                remove_routes_by_url(
-                                    url.clone(),
-                                    routing_table.clone(),
-                                    peering_table.clone(),
-                                )
-                                .await;
+                                remove_routes_by_url(url.clone(), singleton.clone()).await;
 
                                 push_message_collection_to_backlog(
                                     inbound_message_collection,
-                                    message_backlog.clone(),
+                                    singleton.clone(),
                                 )
                                 .await;
                             }
@@ -199,7 +177,7 @@ pub async fn process_message_collection<T: Into<MessageCollection>, U: Into<Conf
                     None => {
                         push_message_collection_to_backlog(
                             inbound_message_collection,
-                            message_backlog.clone(),
+                            singleton.clone(),
                         )
                         .await
                     }
@@ -207,7 +185,8 @@ pub async fn process_message_collection<T: Into<MessageCollection>, U: Into<Conf
             }
             // Don't know where to forward to
             None => {
-                let destination_ids: Vec<String> = peering_table
+                let destination_ids: Vec<String> = singleton
+                    .peering_table
                     .read()
                     .await
                     .iter()
@@ -226,20 +205,17 @@ pub async fn process_message_collection<T: Into<MessageCollection>, U: Into<Conf
                                         .clone()
                                         .unwrap(),
                                 })],
-                                origin_id: configuration.id.clone(),
+                                origin_id: singleton.configuration.id.clone(),
                                 destination_id: Some(id.clone()),
                             },
-                            message_backlog.clone(),
+                            singleton.clone(),
                         )
                         .await;
                     }
                 }
 
-                push_message_collection_to_backlog(
-                    inbound_message_collection,
-                    message_backlog.clone(),
-                )
-                .await;
+                push_message_collection_to_backlog(inbound_message_collection, singleton.clone())
+                    .await;
             }
         }
     }

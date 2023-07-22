@@ -1,4 +1,4 @@
-use crate::{config::Configuration, io::http::client::send_raw_message, routing::Route};
+use crate::{io::http::client::send_raw_message, routing::Route, state::Singleton};
 use serde::{Deserialize, Serialize};
 use std::{
     error::Error,
@@ -65,7 +65,7 @@ pub struct TraceEvent {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum Ticket {
-    Test
+    Test,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -125,20 +125,17 @@ impl TryInto<Vec<u8>> for MessageCollection {
     }
 }
 
-pub async fn send_message_collection_to_url<U: Into<String>, V: Into<Configuration>>(
+pub async fn send_message_collection_to_url(
     outgoing_message_collection: MessageCollection,
-    url: U,
-    configuration: V,
+    url: String,
+    singleton: Singleton,
 ) -> Result<MessageCollection, Box<dyn Error + Send + Sync + 'static>> {
-    let url = url.into();
-    let configuration = configuration.into();
-
     let outgoing_message_bytes: Vec<u8> = match outgoing_message_collection.try_into() {
         Ok(collection) => collection,
         Err(error) => return Err(error),
     };
 
-    match send_raw_message(outgoing_message_bytes, url, configuration).await {
+    match send_raw_message(outgoing_message_bytes, url, singleton.configuration).await {
         Ok(bytes) => {
             let incoming_message_collection: MessageCollection = match bytes.try_into() {
                 Ok(collection) => collection,

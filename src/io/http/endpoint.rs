@@ -1,23 +1,20 @@
 use actix_web::{web, HttpRequest, HttpResponse, Result};
 use reqwest::header::{HeaderName, HeaderValue};
-use std::{error::Error, sync::Arc};
-use tokio::sync::RwLock;
+use std::error::Error;
 
 use magic_crypt::{new_magic_crypt, MagicCryptTrait};
 
 use crate::{
-    config::Configuration, messaging::MessageCollection, peering::Peer,
-    processing::process_message_collection, routing::Route,
+    messaging::MessageCollection, processing::process_message_collection, state::Singleton,
 };
 
 pub async fn message_handler(
     encrypted_request_body_bytes: web::Bytes,
-    configuration: web::Data<Configuration>,
-    peering_table: web::Data<Arc<RwLock<Vec<Peer>>>>,
-    routing_table: web::Data<Arc<RwLock<Vec<Route>>>>,
-    message_backlog: web::Data<Arc<RwLock<Vec<MessageCollection>>>>,
+    singleton: web::Data<Singleton>,
     request: HttpRequest,
 ) -> Result<HttpResponse, Box<dyn Error>> {
+    let singleton = singleton.get_ref();
+
     let request_nonce_header_value: &HeaderValue = match request.headers().get("Nonce") {
         Some(value) => value,
         None => return Err("nonce missing from request headers".into()),
@@ -38,7 +35,8 @@ pub async fn message_handler(
         Err(_) => return Err("failed to read tag from request header".into()),
     };
 
-    let request_cipher = new_magic_crypt!(&configuration.secret, 256, &request_nonce_string);
+    let request_cipher =
+        new_magic_crypt!(&singleton.configuration.secret, 256, &request_nonce_string);
 
     let encrypted_request_body_string =
         match String::from_utf8(encrypted_request_body_bytes.to_vec()) {
@@ -61,15 +59,9 @@ pub async fn message_handler(
                         Err(error) => return Err(error),
                     };
 
-                match process_message_collection(
-                    inbound_message_collection,
-                    configuration.get_ref().clone(),
-                    peering_table.get_ref().clone(),
-                    routing_table.get_ref().clone(),
-                    message_backlog.get_ref().clone(),
-                )
-                .await
-                .try_into()
+                match process_message_collection(inbound_message_collection, singleton.clone())
+                    .await
+                    .try_into()
                 {
                     Ok(bytes) => bytes,
                     Err(error) => return Err(error),
@@ -85,7 +77,8 @@ pub async fn message_handler(
         Err(_) => return Err("failed to instantiate response header value for nonce".into()),
     };
 
-    let response_cipher = new_magic_crypt!(&configuration.secret, 256, &response_nonce_string);
+    let response_cipher =
+        new_magic_crypt!(&singleton.configuration.secret, 256, &response_nonce_string);
 
     let response_tag_string = sha256::digest(decrypted_response_body_bytes.as_slice());
 

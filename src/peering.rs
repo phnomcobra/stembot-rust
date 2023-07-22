@@ -1,9 +1,6 @@
-use std::sync::Arc;
-
 use serde::{Deserialize, Serialize};
-use tokio::sync::RwLock;
 
-use crate::config::Configuration;
+use crate::state::Singleton;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Peer {
@@ -17,9 +14,10 @@ pub struct PeerTable {
     pub peers: Vec<Peer>,
 }
 
-pub async fn initialize_peers(configuration: Configuration, peering_table: Arc<RwLock<Vec<Peer>>>) {
-    let mut peering_table = peering_table.write().await;
-    for peer in configuration
+pub async fn initialize_peers(singleton: Singleton) {
+    let mut peering_table = singleton.peering_table.write().await;
+    for peer in singleton
+        .configuration
         .clone()
         .peer
         .into_values()
@@ -33,8 +31,8 @@ pub async fn initialize_peers(configuration: Configuration, peering_table: Arc<R
     }
 }
 
-pub async fn touch_peer(id: &String, peering_table: Arc<RwLock<Vec<Peer>>>) {
-    let peering_table_read = peering_table.read().await;
+pub async fn touch_peer(id: &String, singleton: Singleton) {
+    let peering_table_read = singleton.peering_table.read().await;
 
     let peers: Vec<&Peer> = peering_table_read
         .iter()
@@ -46,7 +44,7 @@ pub async fn touch_peer(id: &String, peering_table: Arc<RwLock<Vec<Peer>>>) {
     drop(peering_table_read);
 
     if !present {
-        let mut peering_table_write = peering_table.write().await;
+        let mut peering_table_write = singleton.peering_table.write().await;
         peering_table_write.push(Peer {
             id: Some(id.to_string()),
             url: None,
@@ -55,8 +53,8 @@ pub async fn touch_peer(id: &String, peering_table: Arc<RwLock<Vec<Peer>>>) {
     }
 }
 
-pub async fn lookup_peer_url(id: &String, peering_table: Arc<RwLock<Vec<Peer>>>) -> Option<String> {
-    let peering_table = peering_table.read().await;
+pub async fn lookup_peer_url(id: &String, singleton: Singleton) -> Option<String> {
+    let peering_table = singleton.peering_table.read().await;
 
     let peers: Vec<Peer> = peering_table
         .iter()

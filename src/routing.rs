@@ -1,13 +1,9 @@
-use std::sync::Arc;
-
 use serde::{Deserialize, Serialize};
-use tokio::sync::RwLock;
 
 use crate::{
-    config::Configuration,
     messaging::{send_message_collection_to_url, Message, MessageCollection, RouteAdvertisement},
-    peering::Peer,
     processing::process_message_collection,
+    state::Singleton,
 };
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -17,11 +13,8 @@ pub struct Route {
     pub weight: Option<usize>,
 }
 
-pub async fn resolve_gateway_id(
-    destination_id: String,
-    routing_table: Arc<RwLock<Vec<Route>>>,
-) -> Option<String> {
-    let routing_table = routing_table.read().await.clone();
+pub async fn resolve_gateway_id(destination_id: String, singleton: Singleton) -> Option<String> {
+    let routing_table = singleton.routing_table.read().await.clone();
     let mut best_weight: Option<usize> = None;
     let mut best_gateway_id: Option<String> = None;
 
@@ -40,12 +33,8 @@ pub async fn resolve_gateway_id(
     best_gateway_id
 }
 
-pub async fn remove_routes_by_url(
-    url: String,
-    routing_table: Arc<RwLock<Vec<Route>>>,
-    peering_table: Arc<RwLock<Vec<Peer>>>,
-) {
-    let peering_table = peering_table.read().await.clone();
+pub async fn remove_routes_by_url(url: String, singleton: Singleton) {
+    let peering_table = singleton.peering_table.read().await.clone();
     let peer_ids: Vec<String> = peering_table
         .iter()
         .filter(|x| x.url == Some(url.clone()))
@@ -53,7 +42,7 @@ pub async fn remove_routes_by_url(
         .collect();
     drop(peering_table);
 
-    let mut routing_table = routing_table.write().await.clone();
+    let mut routing_table = singleton.routing_table.write().await.clone();
 
     let mut updated_routing_table: Vec<Route> = routing_table
         .iter()
@@ -67,9 +56,9 @@ pub async fn remove_routes_by_url(
 pub async fn remove_routes_by_gateway_and_destination(
     gateway_id: String,
     destination_id: String,
-    routing_table: Arc<RwLock<Vec<Route>>>,
+    singleton: Singleton,
 ) {
-    let mut routing_table = routing_table.write().await.clone();
+    let mut routing_table = singleton.routing_table.write().await.clone();
     let mut updated_routing_table: Vec<Route> = routing_table
         .iter()
         .filter(|x| x.destination_id != destination_id && x.gateway_id != gateway_id)
@@ -79,20 +68,15 @@ pub async fn remove_routes_by_gateway_and_destination(
     routing_table.append(&mut updated_routing_table);
 }
 
-pub async fn advertise(
-    configuration: Configuration,
-    peering_table: Arc<RwLock<Vec<Peer>>>,
-    routing_table: Arc<RwLock<Vec<Route>>>,
-    message_backlog: Arc<RwLock<Vec<MessageCollection>>>,
-) {
-    let mut local_peering_table = peering_table.read().await.clone();
+pub async fn advertise(singleton: Singleton) {
+    let mut local_peering_table = singleton.peering_table.read().await.clone();
 
     let advertisement_message: Message = Message::RouteAdvertisement(
-        RouteAdvertisement::from_routes(routing_table.read().await.clone()),
+        RouteAdvertisement::from_routes(singleton.routing_table.read().await.clone()),
     );
 
     for peer in local_peering_table.iter_mut().filter(|x| x.url.is_some()) {
-        let configuration = configuration.clone();
+        let configuration = singleton.configuration.clone();
 
         let outgoing_message_collection = MessageCollection {
             messages: vec![advertisement_message.clone()],
@@ -100,38 +84,27 @@ pub async fn advertise(
             destination_id: peer.id.clone(),
         };
 
-        match send_message_collection_to_url(
-            outgoing_message_collection,
-            peer.url.as_ref().unwrap(),
-            configuration.clone(),
-        )
-        .await
+        let url = match peer.url.clone() {
+            Some(url) => url,
+            None => continue,
+        };
+
+        match send_message_collection_to_url(outgoing_message_collection, url, singleton.clone())
+            .await
         {
             Ok(incoming_message_collection) => {
                 peer.id = Some(incoming_message_collection.origin_id.clone());
 
-                process_message_collection(
-                    incoming_message_collection,
-                    configuration.clone(),
-                    peering_table.clone(),
-                    routing_table.clone(),
-                    message_backlog.clone(),
-                )
-                .await;
+                process_message_collection(incoming_message_collection, singleton.clone()).await;
             }
             Err(error) => {
-                remove_routes_by_url(
-                    peer.url.clone().unwrap(),
-                    routing_table.clone(),
-                    peering_table.clone(),
-                )
-                .await;
+                remove_routes_by_url(peer.url.clone().unwrap(), singleton.clone()).await;
                 log::error!("{}", error)
             }
         };
     }
 
-    let mut shared_peering_table = peering_table.write().await;
+    let mut shared_peering_table = singleton.peering_table.write().await;
     shared_peering_table.clear();
     shared_peering_table.append(&mut local_peering_table);
 }
@@ -141,18 +114,13 @@ impl RouteAdvertisement {
         Self { routes: vec![] }
     }
 
-    pub async fn process(
-        &self,
-        configuration: Configuration,
-        routing_table: Arc<RwLock<Vec<Route>>>,
-        origin_id: String,
-    ) {
-        let mut routing_table = routing_table.write().await;
+    pub async fn process(&self, singleton: Singleton, origin_id: String) {
+        let mut routing_table = singleton.routing_table.write().await;
 
         for advertised_route in self
             .routes
             .iter()
-            .filter(|x| x.destination_id != configuration.id)
+            .filter(|x| x.destination_id != singleton.configuration.id)
             .map(|x| Route {
                 weight: Some(x.weight.unwrap_or(0) + 1),
                 destination_id: x.destination_id.clone(),
@@ -209,20 +177,17 @@ impl RouteAdvertisement {
     }
 }
 
-pub async fn initialize_routes(
-    configuration: Configuration,
-    routing_table: Arc<RwLock<Vec<Route>>>,
-) {
-    let mut routing_table = routing_table.write().await;
+pub async fn initialize_routes(singleton: Singleton) {
+    let mut routing_table = singleton.routing_table.write().await;
     routing_table.push(Route {
-        destination_id: configuration.id.clone(),
-        gateway_id: configuration.id.clone(),
+        destination_id: singleton.configuration.id.clone(),
+        gateway_id: singleton.configuration.id.clone(),
         weight: None,
     });
 }
 
-pub async fn age_routes(configuration: Configuration, routing_table: Arc<RwLock<Vec<Route>>>) {
-    let mut routing_table = routing_table.write().await;
+pub async fn age_routes(singleton: Singleton) {
+    let mut routing_table = singleton.routing_table.write().await;
 
     let mut stale_indices: Vec<usize> = vec![];
 
@@ -232,7 +197,7 @@ pub async fn age_routes(configuration: Configuration, routing_table: Arc<RwLock<
         .filter(|x| x.1.weight.is_some())
     {
         route.weight = Some(route.weight.unwrap() + 1);
-        if route.weight.unwrap() > configuration.maxrouteweight {
+        if route.weight.unwrap() > singleton.configuration.maxrouteweight {
             stale_indices.push(i)
         }
     }

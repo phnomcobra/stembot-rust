@@ -1,25 +1,18 @@
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
 use actix_web::rt::spawn;
-use tokio::sync::RwLock;
 
 use crate::{
-    config::Configuration,
     messaging::{BacklogRequest, BacklogResponse, Message, MessageCollection},
-    peering::Peer,
     processing::process_message_collection,
-    routing::{resolve_gateway_id, Route},
+    routing::resolve_gateway_id,
+    state::Singleton,
 };
 
-pub async fn poll_backlogs<T: Into<Configuration>>(
-    configuration: T,
-    peering_table: Arc<RwLock<Vec<Peer>>>,
-    message_backlog: Arc<RwLock<Vec<MessageCollection>>>,
-) {
-    let configuration = configuration.into();
-    let peering_table = peering_table.read().await;
+pub async fn poll_backlogs(singleton: Singleton) {
+    let peering_table = singleton.peering_table.read().await;
     let backlog_request = BacklogRequest {
-        gateway_id: configuration.id.clone(),
+        gateway_id: singleton.configuration.id.clone(),
     };
 
     for peer in peering_table
@@ -29,31 +22,32 @@ pub async fn poll_backlogs<T: Into<Configuration>>(
     {
         let message_collection = MessageCollection {
             messages: vec![Message::BacklogRequest(backlog_request.clone())],
-            origin_id: configuration.id.clone(),
+            origin_id: singleton.configuration.id.clone(),
             destination_id: peer.id.clone(),
         };
 
-        push_message_collection_to_backlog(message_collection, message_backlog.clone()).await
+        push_message_collection_to_backlog(message_collection, singleton.clone()).await
     }
 }
 
 pub async fn push_message_collection_to_backlog(
     message_collection: MessageCollection,
-    message_backlog: Arc<RwLock<Vec<MessageCollection>>>,
+    singleton: Singleton,
 ) {
     if !message_collection.messages.is_empty() {
-        message_backlog.write().await.push(message_collection);
+        singleton
+            .message_backlog
+            .write()
+            .await
+            .push(message_collection);
     }
 }
 
-pub async fn request_backlog<T: Into<Configuration>>(
-    configuration: T,
-    routing_table: Arc<RwLock<Vec<Route>>>,
-    message_backlog: Arc<RwLock<Vec<MessageCollection>>>,
+pub async fn request_backlog(
+    singleton: Singleton,
     backlog_request: BacklogRequest,
 ) -> BacklogResponse {
-    let configuration = configuration.into();
-    let mut message_backlog = message_backlog.write().await;
+    let mut message_backlog = singleton.message_backlog.write().await;
     let mut backlog_indices_to_remove: Vec<usize> = vec![];
     let mut backlog_response = BacklogResponse {
         message_collections: vec![],
@@ -64,8 +58,8 @@ pub async fn request_backlog<T: Into<Configuration>>(
             message_collection
                 .destination_id
                 .clone()
-                .unwrap_or_else(|| configuration.id.clone()),
-            routing_table.clone(),
+                .unwrap_or_else(|| singleton.configuration.id.clone()),
+            singleton.clone(),
         )
         .await;
 
@@ -85,15 +79,8 @@ pub async fn request_backlog<T: Into<Configuration>>(
     backlog_response
 }
 
-pub async fn process_backlog<T: Into<Configuration>>(
-    configuration: T,
-    peering_table: Arc<RwLock<Vec<Peer>>>,
-    routing_table: Arc<RwLock<Vec<Route>>>,
-    message_backlog: Arc<RwLock<Vec<MessageCollection>>>,
-) {
-    let configuration = configuration.into();
-
-    let mut local_message_backlog = message_backlog.write().await;
+pub async fn process_backlog(singleton: Singleton) {
+    let mut local_message_backlog = singleton.message_backlog.write().await;
 
     let mut message_buckets: HashMap<Option<String>, MessageCollection> = HashMap::default();
 
@@ -125,24 +112,19 @@ pub async fn process_backlog<T: Into<Configuration>>(
     // Process condesnsed message collections
     for outbound_message_collection in message_buckets.values() {
         spawn({
-            let configuration = configuration.clone();
-            let routing_table = routing_table.clone();
-            let peering_table = peering_table.clone();
-            let message_backlog = message_backlog.clone();
+            let singleton = singleton.clone();
             let outbound_message_collection = outbound_message_collection.clone();
 
             async move {
                 let inbound_message_collection = process_message_collection(
                     outbound_message_collection.clone(),
-                    configuration.clone(),
-                    peering_table.clone(),
-                    routing_table.clone(),
-                    message_backlog.clone(),
+                    singleton.clone(),
                 )
                 .await;
 
                 if !inbound_message_collection.messages.is_empty() {
-                    message_backlog
+                    singleton
+                        .message_backlog
                         .write()
                         .await
                         .push(inbound_message_collection);

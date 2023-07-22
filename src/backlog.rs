@@ -82,7 +82,8 @@ pub async fn request_backlog(
 pub async fn process_backlog(singleton: Singleton) {
     let mut local_message_backlog = singleton.message_backlog.write().await;
 
-    let mut message_buckets: HashMap<Option<String>, MessageCollection> = HashMap::default();
+    let mut message_buckets: HashMap<(Option<String>, String), MessageCollection> =
+        HashMap::default();
 
     // Condense message collections with common destination options
     while !local_message_backlog.is_empty() {
@@ -92,15 +93,24 @@ pub async fn process_backlog(singleton: Singleton) {
             continue;
         }
 
-        match message_buckets.contains_key(&message_collection.destination_id) {
+        match message_buckets.contains_key(&(
+            message_collection.destination_id.clone(),
+            message_collection.origin_id.clone(),
+        )) {
             true => {
                 message_buckets
-                    .entry(message_collection.destination_id.clone())
+                    .entry((
+                        message_collection.destination_id.clone(),
+                        message_collection.origin_id.clone(),
+                    ))
                     .and_modify(|x| x.messages.append(&mut message_collection.messages));
             }
             false => {
                 message_buckets.insert(
-                    message_collection.destination_id.clone(),
+                    (
+                        message_collection.destination_id.clone(),
+                        message_collection.origin_id.clone(),
+                    ),
                     message_collection,
                 );
             }

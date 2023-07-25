@@ -7,7 +7,7 @@ use crate::{
     peering::{lookup_peer_url, touch_peer},
     routing::{remove_routes_by_gateway_and_destination, remove_routes_by_url, resolve_gateway_id},
     state::Singleton,
-    ticket::{process_ticket_request, process_ticket_response},
+    ticketing::{process_ticket_request, process_ticket_response},
 };
 
 pub async fn process_message_collection(
@@ -137,7 +137,7 @@ pub async fn process_message_collection(
                 }
                 Message::TicketResponse(ticket_response) => {
                     log::warn!("ticket response received");
-                    process_ticket_response(ticket_response).await;
+                    process_ticket_response(ticket_response, singleton.clone()).await;
                 }
             }
         }

@@ -79,6 +79,7 @@ pub struct TicketRequest {
 pub struct TicketResponse {
     pub ticket: Ticket,
     pub ticket_id: String,
+    pub start_time: u128,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

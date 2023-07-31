@@ -23,12 +23,21 @@ pub struct Configuration {
     pub maxrouteweight: usize,
     pub tracing: bool,
     pub loglevel: String,
+    pub ticketexpiration: u64,
 }
 
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Ping {
+    pub destination_id: String,
+    pub delay: u32,
+}
+
+#[allow(clippy::struct_excessive_bools)]
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TicketTest {
     pub destination_id: String,
     pub delay: u32,
 }

@@ -6,6 +6,7 @@ endpoint="/"
 maxrouteweight=10
 tracing=false
 loglevel="info"
+ticketexpiration=10
 
 [peer.docker-bot0]
 url="http://bot0:8080/"

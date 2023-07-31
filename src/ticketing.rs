@@ -1,4 +1,7 @@
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::{
+    error::Error,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 use tokio::time::sleep;
 
 use crate::{
@@ -12,6 +15,7 @@ pub async fn process_ticket_request(ticket_request: TicketRequest) -> TicketResp
         Ticket::Test => TicketResponse {
             ticket: ticket_request.ticket,
             ticket_id: ticket_request.ticket_id,
+            start_time: ticket_request.start_time,
         },
     }
 }
@@ -60,12 +64,14 @@ pub async fn send_ticket(
     ticket_id
 }
 
-pub async fn receive_ticket(ticket_id: String, singleton: Singleton) -> Option<Ticket> {
+pub async fn receive_ticket(
+    ticket_id: String,
+    singleton: Singleton,
+) -> Result<Ticket, Box<dyn Error + Send + Sync + 'static>> {
     let mut millis_to_delay: u64 = 10;
-    let exhaustion_period: u64 = 10000;
     let mut ticket: Option<Ticket> = None;
 
-    while millis_to_delay < exhaustion_period {
+    while millis_to_delay < singleton.configuration.ticketexpiration {
         let mut ticket_map = singleton.ticket_map.write().await;
         match ticket_map.get(&ticket_id) {
             Some(ticket_option) => match ticket_option {
@@ -88,5 +94,8 @@ pub async fn receive_ticket(ticket_id: String, singleton: Singleton) -> Option<T
         }
     }
 
-    ticket
+    match ticket {
+        Some(ticket) => Ok(ticket),
+        None => Err(format!("timeout exceeded for ticket {ticket_id}").into()),
+    }
 }

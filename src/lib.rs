@@ -4,10 +4,11 @@ use std::{io::Write, str::FromStr, thread};
 
 pub mod backlog;
 pub mod config;
-pub mod io;
 pub mod messaging;
 pub mod peering;
+pub mod private;
 pub mod processing;
+pub mod public;
 pub mod routing;
 pub mod state;
 pub mod ticketing;

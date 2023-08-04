@@ -8,9 +8,10 @@ use tokio::time::sleep;
 use stembot_rust::{
     backlog::{poll_backlogs, process_backlog, push_message_collection_to_backlog},
     init_logger,
-    io::http::endpoint::message_handler,
     messaging::{Message, MessageCollection, TraceRequest},
     peering::initialize_peers,
+    private::http::ticketing::post_ticket,
+    public::http::endpoint::message_handler,
     routing::{advertise, age_routes, initialize_routes},
     state::Singleton,
 };
@@ -147,9 +148,57 @@ async fn main() -> Result<(), std::io::Error> {
         }
     });
 
-    log::info!("Starting webserver...");
+    spawn({
+        let singleton = singleton.clone();
+        async move {
+            log::info!("Starting private webserver...");
+
+            if singleton.configuration.private_http.tracing {
+                HttpServer::new({
+                    let singleton = singleton.clone();
+
+                    move || {
+                        App::new()
+                            .wrap(TracingLogger::default())
+                            .app_data(web::Data::new(singleton.clone()))
+                            .route(
+                                &singleton.configuration.private_http.ticket_endpoint,
+                                web::post().to(post_ticket),
+                            )
+                    }
+                })
+                .bind((
+                    singleton.configuration.private_http.host,
+                    singleton.configuration.private_http.port,
+                ))?
+                .run()
+                .await
+            } else {
+                HttpServer::new({
+                    let singleton = singleton.clone();
+
+                    move || {
+                        App::new()
+                            .app_data(web::Data::new(singleton.clone()))
+                            .route(
+                                &singleton.configuration.private_http.ticket_endpoint,
+                                web::post().to(post_ticket),
+                            )
+                    }
+                })
+                .bind((
+                    singleton.configuration.private_http.host,
+                    singleton.configuration.private_http.port,
+                ))?
+                .run()
+                .await
+            }
+        }
+    });
+
+    log::info!("Starting public webserver...");
     // This is bad
-    if singleton.configuration.tracing {
+    if singleton.configuration.public_http.tracing {
         HttpServer::new({
             let singleton = singleton.clone();
 
@@ -158,12 +207,15 @@ async fn main() -> Result<(), std::io::Error> {
                     .wrap(TracingLogger::default())
                     .app_data(web::Data::new(singleton.clone()))
                     .route(
-                        &singleton.configuration.endpoint,
+                        &singleton.configuration.public_http.endpoint,
                         web::post().to(message_handler),
                     )
             }
         })
-        .bind((singleton.configuration.host, singleton.configuration.port))?
+        .bind((
+            singleton.configuration.public_http.host,
+            singleton.configuration.public_http.port,
+        ))?
         .run()
         .await
     } else {
@@ -174,12 +226,15 @@ async fn main() -> Result<(), std::io::Error> {
                 App::new()
                     .app_data(web::Data::new(singleton.clone()))
                     .route(
-                        &singleton.configuration.endpoint,
+                        &singleton.configuration.public_http.endpoint,
                         web::post().to(message_handler),
                     )
             }
         })
-        .bind((singleton.configuration.host, singleton.configuration.port))?
+        .bind((
+            singleton.configuration.public_http.host,
+            singleton.configuration.public_http.port,
+        ))?
         .run()
         .await
     }

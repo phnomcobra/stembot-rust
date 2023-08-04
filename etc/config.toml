@@ -1,12 +1,20 @@
-secret="01234567890123456789012345678901"
 id="id0"
+maxrouteweight=10
+loglevel="info"
+ticketexpiration=10
+
+[private_http]
+host="127.0.0.1"
+port=8081
+tracing=false
+ticket_endpoint="/ticket"
+
+[public_http]
 host="0.0.0.0"
 port=8080
 endpoint="/"
-maxrouteweight=10
 tracing=false
-loglevel="info"
-ticketexpiration=10
+secret="01234567890123456789012345678901"
 
 [peer.0]
 url="http://0.0.0.0:8080/"

@@ -22,7 +22,7 @@ pub async fn send_raw_message<T: Into<Vec<u8>>, U: Into<String>, V: Into<Configu
 
     let nonce_string = sha256::digest(rand::random::<[u8; 32]>().as_ref());
 
-    let cipher = new_magic_crypt!(&configuration.secret, 256, &nonce_string);
+    let cipher = new_magic_crypt!(&configuration.public_http.secret, 256, &nonce_string);
 
     let tag_string = sha256::digest(unencrypted_request_body.as_slice());
 
@@ -70,7 +70,8 @@ pub async fn send_raw_message<T: Into<Vec<u8>>, U: Into<String>, V: Into<Configu
                         Err(_) => return Err("failed to read encrypted response body".into()),
                     };
 
-                let cipher = new_magic_crypt!(&configuration.secret, 256, &nonce_string);
+                let cipher =
+                    new_magic_crypt!(&configuration.public_http.secret, 256, &nonce_string);
 
                 let decrypted_response_body =
                     match cipher.decrypt_base64_to_bytes(encrypted_response_body_string) {

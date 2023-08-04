@@ -35,8 +35,11 @@ pub async fn message_handler(
         Err(_) => return Err("failed to read tag from request header".into()),
     };
 
-    let request_cipher =
-        new_magic_crypt!(&singleton.configuration.secret, 256, &request_nonce_string);
+    let request_cipher = new_magic_crypt!(
+        &singleton.configuration.public_http.secret,
+        256,
+        &request_nonce_string
+    );
 
     let encrypted_request_body_string =
         match String::from_utf8(encrypted_request_body_bytes.to_vec()) {
@@ -77,8 +80,11 @@ pub async fn message_handler(
         Err(_) => return Err("failed to instantiate response header value for nonce".into()),
     };
 
-    let response_cipher =
-        new_magic_crypt!(&singleton.configuration.secret, 256, &response_nonce_string);
+    let response_cipher = new_magic_crypt!(
+        &singleton.configuration.public_http.secret,
+        256,
+        &response_nonce_string
+    );
 
     let response_tag_string = sha256::digest(decrypted_response_body_bytes.as_slice());
 

@@ -9,11 +9,7 @@ use crate::peering::Peer;
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Clone, Debug, Deserialize)]
 pub struct Configuration {
-    pub secret: String,
     pub id: String,
-    pub host: String,
-    pub port: u16,
-    pub endpoint: String,
     #[serde(default)]
     pub peer: HashMap<String, Peer>,
     #[serde(default)]
@@ -21,9 +17,31 @@ pub struct Configuration {
     #[serde(default)]
     pub trace: HashMap<String, Trace>,
     pub maxrouteweight: usize,
-    pub tracing: bool,
     pub loglevel: String,
     pub ticketexpiration: u64,
+    pub public_http: PublicHttp,
+    pub private_http: PrivateHttp,
+}
+
+#[allow(clippy::struct_excessive_bools)]
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PublicHttp {
+    pub secret: String,
+    pub tracing: bool,
+    pub host: String,
+    pub port: u16,
+    pub endpoint: String,
+}
+
+#[allow(clippy::struct_excessive_bools)]
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PrivateHttp {
+    pub tracing: bool,
+    pub host: String,
+    pub port: u16,
+    pub ticket_endpoint: String,
 }
 
 #[allow(clippy::struct_excessive_bools)]

@@ -99,3 +99,13 @@ pub async fn receive_ticket(
         None => Err(format!("timeout exceeded for ticket {ticket_id}").into()),
     }
 }
+
+pub async fn synchronize_ticket(
+    ticket: Ticket,
+    ticket_id: Option<String>,
+    destination_id: Option<String>,
+    singleton: Singleton,
+) -> Result<Ticket, Box<dyn Error + Send + Sync + 'static>> {
+    let ticket_id = send_ticket(ticket, ticket_id, destination_id, singleton.clone()).await;
+    receive_ticket(ticket_id, singleton.clone()).await
+}

@@ -10,7 +10,7 @@ use stembot_rust::{
     init_logger,
     messaging::{Message, MessageCollection, TraceRequest},
     peering::initialize_peers,
-    private::http::ticketing::post_ticket,
+    private::http::ticketing::ticket_synchronization_endpoint,
     public::http::endpoint::message_handler,
     routing::{advertise, age_routes, initialize_routes},
     state::Singleton,
@@ -163,7 +163,7 @@ async fn main() -> Result<(), std::io::Error> {
                             .app_data(web::Data::new(singleton.clone()))
                             .route(
                                 &singleton.configuration.private_http.ticket_endpoint,
-                                web::post().to(post_ticket),
+                                web::post().to(ticket_synchronization_endpoint),
                             )
                     }
                 })
@@ -182,7 +182,7 @@ async fn main() -> Result<(), std::io::Error> {
                             .app_data(web::Data::new(singleton.clone()))
                             .route(
                                 &singleton.configuration.private_http.ticket_endpoint,
-                                web::post().to(post_ticket),
+                                web::post().to(ticket_synchronization_endpoint),
                             )
                     }
                 })

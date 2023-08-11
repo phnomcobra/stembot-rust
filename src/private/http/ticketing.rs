@@ -1,4 +1,4 @@
-use actix_web::{web, Responder};
+use actix_web::{web, HttpResponse};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 
@@ -20,41 +20,48 @@ pub struct TicketHttpResponse {
 }
 
 pub async fn ticket_synchronization_endpoint(
-    ticket_post_request: web::Json<TicketHttpRequest>,
+    request_body_bytes: web::Bytes,
     singleton: web::Data<Singleton>,
-) -> actix_web::Result<impl Responder> {
+) -> Result<HttpResponse, Box<dyn Error>> {
     let singleton = singleton.get_ref();
 
-    let ticket = match synchronize_ticket(
-        ticket_post_request.ticket.clone(),
-        ticket_post_request.ticket_id.clone(),
-        ticket_post_request.destination_id.clone(),
+    let request_body_string = match String::from_utf8(request_body_bytes.to_vec()) {
+        Ok(json_string) => json_string,
+        Err(_) => return Err("failed to read ticket request body".into()),
+    };
+
+    let ticket_http_request = match serde_json::from_str::<TicketHttpRequest>(&request_body_string)
+    {
+        Ok(ticket_http_request) => ticket_http_request,
+        Err(_) => return Err("failed to parse ticket request body".into()),
+    };
+
+    let ticket_http_response = match synchronize_ticket(
+        ticket_http_request.ticket.clone(),
+        ticket_http_request.ticket_id.clone(),
+        ticket_http_request.destination_id.clone(),
         singleton.clone(),
     )
     .await
     {
-        Ok(ticket) => ticket,
-        Err(error) => return Err(actix_web::error::ErrorRequestTimeout(error.to_string())),
+        Ok(ticket) => TicketHttpResponse { ticket },
+        Err(error) => return Err(error),
     };
 
-    Ok(web::Json(TicketHttpResponse { ticket }))
+    let response_body = match serde_json::to_string_pretty(&ticket_http_response) {
+        Ok(json_string) => json_string.as_bytes().to_vec(),
+        Err(error) => return Err(error.into()),
+    };
+
+    Ok(HttpResponse::Ok().body(response_body))
 }
 
 pub async fn request_ticket_synchronization(
     ticket: Ticket,
     ticket_id: Option<String>,
     destination_id: Option<String>,
-    singleton: Singleton,
+    url: String,
 ) -> Result<Ticket, Box<dyn Error + Send + Sync + 'static>> {
-    let singleton = singleton.clone();
-
-    let url = format!(
-        "http://{}:{}/{}",
-        &singleton.configuration.private_http.host,
-        &singleton.configuration.private_http.port,
-        &singleton.configuration.private_http.ticket_endpoint
-    );
-
     let client = Client::new();
 
     let ticket_http_request = TicketHttpRequest {
@@ -83,7 +90,7 @@ pub async fn request_ticket_synchronization(
 
                 match serde_json::from_str::<TicketHttpResponse>(&response_body_string) {
                     Ok(response) => Ok(response.ticket),
-                    Err(_) => return Err("failed to parse http response body".into()),
+                    Err(_) => Err("failed to parse http response body".into()),
                 }
             }
             _ => Err(format!("HTTP Status: {}", response.status()).into()),

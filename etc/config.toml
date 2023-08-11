@@ -1,7 +1,7 @@
 id="id0"
 maxrouteweight=10
 loglevel="info"
-ticketexpiration=10
+ticketexpiration=10000
 
 [private_http]
 host="127.0.0.1"

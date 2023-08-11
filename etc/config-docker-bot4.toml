@@ -1,7 +1,7 @@
 id="docker-bot4"
 maxrouteweight=10
 loglevel="info"
-ticketexpiration=10
+ticketexpiration=10000
 
 [public_http]
 host="0.0.0.0"

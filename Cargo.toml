@@ -7,6 +7,10 @@ edition = "2021"
 name = "bot"
 path = "src/bin/bot.rs"
 
+[[bin]]
+name = "test"
+path = "src/bin/test.rs"
+
 [dependencies]
 actix-web = "4.3.1"
 chrono = "0.4.23"

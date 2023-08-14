@@ -4,7 +4,7 @@ use clap::Parser;
 use serde::Deserialize;
 use toml::de::Error;
 
-use crate::peering::Peer;
+use crate::core::peering::Peer;
 
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Clone, Debug, Deserialize)]

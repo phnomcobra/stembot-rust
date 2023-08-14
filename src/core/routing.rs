@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{
+use crate::core::{
     messaging::{send_message_collection_to_url, Message, MessageCollection, RouteAdvertisement},
     processing::process_message_collection,
     state::Singleton,

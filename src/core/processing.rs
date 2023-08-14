@@ -1,4 +1,4 @@
-use crate::{
+use crate::core::{
     backlog::{push_message_collection_to_backlog, request_backlog},
     messaging::{
         send_message_collection_to_url, Message, MessageCollection, RouteAdvertisement,

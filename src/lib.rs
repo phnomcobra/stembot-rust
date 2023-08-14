@@ -2,17 +2,10 @@ use chrono::{SecondsFormat, Utc};
 use log::Level;
 use std::{io::Write, str::FromStr, thread};
 
-pub mod backlog;
 pub mod config;
-pub mod messaging;
-pub mod peering;
+pub mod core;
 pub mod private;
-pub mod processing;
 pub mod public;
-pub mod routing;
-pub mod state;
-pub mod ticketing;
-pub mod tracing;
 
 pub fn init_logger(loglevel: String) {
     env_logger::builder()

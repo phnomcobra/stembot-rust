@@ -1,6 +1,6 @@
 use actix_web::Result;
 use stembot_rust::{
-    init_logger, messaging::Ticket, private::http::ticketing::request_ticket_synchronization,
+    core::messaging::Ticket, init_logger, private::http::ticketing::request_ticket_synchronization,
 };
 
 #[actix_web::main]

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::state::Singleton;
+use crate::core::state::Singleton;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Peer {

@@ -4,7 +4,7 @@ use std::error::Error;
 
 use magic_crypt::{new_magic_crypt, MagicCryptTrait};
 
-use crate::{
+use crate::core::{
     messaging::MessageCollection, processing::process_message_collection, state::Singleton,
 };
 

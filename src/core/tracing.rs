@@ -3,7 +3,7 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use crate::{
+use crate::core::{
     messaging::{Direction, TraceEvent, TraceRequest, TraceResponse},
     state::Singleton,
 };

@@ -5,7 +5,7 @@ use std::error::Error;
 use reqwest::Client;
 use reqwest::StatusCode;
 
-use crate::{messaging::Ticket, state::Singleton, ticketing::synchronize_ticket};
+use crate::core::{messaging::Ticket, state::Singleton, ticketing::synchronize_ticket};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TicketHttpRequest {

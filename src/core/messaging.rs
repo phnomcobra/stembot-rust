@@ -1,4 +1,5 @@
-use crate::{public::http::client::send_raw_message, routing::Route, state::Singleton};
+use crate::core::{routing::Route, state::Singleton};
+use crate::public::http::client::send_raw_message;
 use serde::{Deserialize, Serialize};
 use std::{
     error::Error,

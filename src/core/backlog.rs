@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use actix_web::rt::spawn;
 
-use crate::{
+use crate::core::{
     messaging::{BacklogRequest, BacklogResponse, Message, MessageCollection},
     processing::process_message_collection,
     routing::resolve_gateway_id,

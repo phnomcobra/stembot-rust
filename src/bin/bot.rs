@@ -6,14 +6,16 @@ use std::time::Duration;
 use tokio::time::sleep;
 
 use stembot_rust::{
-    backlog::{poll_backlogs, process_backlog, push_message_collection_to_backlog},
+    core::{
+        backlog::{poll_backlogs, process_backlog, push_message_collection_to_backlog},
+        messaging::{Message, MessageCollection, TraceRequest},
+        peering::initialize_peers,
+        routing::{advertise, age_routes, initialize_routes},
+        state::Singleton,
+    },
     init_logger,
-    messaging::{Message, MessageCollection, TraceRequest},
-    peering::initialize_peers,
     private::http::ticketing::ticket_synchronization_endpoint,
     public::http::endpoint::message_handler,
-    routing::{advertise, age_routes, initialize_routes},
-    state::Singleton,
 };
 
 async fn test(_singleton: Singleton) {

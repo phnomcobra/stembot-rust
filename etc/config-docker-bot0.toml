@@ -14,7 +14,8 @@ secret="01234567890123456789012345678901"
 host="0.0.0.0"
 port=8081
 tracing=true
-ticket_endpoint="/ticket"
+ticket_sync_endpoint="/ticket/sync"
+ticket_async_endpoint="/ticket/async"
 
 [peer.docker-bot1]
 url="http://bot1:8080/"

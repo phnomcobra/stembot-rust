@@ -7,7 +7,8 @@ ticketexpiration=10000
 host="127.0.0.1"
 port=8090
 tracing=false
-ticket_endpoint="/ticket"
+ticket_sync_endpoint="/ticket/sync"
+ticket_async_endpoint="/ticket/async"
 
 [public_http]
 host="0.0.0.0"

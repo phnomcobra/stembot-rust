@@ -122,17 +122,26 @@ pub async fn process_message_collection(
                         .push(Message::TraceResponse(TraceResponse::from(trace_request)));
                 }
                 Message::TraceResponse(trace_response) => {
-                    log::warn!("{trace_response}")
+                    log::info!("{trace_response}")
                 }
                 Message::TraceEvent(trace_event) => {
-                    log::warn!("{trace_event}")
+                    log::info!("{trace_event}");
+                    let mut trace_map = singleton.trace_map.write().await;
+                    match trace_map.get_mut(&trace_event.request_id) {
+                        Some(events) => {
+                            events.push(trace_event);
+                        }
+                        None => {
+                            trace_map.insert(trace_event.request_id.clone(), vec![trace_event]);
+                        }
+                    };
                 }
                 Message::TicketRequest(ticket_request) => {
                     log::warn!("ticket request received");
                     outbound_message_collection
                         .messages
                         .push(Message::TicketResponse(
-                            process_ticket_request(ticket_request).await,
+                            process_ticket_request(ticket_request, singleton.clone()).await,
                         ));
                 }
                 Message::TicketResponse(ticket_response) => {

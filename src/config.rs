@@ -41,7 +41,8 @@ pub struct PrivateHttp {
     pub tracing: bool,
     pub host: String,
     pub port: u16,
-    pub ticket_endpoint: String,
+    pub ticket_sync_endpoint: String,
+    pub ticket_async_endpoint: String,
 }
 
 #[allow(clippy::struct_excessive_bools)]

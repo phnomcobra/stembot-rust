@@ -65,8 +65,16 @@ pub struct TraceEvent {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct TraceTicket {
+    pub events: Vec<TraceEvent>,
+    pub period: u64,
+    pub destination_id: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum Ticket {
     Test,
+    Trace(TraceTicket),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

@@ -5,18 +5,15 @@ use std::error::Error;
 use reqwest::Client;
 use reqwest::StatusCode;
 
-use crate::core::{messaging::Ticket, state::Singleton, ticketing::synchronize_ticket};
+use crate::core::ticketing::receive_ticket;
+use crate::core::ticketing::send_ticket;
+use crate::core::{messaging::Ticket, state::Singleton, ticketing::send_and_receive_ticket};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct TicketHttpRequest {
-    pub ticket: Ticket,
-    pub ticket_id: Option<String>,
-    pub destination_id: Option<String>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct TicketHttpResponse {
-    pub ticket: Ticket,
+struct Session {
+    ticket: Option<Ticket>,
+    ticket_id: Option<String>,
+    destination_id: Option<String>,
 }
 
 pub async fn ticket_synchronization_endpoint(
@@ -25,35 +22,174 @@ pub async fn ticket_synchronization_endpoint(
 ) -> Result<HttpResponse, Box<dyn Error>> {
     let singleton = singleton.get_ref();
 
-    let request_body_string = match String::from_utf8(request_body_bytes.to_vec()) {
-        Ok(json_string) => json_string,
-        Err(_) => return Err("failed to read ticket request body".into()),
+    let mut session = match serde_json::from_slice::<Session>(&request_body_bytes) {
+        Ok(session) => session,
+        Err(_) => return Err("failed to parse session body".into()),
     };
 
-    let ticket_http_request = match serde_json::from_str::<TicketHttpRequest>(&request_body_string)
-    {
-        Ok(ticket_http_request) => ticket_http_request,
-        Err(_) => return Err("failed to parse ticket request body".into()),
+    let ticket = match session.ticket {
+        Some(ticket) => ticket.clone(),
+        None => return Err("ticket not set in session body".into()),
     };
 
-    let ticket_http_response = match synchronize_ticket(
-        ticket_http_request.ticket.clone(),
-        ticket_http_request.ticket_id.clone(),
-        ticket_http_request.destination_id.clone(),
+    match send_and_receive_ticket(
+        ticket,
+        session.ticket_id.clone(),
+        session.destination_id.clone(),
         singleton.clone(),
     )
     .await
     {
-        Ok(ticket) => TicketHttpResponse { ticket },
+        Ok(ticket) => session.ticket = Some(ticket),
         Err(error) => return Err(error),
     };
 
-    let response_body = match serde_json::to_string_pretty(&ticket_http_response) {
+    let response_body = match serde_json::to_string_pretty(&session) {
         Ok(json_string) => json_string.as_bytes().to_vec(),
         Err(error) => return Err(error.into()),
     };
 
     Ok(HttpResponse::Ok().body(response_body))
+}
+
+pub async fn ticket_initialization_endpoint(
+    request_body_bytes: web::Bytes,
+    singleton: web::Data<Singleton>,
+) -> Result<HttpResponse, Box<dyn Error>> {
+    let singleton = singleton.get_ref();
+
+    let mut session = match serde_json::from_slice::<Session>(&request_body_bytes) {
+        Ok(session) => session,
+        Err(_) => return Err("failed to parse session body".into()),
+    };
+
+    let ticket = match session.ticket.clone() {
+        Some(ticket) => ticket,
+        None => return Err("ticket not set in session body".into()),
+    };
+
+    let ticket_id = send_ticket(
+        ticket,
+        session.ticket_id.clone(),
+        session.destination_id.clone(),
+        singleton.clone(),
+    )
+    .await;
+
+    session.ticket_id = Some(ticket_id);
+
+    let response_body = match serde_json::to_string_pretty(&session) {
+        Ok(json_string) => json_string.as_bytes().to_vec(),
+        Err(error) => return Err(error.into()),
+    };
+
+    Ok(HttpResponse::Ok().body(response_body))
+}
+
+pub async fn ticket_retrieval_endpoint(
+    request_body_bytes: web::Bytes,
+    singleton: web::Data<Singleton>,
+) -> Result<HttpResponse, Box<dyn Error>> {
+    let singleton = singleton.get_ref();
+
+    let mut session = match serde_json::from_slice::<Session>(&request_body_bytes) {
+        Ok(session) => session,
+        Err(_) => return Err("failed to parse session body".into()),
+    };
+
+    let ticket_id = match session.ticket_id.clone() {
+        Some(ticket_id) => ticket_id,
+        None => return Err("ticket id not set in session".into()),
+    };
+
+    match receive_ticket(ticket_id, singleton.clone()).await {
+        Ok(ticket) => session.ticket = Some(ticket),
+        Err(error) => return Err(error.to_string().into()),
+    };
+
+    let response_body = match serde_json::to_string_pretty(&session) {
+        Ok(json_string) => json_string.as_bytes().to_vec(),
+        Err(error) => return Err(error.into()),
+    };
+
+    Ok(HttpResponse::Ok().body(response_body))
+}
+
+pub async fn request_ticket_initialization(
+    ticket: Ticket,
+    ticket_id: Option<String>,
+    destination_id: Option<String>,
+    url: String,
+) -> Result<Option<String>, Box<dyn Error + Send + Sync + 'static>> {
+    let client = Client::new();
+
+    let session = Session {
+        ticket: Some(ticket),
+        ticket_id,
+        destination_id,
+    };
+
+    let body = match serde_json::to_string_pretty(&session) {
+        Ok(json_string) => json_string.as_bytes().to_vec(),
+        Err(error) => return Err(error.into()),
+    };
+
+    match client.post(url.clone()).body(body).send().await {
+        Ok(response) => match response.status() {
+            StatusCode::OK => {
+                let response_body_bytes = match response.bytes().await {
+                    Ok(bytes) => bytes.to_vec(),
+                    Err(_) => return Err("failed to receive session body".into()),
+                };
+
+                match serde_json::from_slice::<Session>(&response_body_bytes) {
+                    Ok(session) => Ok(session.ticket_id),
+                    Err(_) => Err("failed to parse session body".into()),
+                }
+            }
+            _ => Err(format!("HTTP Status: {}", response.status()).into()),
+        },
+        Err(error) => Err(format!("HTTP Failure: {}", error).into()),
+    }
+}
+
+pub async fn request_ticket_retrieval(
+    ticket_id: Option<String>,
+    url: String,
+) -> Result<Ticket, Box<dyn Error + Send + Sync + 'static>> {
+    let client = Client::new();
+
+    let session = Session {
+        ticket: None,
+        ticket_id,
+        destination_id: None,
+    };
+
+    let body = match serde_json::to_string_pretty(&session) {
+        Ok(json_string) => json_string.as_bytes().to_vec(),
+        Err(error) => return Err(error.into()),
+    };
+
+    match client.get(url.clone()).body(body).send().await {
+        Ok(response) => match response.status() {
+            StatusCode::OK => {
+                let response_body_bytes = match response.bytes().await {
+                    Ok(bytes) => bytes.to_vec(),
+                    Err(_) => return Err("failed to receive session body".into()),
+                };
+
+                match serde_json::from_slice::<Session>(&response_body_bytes) {
+                    Ok(session) => match session.ticket.clone() {
+                        Some(ticket) => Ok(ticket),
+                        None => return Err("ticket not set in session body".into()),
+                    },
+                    Err(_) => Err("failed to parse session body".into()),
+                }
+            }
+            _ => Err(format!("HTTP Status: {}", response.status()).into()),
+        },
+        Err(error) => Err(format!("HTTP Failure: {}", error).into()),
+    }
 }
 
 pub async fn request_ticket_synchronization(
@@ -64,13 +200,13 @@ pub async fn request_ticket_synchronization(
 ) -> Result<Ticket, Box<dyn Error + Send + Sync + 'static>> {
     let client = Client::new();
 
-    let ticket_http_request = TicketHttpRequest {
-        ticket,
+    let session = Session {
+        ticket: Some(ticket),
         ticket_id,
         destination_id,
     };
 
-    let body = match serde_json::to_string_pretty(&ticket_http_request) {
+    let body = match serde_json::to_string_pretty(&session) {
         Ok(json_string) => json_string.as_bytes().to_vec(),
         Err(error) => return Err(error.into()),
     };
@@ -80,17 +216,15 @@ pub async fn request_ticket_synchronization(
             StatusCode::OK => {
                 let response_body_bytes = match response.bytes().await {
                     Ok(bytes) => bytes.to_vec(),
-                    Err(_) => return Err("failed to receive http response body".into()),
+                    Err(_) => return Err("failed to receive session body".into()),
                 };
 
-                let response_body_string = match String::from_utf8(response_body_bytes) {
-                    Ok(response_body_string) => response_body_string,
-                    Err(_) => return Err("failed to read http response body".into()),
-                };
-
-                match serde_json::from_str::<TicketHttpResponse>(&response_body_string) {
-                    Ok(response) => Ok(response.ticket),
-                    Err(_) => Err("failed to parse http response body".into()),
+                match serde_json::from_slice::<Session>(&response_body_bytes) {
+                    Ok(session) => match session.ticket.clone() {
+                        Some(ticket) => Ok(ticket),
+                        None => return Err("ticket not set in session body".into()),
+                    },
+                    Err(_) => Err("failed to parse session body".into()),
                 }
             }
             _ => Err(format!("HTTP Status: {}", response.status()).into()),

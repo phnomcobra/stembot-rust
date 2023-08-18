@@ -14,7 +14,9 @@ use stembot_rust::{
         state::Singleton,
     },
     init_logger,
-    private::http::ticketing::ticket_synchronization_endpoint,
+    private::http::ticketing::{
+        ticket_initialization_endpoint, ticket_retrieval_endpoint, ticket_synchronization_endpoint,
+    },
     public::http::endpoint::message_handler,
 };
 
@@ -164,8 +166,16 @@ async fn main() -> Result<(), std::io::Error> {
                             .wrap(TracingLogger::default())
                             .app_data(web::Data::new(singleton.clone()))
                             .route(
-                                &singleton.configuration.private_http.ticket_endpoint,
+                                &singleton.configuration.private_http.ticket_sync_endpoint,
                                 web::post().to(ticket_synchronization_endpoint),
+                            )
+                            .route(
+                                &singleton.configuration.private_http.ticket_async_endpoint,
+                                web::post().to(ticket_initialization_endpoint),
+                            )
+                            .route(
+                                &singleton.configuration.private_http.ticket_async_endpoint,
+                                web::get().to(ticket_retrieval_endpoint),
                             )
                     }
                 })
@@ -183,8 +193,16 @@ async fn main() -> Result<(), std::io::Error> {
                         App::new()
                             .app_data(web::Data::new(singleton.clone()))
                             .route(
-                                &singleton.configuration.private_http.ticket_endpoint,
+                                &singleton.configuration.private_http.ticket_sync_endpoint,
                                 web::post().to(ticket_synchronization_endpoint),
+                            )
+                            .route(
+                                &singleton.configuration.private_http.ticket_async_endpoint,
+                                web::post().to(ticket_initialization_endpoint),
+                            )
+                            .route(
+                                &singleton.configuration.private_http.ticket_async_endpoint,
+                                web::get().to(ticket_retrieval_endpoint),
                             )
                     }
                 })

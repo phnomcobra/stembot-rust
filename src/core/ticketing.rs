@@ -10,13 +10,46 @@ use crate::core::{
     state::Singleton,
 };
 
-pub async fn process_ticket_request(ticket_request: TicketRequest) -> TicketResponse {
+use super::messaging::TraceRequest;
+
+pub async fn process_ticket_request(
+    ticket_request: TicketRequest,
+    singleton: Singleton,
+) -> TicketResponse {
     match ticket_request.ticket {
         Ticket::Test => TicketResponse {
             ticket: ticket_request.ticket,
             ticket_id: ticket_request.ticket_id,
             start_time: ticket_request.start_time,
         },
+        Ticket::Trace(ticket) => {
+            let trace_request = TraceRequest::default();
+            let request_id = trace_request.request_id.clone();
+            let trace_request_message = Message::TraceRequest(trace_request);
+
+            let message_collection = MessageCollection {
+                origin_id: singleton.configuration.id.clone(),
+                destination_id: Some(ticket.destination_id.clone()),
+                messages: vec![trace_request_message.clone()],
+            };
+
+            push_message_collection_to_backlog(message_collection, singleton.clone()).await;
+
+            sleep(Duration::from_millis(ticket.period)).await;
+
+            let mut ticket = ticket.clone();
+
+            let mut trace_map = singleton.trace_map.write().await;
+
+            ticket.events = trace_map.get(&request_id).unwrap().to_vec();
+            trace_map.remove(&request_id);
+
+            TicketResponse {
+                ticket: Ticket::Trace(ticket),
+                ticket_id: ticket_request.ticket_id,
+                start_time: ticket_request.start_time,
+            }
+        }
     }
 }
 
@@ -100,7 +133,7 @@ pub async fn receive_ticket(
     }
 }
 
-pub async fn synchronize_ticket(
+pub async fn send_and_receive_ticket(
     ticket: Ticket,
     ticket_id: Option<String>,
     destination_id: Option<String>,

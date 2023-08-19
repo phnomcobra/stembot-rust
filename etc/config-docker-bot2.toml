@@ -22,5 +22,5 @@ url="http://bot1:8080/"
 polling=false
 
 [peer.docker-bot3]
-#url="http://bot3:8080/"
+url="http://bot3:8080/"
 polling=false

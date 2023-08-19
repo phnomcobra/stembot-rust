@@ -28,7 +28,7 @@ pub async fn ticket_synchronization_endpoint(
     };
 
     let ticket = match session.ticket {
-        Some(ticket) => ticket.clone(),
+        Some(ticket) => ticket,
         None => return Err("ticket not set in session body".into()),
     };
 
@@ -179,9 +179,9 @@ pub async fn request_ticket_retrieval(
                 };
 
                 match serde_json::from_slice::<Session>(&response_body_bytes) {
-                    Ok(session) => match session.ticket.clone() {
+                    Ok(session) => match session.ticket {
                         Some(ticket) => Ok(ticket),
-                        None => return Err("ticket not set in session body".into()),
+                        None => Err("ticket not set in session body".into()),
                     },
                     Err(_) => Err("failed to parse session body".into()),
                 }
@@ -220,9 +220,9 @@ pub async fn request_ticket_synchronization(
                 };
 
                 match serde_json::from_slice::<Session>(&response_body_bytes) {
-                    Ok(session) => match session.ticket.clone() {
+                    Ok(session) => match session.ticket {
                         Some(ticket) => Ok(ticket),
-                        None => return Err("ticket not set in session body".into()),
+                        None => Err("ticket not set in session body".into()),
                     },
                     Err(_) => Err("failed to parse session body".into()),
                 }

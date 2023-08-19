@@ -19,7 +19,7 @@ ticket_async_endpoint="/ticket/async"
 
 [peer.docker-bot2]
 url="http://bot2:8080/"
-polling=true
+polling=false
 
 [peer.docker-bot4]
 url="http://bot4:8080/"

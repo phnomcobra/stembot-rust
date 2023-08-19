@@ -13,7 +13,7 @@ secret="01234567890123456789012345678901"
 [private_http]
 host="0.0.0.0"
 port=8081
-tracing=true
+tracing=false
 ticket_sync_endpoint="/ticket/sync"
 ticket_async_endpoint="/ticket/async"
 

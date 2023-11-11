@@ -81,9 +81,7 @@ pub async fn process_message_collection(
                     outbound_message_collection
                         .messages
                         .push(Message::RouteAdvertisement(
-                            RouteAdvertisement::from_routes(
-                                singleton.routing_table.read().await.clone(),
-                            ),
+                            RouteAdvertisement::from_routes(singleton.routes.read().await.clone()),
                         ));
                 }
                 Message::Pong => {
@@ -126,13 +124,13 @@ pub async fn process_message_collection(
                 }
                 Message::TraceEvent(trace_event) => {
                     log::info!("{trace_event}");
-                    let mut trace_map = singleton.trace_map.write().await;
-                    match trace_map.get_mut(&trace_event.request_id) {
+                    let mut traces = singleton.traces.write().await;
+                    match traces.get_mut(&trace_event.request_id) {
                         Some(events) => {
                             events.push(trace_event);
                         }
                         None => {
-                            trace_map.insert(trace_event.request_id.clone(), vec![trace_event]);
+                            traces.insert(trace_event.request_id.clone(), vec![trace_event]);
                         }
                     };
                 }
@@ -195,7 +193,7 @@ pub async fn process_message_collection(
             // Don't know where to forward to
             None => {
                 let destination_ids: Vec<String> = singleton
-                    .peering_table
+                    .peers
                     .read()
                     .await
                     .iter()

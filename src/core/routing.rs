@@ -14,14 +14,11 @@ pub struct Route {
 }
 
 pub async fn resolve_gateway_id(destination_id: String, singleton: Singleton) -> Option<String> {
-    let routing_table = singleton.routing_table.read().await.clone();
+    let routes = singleton.routes.read().await.clone();
     let mut best_weight: Option<usize> = None;
     let mut best_gateway_id: Option<String> = None;
 
-    for route in routing_table
-        .iter()
-        .filter(|x| x.destination_id == destination_id)
-    {
+    for route in routes.iter().filter(|x| x.destination_id == destination_id) {
         let weight = route.weight.unwrap_or(0);
 
         if weight < best_weight.unwrap_or(usize::MAX) {
@@ -34,23 +31,23 @@ pub async fn resolve_gateway_id(destination_id: String, singleton: Singleton) ->
 }
 
 pub async fn remove_routes_by_url(url: String, singleton: Singleton) {
-    let peering_table = singleton.peering_table.read().await.clone();
-    let peer_ids: Vec<String> = peering_table
+    let peers = singleton.peers.read().await.clone();
+    let peer_ids: Vec<String> = peers
         .iter()
         .filter(|x| x.url == Some(url.clone()))
         .filter_map(|x| x.id.clone())
         .collect();
-    drop(peering_table);
+    drop(peers);
 
-    let mut routing_table = singleton.routing_table.write().await.clone();
+    let mut routes = singleton.routes.write().await.clone();
 
-    let mut updated_routing_table: Vec<Route> = routing_table
+    let mut updated_routes: Vec<Route> = routes
         .iter()
         .filter(|x| !peer_ids.contains(&x.destination_id) || x.destination_id == x.gateway_id)
         .cloned()
         .collect();
-    routing_table.clear();
-    routing_table.append(&mut updated_routing_table);
+    routes.clear();
+    routes.append(&mut updated_routes);
 }
 
 pub async fn remove_routes_by_gateway_and_destination(
@@ -58,24 +55,24 @@ pub async fn remove_routes_by_gateway_and_destination(
     destination_id: String,
     singleton: Singleton,
 ) {
-    let mut routing_table = singleton.routing_table.write().await.clone();
-    let mut updated_routing_table: Vec<Route> = routing_table
+    let mut routes = singleton.routes.write().await.clone();
+    let mut updated_routes: Vec<Route> = routes
         .iter()
         .filter(|x| x.destination_id != destination_id && x.gateway_id != gateway_id)
         .cloned()
         .collect();
-    routing_table.clear();
-    routing_table.append(&mut updated_routing_table);
+    routes.clear();
+    routes.append(&mut updated_routes);
 }
 
 pub async fn advertise(singleton: Singleton) {
-    let mut local_peering_table = singleton.peering_table.read().await.clone();
+    let mut local_peers = singleton.peers.read().await.clone();
 
     let advertisement_message: Message = Message::RouteAdvertisement(
-        RouteAdvertisement::from_routes(singleton.routing_table.read().await.clone()),
+        RouteAdvertisement::from_routes(singleton.routes.read().await.clone()),
     );
 
-    for peer in local_peering_table.iter_mut().filter(|x| x.url.is_some()) {
+    for peer in local_peers.iter_mut().filter(|x| x.url.is_some()) {
         let configuration = singleton.configuration.clone();
 
         let outgoing_message_collection = MessageCollection {
@@ -104,14 +101,14 @@ pub async fn advertise(singleton: Singleton) {
         };
     }
 
-    let mut shared_peering_table = singleton.peering_table.write().await;
-    shared_peering_table.clear();
-    shared_peering_table.append(&mut local_peering_table);
+    let mut shared_peers = singleton.peers.write().await;
+    shared_peers.clear();
+    shared_peers.append(&mut local_peers);
 }
 
 impl RouteAdvertisement {
     pub async fn process(&self, singleton: Singleton, origin_id: String) {
-        let mut routing_table = singleton.routing_table.write().await;
+        let mut routes = singleton.routes.write().await;
 
         for advertised_route in self
             .routes
@@ -123,7 +120,7 @@ impl RouteAdvertisement {
                 gateway_id: x.gateway_id.clone(),
             })
         {
-            let weights: Vec<usize> = routing_table
+            let weights: Vec<usize> = routes
                 .iter()
                 .filter(|x| x.destination_id == advertised_route.destination_id)
                 .filter(|x| x.gateway_id == origin_id)
@@ -132,7 +129,7 @@ impl RouteAdvertisement {
 
             match weights.iter().min() {
                 None => {
-                    routing_table.push(Route {
+                    routes.push(Route {
                         gateway_id: origin_id.clone(),
                         destination_id: advertised_route.destination_id.clone(),
                         weight: advertised_route.weight,
@@ -140,7 +137,7 @@ impl RouteAdvertisement {
                 }
                 Some(weight) => {
                     if advertised_route.weight.unwrap() < *weight {
-                        let mut indices: Vec<usize> = routing_table
+                        let mut indices: Vec<usize> = routes
                             .iter()
                             .enumerate()
                             .filter(|x| x.1.destination_id == advertised_route.destination_id)
@@ -151,10 +148,10 @@ impl RouteAdvertisement {
                         indices.sort_by(|a, b| b.cmp(a));
 
                         for i in indices.iter() {
-                            routing_table.remove(*i);
+                            routes.remove(*i);
                         }
 
-                        routing_table.push(Route {
+                        routes.push(Route {
                             gateway_id: origin_id.clone(),
                             destination_id: advertised_route.destination_id.clone(),
                             weight: advertised_route.weight,
@@ -173,8 +170,8 @@ impl RouteAdvertisement {
 }
 
 pub async fn initialize_routes(singleton: Singleton) {
-    let mut routing_table = singleton.routing_table.write().await;
-    routing_table.push(Route {
+    let mut routes = singleton.routes.write().await;
+    routes.push(Route {
         destination_id: singleton.configuration.id.clone(),
         gateway_id: singleton.configuration.id.clone(),
         weight: None,
@@ -182,11 +179,11 @@ pub async fn initialize_routes(singleton: Singleton) {
 }
 
 pub async fn age_routes(singleton: Singleton) {
-    let mut routing_table = singleton.routing_table.write().await;
+    let mut routes = singleton.routes.write().await;
 
     let mut stale_indices: Vec<usize> = vec![];
 
-    for (i, route) in routing_table
+    for (i, route) in routes
         .iter_mut()
         .enumerate()
         .filter(|x| x.1.weight.is_some())
@@ -200,6 +197,6 @@ pub async fn age_routes(singleton: Singleton) {
     stale_indices.sort_by(|a, b| b.cmp(a));
 
     for i in stale_indices {
-        routing_table.remove(i);
+        routes.remove(i);
     }
 }

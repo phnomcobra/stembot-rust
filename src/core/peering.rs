@@ -15,7 +15,7 @@ pub struct PeerTable {
 }
 
 pub async fn initialize_peers(singleton: Singleton) {
-    let mut peering_table = singleton.peering_table.write().await;
+    let mut peers = singleton.peers.write().await;
     for peer in singleton
         .configuration
         .clone()
@@ -23,7 +23,7 @@ pub async fn initialize_peers(singleton: Singleton) {
         .into_values()
         .filter(|x| x.url.is_some())
     {
-        peering_table.push(Peer {
+        peers.push(Peer {
             id: None,
             url: peer.url.clone(),
             polling: peer.polling,
@@ -32,20 +32,20 @@ pub async fn initialize_peers(singleton: Singleton) {
 }
 
 pub async fn touch_peer(id: &String, singleton: Singleton) {
-    let peering_table_read = singleton.peering_table.read().await;
+    let peers_read = singleton.peers.read().await;
 
-    let peers: Vec<&Peer> = peering_table_read
+    let peers: Vec<&Peer> = peers_read
         .iter()
         .filter(|x| x.id == Some(id.to_string()))
         .collect();
     let present = !peers.is_empty();
 
     drop(peers);
-    drop(peering_table_read);
+    drop(peers_read);
 
     if !present {
-        let mut peering_table_write = singleton.peering_table.write().await;
-        peering_table_write.push(Peer {
+        let mut peers_write = singleton.peers.write().await;
+        peers_write.push(Peer {
             id: Some(id.to_string()),
             url: None,
             polling: false,
@@ -54,9 +54,9 @@ pub async fn touch_peer(id: &String, singleton: Singleton) {
 }
 
 pub async fn lookup_peer_url(id: &String, singleton: Singleton) -> Option<String> {
-    let peering_table = singleton.peering_table.read().await;
+    let peers = singleton.peers.read().await;
 
-    let peers: Vec<Peer> = peering_table
+    let peers: Vec<Peer> = peers
         .iter()
         .filter(|x| Some(id.to_string()) == x.id)
         .filter(|x| x.url.is_some())

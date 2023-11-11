@@ -46,10 +46,10 @@ pub async fn process_ticket_request(
 
             sleep(Duration::from_millis(ticket.period.unwrap_or(0))).await;
 
-            let mut trace_map = singleton.trace_map.write().await;
+            let mut traces = singleton.traces.write().await;
 
-            ticket.events = trace_map.get(&request_id).unwrap().to_vec();
-            trace_map.remove(&request_id);
+            ticket.events = traces.get(&request_id).unwrap().to_vec();
+            traces.remove(&request_id);
 
             TicketResponse {
                 ticket: Ticket::SyncTrace(ticket),
@@ -88,12 +88,12 @@ pub async fn process_ticket_request(
         Ticket::DrainTrace(ticket) => {
             let mut ticket = ticket.clone();
 
-            let mut trace_map = singleton.trace_map.write().await;
+            let mut traces = singleton.traces.write().await;
 
             if ticket.request_id.is_some() {
                 let request_id = ticket.request_id.clone().unwrap();
-                ticket.events = trace_map.get(&request_id).unwrap().to_vec();
-                trace_map.remove(&request_id);
+                ticket.events = traces.get(&request_id).unwrap().to_vec();
+                traces.remove(&request_id);
             }
 
             TicketResponse {
@@ -106,8 +106,8 @@ pub async fn process_ticket_request(
 }
 
 pub async fn process_ticket_response(ticket_response: TicketResponse, singleton: Singleton) {
-    let mut ticket_map = singleton.ticket_map.write().await;
-    ticket_map.insert(ticket_response.ticket_id, Some(ticket_response.ticket));
+    let mut tickets = singleton.tickets.write().await;
+    tickets.insert(ticket_response.ticket_id, Some(ticket_response.ticket));
 }
 
 pub async fn send_ticket(
@@ -122,7 +122,7 @@ pub async fn send_ticket(
     };
 
     singleton
-        .ticket_map
+        .tickets
         .write()
         .await
         .insert(ticket_id.clone(), None);
@@ -157,23 +157,23 @@ pub async fn receive_ticket(
     let mut ticket: Option<Ticket> = None;
 
     while millis_to_delay < singleton.configuration.ticketexpiration {
-        let mut ticket_map = singleton.ticket_map.write().await;
-        match ticket_map.get(&ticket_id) {
+        let mut tickets = singleton.tickets.write().await;
+        match tickets.get(&ticket_id) {
             Some(ticket_option) => match ticket_option {
                 Some(ticket_value) => {
                     ticket = Some(ticket_value.clone());
-                    ticket_map.remove(&ticket_id);
-                    drop(ticket_map);
+                    tickets.remove(&ticket_id);
+                    drop(tickets);
                     break;
                 }
                 None => {
-                    drop(ticket_map);
+                    drop(tickets);
                     sleep(Duration::from_millis(millis_to_delay)).await;
                     millis_to_delay *= 2;
                 }
             },
             None => {
-                drop(ticket_map);
+                drop(tickets);
                 break;
             }
         }

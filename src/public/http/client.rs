@@ -1,7 +1,7 @@
-use std::error::Error;
-
 use reqwest::Client;
 use reqwest::StatusCode;
+
+use anyhow::Result;
 
 use magic_crypt::{new_magic_crypt, MagicCryptTrait};
 
@@ -11,7 +11,7 @@ pub async fn send_raw_message<T: Into<Vec<u8>>, U: Into<String>, V: Into<Configu
     message: T,
     url: U,
     configuration: V,
-) -> Result<Vec<u8>, Box<dyn Error + Send + Sync + 'static>> {
+) -> Result<Vec<u8>> {
     let configuration = configuration.into();
 
     let unencrypted_request_body: Vec<u8> = message.into();
@@ -41,33 +41,49 @@ pub async fn send_raw_message<T: Into<Vec<u8>>, U: Into<String>, V: Into<Configu
             StatusCode::OK => {
                 let nonce_header_value = match response.headers().get("Nonce") {
                     Some(value) => value,
-                    None => return Err("nonce missing from response headers".into()),
+                    None => return Err(anyhow::Error::msg("nonce missing from response headers")),
                 };
 
                 let nonce_string = match nonce_header_value.to_str() {
                     Ok(value) => String::from(value),
-                    Err(_) => return Err("failed to read nonce from response header".into()),
+                    Err(_) => {
+                        return Err(anyhow::Error::msg(
+                            "failed to read nonce from response header",
+                        ))
+                    }
                 };
 
                 let tag_header_value = match response.headers().get("Tag") {
                     Some(value) => value,
-                    None => return Err("tag missing from response headers".into()),
+                    None => return Err(anyhow::Error::msg("tag missing from response headers")),
                 };
 
                 let tag_string = match tag_header_value.to_str() {
                     Ok(value) => String::from(value),
-                    Err(_) => return Err("failed to read tag from response header".into()),
+                    Err(_) => {
+                        return Err(anyhow::Error::msg(
+                            "failed to read tag from response header",
+                        ))
+                    }
                 };
 
                 let encrypted_response_body_bytes = match response.bytes().await {
                     Ok(bytes) => bytes.to_vec(),
-                    Err(_) => return Err("failed to receive encrypted http response body".into()),
+                    Err(error) => {
+                        return Err(anyhow::Error::msg(format!(
+                            "failed to receive encrypted http response body: {error}",
+                        )))
+                    }
                 };
 
                 let encrypted_response_body_string =
                     match String::from_utf8(encrypted_response_body_bytes) {
                         Ok(string) => string,
-                        Err(_) => return Err("failed to read encrypted response body".into()),
+                        Err(error) => {
+                            return Err(anyhow::Error::msg(format!(
+                                "failed to read encrypted response body: {error}",
+                            )))
+                        }
                     };
 
                 let cipher =
@@ -76,16 +92,23 @@ pub async fn send_raw_message<T: Into<Vec<u8>>, U: Into<String>, V: Into<Configu
                 let decrypted_response_body =
                     match cipher.decrypt_base64_to_bytes(encrypted_response_body_string) {
                         Ok(bytes) => bytes,
-                        Err(_) => return Err("failed to decrypt http response body".into()),
+                        Err(error) => {
+                            return Err(anyhow::Error::msg(format!(
+                                "failed to decrypt http response body: {error}"
+                            )))
+                        }
                     };
 
                 match tag_string == sha256::digest(decrypted_response_body.as_slice()) {
                     true => Ok(decrypted_response_body),
-                    false => Err("http response body digest mismatch".into()),
+                    false => Err(anyhow::Error::msg("http response body digest mismatch")),
                 }
             }
-            _ => Err(format!("HTTP Status: {}", response.status()).into()),
+            _ => Err(anyhow::Error::msg(format!(
+                "HTTP Status: {}",
+                response.status()
+            ))),
         },
-        Err(error) => Err(format!("HTTP Failure: {}", error).into()),
+        Err(error) => Err(anyhow::Error::msg(format!("HTTP Failure: {}", error))),
     }
 }

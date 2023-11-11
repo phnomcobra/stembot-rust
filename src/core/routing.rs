@@ -110,10 +110,6 @@ pub async fn advertise(singleton: Singleton) {
 }
 
 impl RouteAdvertisement {
-    pub fn default() -> Self {
-        Self { routes: vec![] }
-    }
-
     pub async fn process(&self, singleton: Singleton, origin_id: String) {
         let mut routing_table = singleton.routing_table.write().await;
 
@@ -170,10 +166,9 @@ impl RouteAdvertisement {
     }
 
     pub fn from_routes<T: Into<Vec<Route>>>(routes: T) -> Self {
-        let routes = routes.into();
-        let mut advertisement = Self::default();
-        advertisement.routes = routes;
-        advertisement
+        RouteAdvertisement {
+            routes: routes.into(),
+        }
     }
 }
 

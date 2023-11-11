@@ -1,12 +1,10 @@
 use crate::core::{routing::Route, state::Singleton};
 use crate::public::http::client::send_raw_message;
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use std::{
-    error::Error,
-    fmt::{self, Display},
-};
+use std::fmt::{self, Display};
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct RouteAdvertisement {
     pub routes: Vec<Route>,
 }
@@ -65,7 +63,7 @@ pub struct TraceEvent {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct TraceTicket {
+pub struct Trace {
     pub events: Vec<TraceEvent>,
     pub period: Option<u64>,
     pub request_id: Option<String>,
@@ -75,9 +73,9 @@ pub struct TraceTicket {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum Ticket {
     Test,
-    BeginTrace(TraceTicket),
-    DrainTrace(TraceTicket),
-    SyncTrace(TraceTicket),
+    BeginTrace(Trace),
+    DrainTrace(Trace),
+    SyncTrace(Trace),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -117,24 +115,18 @@ pub struct MessageCollection {
 }
 
 impl TryFrom<Vec<u8>> for MessageCollection {
-    type Error = Box<dyn Error + Send + Sync + 'static>;
+    type Error = anyhow::Error;
 
-    fn try_from(bytes: Vec<u8>) -> Result<Self, Box<dyn Error + Send + Sync + 'static>> {
-        match bincode::deserialize::<MessageCollection>(&bytes) {
-            Ok(message_collection) => Ok(message_collection),
-            Err(_) => Err("failed to deserialize message collection".into()),
-        }
+    fn try_from(bytes: Vec<u8>) -> Result<Self> {
+        Ok(bincode::deserialize::<MessageCollection>(&bytes)?)
     }
 }
 
 impl TryInto<Vec<u8>> for MessageCollection {
-    type Error = Box<dyn Error + Send + Sync + 'static>;
+    type Error = anyhow::Error;
 
-    fn try_into(self) -> Result<Vec<u8>, Box<dyn Error + Send + Sync + 'static>> {
-        match bincode::serialize::<MessageCollection>(&self) {
-            Ok(bytes) => Ok(bytes),
-            Err(_) => Err("failed to serialize message collection".into()),
-        }
+    fn try_into(self) -> Result<Vec<u8>> {
+        Ok(bincode::serialize::<MessageCollection>(&self)?)
     }
 }
 
@@ -142,21 +134,12 @@ pub async fn send_message_collection_to_url(
     outgoing_message_collection: MessageCollection,
     url: String,
     singleton: Singleton,
-) -> Result<MessageCollection, Box<dyn Error + Send + Sync + 'static>> {
-    let outgoing_message_bytes: Vec<u8> = match outgoing_message_collection.try_into() {
-        Ok(collection) => collection,
-        Err(error) => return Err(error),
-    };
+) -> Result<MessageCollection> {
+    let outgoing_message_bytes: Vec<u8> = outgoing_message_collection.try_into()?;
 
-    match send_raw_message(outgoing_message_bytes, url, singleton.configuration).await {
-        Ok(bytes) => {
-            let incoming_message_collection: MessageCollection = match bytes.try_into() {
-                Ok(collection) => collection,
-                Err(error) => return Err(error),
-            };
+    let bytes = send_raw_message(outgoing_message_bytes, url, singleton.configuration).await?;
 
-            Ok(incoming_message_collection)
-        }
-        Err(error) => Err(error),
-    }
+    let incoming_message_collection: MessageCollection = bytes.try_into()?;
+
+    Ok(incoming_message_collection)
 }

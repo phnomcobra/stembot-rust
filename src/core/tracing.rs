@@ -8,8 +8,9 @@ use crate::core::{
     state::Singleton,
 };
 
-impl TraceRequest {
-    pub fn new(request_id: String) -> Self {
+impl Default for TraceRequest {
+    fn default() -> Self {
+        let request_id: String = rand::random::<usize>().to_string();
         let start_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or(Duration::from_millis(0))
@@ -21,9 +22,10 @@ impl TraceRequest {
             start_time,
         }
     }
+}
 
-    pub fn default() -> Self {
-        let request_id: String = rand::random::<usize>().to_string();
+impl TraceRequest {
+    pub fn new(request_id: String) -> Self {
         let start_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or(Duration::from_millis(0))

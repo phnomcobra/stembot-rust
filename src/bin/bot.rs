@@ -14,10 +14,10 @@ use stembot_rust::{
         state::Singleton,
     },
     init_logger,
-    private::http::ticketing::{
+    private::http::server::ticketing::{
         ticket_initialization_endpoint, ticket_retrieval_endpoint, ticket_synchronization_endpoint,
     },
-    public::http::endpoint::message_handler,
+    public::http::server::message_handler,
 };
 
 async fn test(_singleton: Singleton) {

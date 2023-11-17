@@ -1,7 +1,4 @@
-use std::{
-    error::Error,
-    time::{Duration, SystemTime, UNIX_EPOCH},
-};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::time::sleep;
 
 use crate::core::{
@@ -9,6 +6,8 @@ use crate::core::{
     messaging::{Message, MessageCollection, Ticket, TicketRequest, TicketResponse},
     state::Singleton,
 };
+
+use anyhow::Result;
 
 use super::messaging::TraceRequest;
 
@@ -22,82 +21,98 @@ pub async fn process_ticket_request(
             ticket_id: ticket_request.ticket_id,
             start_time: ticket_request.start_time,
         },
-        Ticket::SyncTrace(ticket) => {
-            let mut ticket = ticket.clone();
+        Ticket::SyncTrace(trace) => {
+            let mut trace = trace.clone();
 
-            let trace_request = match ticket.request_id.clone() {
+            let trace_request = match trace.request_id.clone() {
                 Some(request_id) => TraceRequest::new(request_id),
                 None => TraceRequest::default(),
             };
 
             let request_id = trace_request.request_id.clone();
 
-            ticket.request_id = Some(request_id.clone());
+            trace.request_id = Some(request_id.clone());
 
             let trace_request_message = Message::TraceRequest(trace_request);
 
             let message_collection = MessageCollection {
                 origin_id: singleton.configuration.id.clone(),
-                destination_id: Some(ticket.destination_id.clone()),
+                destination_id: Some(trace.destination_id.clone()),
                 messages: vec![trace_request_message.clone()],
             };
 
             push_message_collection_to_backlog(message_collection, singleton.clone()).await;
 
-            sleep(Duration::from_millis(ticket.period.unwrap_or(0))).await;
+            sleep(Duration::from_millis(trace.period.unwrap_or(0))).await;
 
             let mut traces = singleton.traces.write().await;
 
-            ticket.events = traces.get(&request_id).unwrap().to_vec();
+            trace.events = traces.get(&request_id).unwrap().to_vec();
             traces.remove(&request_id);
 
             TicketResponse {
-                ticket: Ticket::SyncTrace(ticket),
+                ticket: Ticket::SyncTrace(trace),
                 ticket_id: ticket_request.ticket_id,
                 start_time: ticket_request.start_time,
             }
         }
-        Ticket::BeginTrace(ticket) => {
-            let mut ticket = ticket.clone();
+        Ticket::BeginTrace(trace) => {
+            let mut trace = trace.clone();
 
-            let trace_request = match ticket.request_id.clone() {
+            let trace_request = match trace.request_id.clone() {
                 Some(request_id) => TraceRequest::new(request_id),
                 None => TraceRequest::default(),
             };
 
             let request_id = trace_request.request_id.clone();
 
-            ticket.request_id = Some(request_id.clone());
+            trace.request_id = Some(request_id.clone());
 
             let trace_request_message = Message::TraceRequest(trace_request);
 
             let message_collection = MessageCollection {
                 origin_id: singleton.configuration.id.clone(),
-                destination_id: Some(ticket.destination_id.clone()),
+                destination_id: Some(trace.destination_id.clone()),
                 messages: vec![trace_request_message.clone()],
             };
 
             push_message_collection_to_backlog(message_collection, singleton.clone()).await;
 
             TicketResponse {
-                ticket: Ticket::BeginTrace(ticket),
+                ticket: Ticket::BeginTrace(trace),
                 ticket_id: ticket_request.ticket_id,
                 start_time: ticket_request.start_time,
             }
         }
-        Ticket::DrainTrace(ticket) => {
-            let mut ticket = ticket.clone();
+        Ticket::DrainTrace(trace) => {
+            let mut trace = trace.clone();
 
             let mut traces = singleton.traces.write().await;
 
-            if ticket.request_id.is_some() {
-                let request_id = ticket.request_id.clone().unwrap();
-                ticket.events = traces.get(&request_id).unwrap().to_vec();
+            if trace.request_id.is_some() {
+                let request_id = trace.request_id.clone().unwrap();
+                trace.events = traces.get(&request_id).unwrap().to_vec();
                 traces.remove(&request_id);
             }
 
             TicketResponse {
-                ticket: Ticket::DrainTrace(ticket),
+                ticket: Ticket::DrainTrace(trace),
+                ticket_id: ticket_request.ticket_id,
+                start_time: ticket_request.start_time,
+            }
+        }
+        Ticket::PollTrace(trace) => {
+            let mut trace = trace.clone();
+
+            let traces = singleton.traces.read().await;
+
+            if trace.request_id.is_some() {
+                let request_id = trace.request_id.clone().unwrap();
+                trace.events = traces.get(&request_id).unwrap().to_vec();
+            }
+
+            TicketResponse {
+                ticket: Ticket::PollTrace(trace),
                 ticket_id: ticket_request.ticket_id,
                 start_time: ticket_request.start_time,
             }
@@ -149,10 +164,7 @@ pub async fn send_ticket(
     ticket_id
 }
 
-pub async fn receive_ticket(
-    ticket_id: String,
-    singleton: Singleton,
-) -> Result<Ticket, Box<dyn Error + Send + Sync + 'static>> {
+pub async fn receive_ticket(ticket_id: String, singleton: Singleton) -> Result<Ticket> {
     let mut millis_to_delay: u64 = 10;
     let mut ticket: Option<Ticket> = None;
 
@@ -181,7 +193,9 @@ pub async fn receive_ticket(
 
     match ticket {
         Some(ticket) => Ok(ticket),
-        None => Err(format!("timeout exceeded for ticket {ticket_id}").into()),
+        None => Err(anyhow::Error::msg(format!(
+            "timeout exceeded for ticket {ticket_id}"
+        ))),
     }
 }
 
@@ -190,7 +204,7 @@ pub async fn send_and_receive_ticket(
     ticket_id: Option<String>,
     destination_id: Option<String>,
     singleton: Singleton,
-) -> Result<Ticket, Box<dyn Error + Send + Sync + 'static>> {
+) -> Result<Ticket> {
     let ticket_id = send_ticket(ticket, ticket_id, destination_id, singleton.clone()).await;
     receive_ticket(ticket_id, singleton.clone()).await
 }

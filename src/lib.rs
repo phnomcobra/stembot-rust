@@ -4,6 +4,7 @@ use std::{io::Write, str::FromStr, thread};
 
 pub mod config;
 pub mod core;
+pub mod interface;
 pub mod private;
 pub mod public;
 

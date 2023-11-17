@@ -38,7 +38,7 @@ pub struct TraceResponse {
     pub start_time: u128,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum Direction {
     Outbound,
     Inbound,
@@ -53,7 +53,7 @@ impl Display for Direction {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct TraceEvent {
     pub hop_count: usize,
     pub request_id: String,
@@ -62,7 +62,7 @@ pub struct TraceEvent {
     pub direction: Direction,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Trace {
     pub events: Vec<TraceEvent>,
     pub period: Option<u64>,
@@ -76,6 +76,7 @@ pub enum Ticket {
     BeginTrace(Trace),
     DrainTrace(Trace),
     SyncTrace(Trace),
+    PollTrace(Trace),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

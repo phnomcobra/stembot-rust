@@ -31,7 +31,7 @@ pub async fn ticket_synchronization_endpoint(
     .await
     {
         Ok(ticket) => session.ticket = Some(ticket),
-        Err(error) => return Err(error),
+        Err(error) => return Err(error.into()),
     };
 
     let response_body = match serde_json::to_string_pretty(&session) {

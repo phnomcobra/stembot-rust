@@ -23,4 +23,5 @@ polling=false
 
 [peer.docker-bot3]
 url="http://bot3:8080/"
-polling=false
+# polling=false
+polling=true

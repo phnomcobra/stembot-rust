@@ -1,13 +1,24 @@
 use std::collections::HashMap;
 
 use actix_web::rt::spawn;
+use serde::{Deserialize, Serialize};
 
 use crate::core::{
-    messaging::{BacklogRequest, BacklogResponse, Message, MessageCollection},
+    messaging::{Message, MessageCollection},
     processing::process_message_collection,
     routing::resolve_gateway_id,
     state::Singleton,
 };
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct BacklogResponse {
+    pub message_collections: Vec<MessageCollection>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct BacklogRequest {
+    pub gateway_id: String,
+}
 
 pub async fn poll_backlogs(singleton: Singleton) {
     let peers = singleton.peers.read().await;

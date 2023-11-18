@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::core::messaging::Ticket;
+use crate::core::ticketing::Ticket;
 
 pub mod client;
 pub mod server;

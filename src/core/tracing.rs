@@ -3,10 +3,65 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use crate::core::{
-    messaging::{Direction, TraceEvent, TraceRequest, TraceResponse},
-    state::Singleton,
-};
+use serde::{Deserialize, Serialize};
+
+use crate::core::state::Singleton;
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct TraceRequest {
+    pub hop_count: usize,
+    pub request_id: String,
+    pub start_time: u128,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct TraceResponse {
+    pub hop_count: usize,
+    pub request_id: String,
+    pub start_time: u128,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub enum Direction {
+    Outbound,
+    Inbound,
+}
+
+impl Display for Direction {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Inbound => write!(f, "inbound"),
+            Self::Outbound => write!(f, "outbound"),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct TraceEvent {
+    pub hop_count: usize,
+    pub request_id: String,
+    pub local_time: u128,
+    pub id: String,
+    pub direction: Direction,
+}
+
+impl Display for TraceEvent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{} {} {} {}",
+            &self.local_time, &self.hop_count, &self.id, &self.direction
+        )
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct Trace {
+    pub events: Vec<TraceEvent>,
+    pub period: Option<u64>,
+    pub request_id: Option<String>,
+    pub destination_id: String,
+}
 
 impl Default for TraceRequest {
     fn default() -> Self {
@@ -53,16 +108,6 @@ impl TraceRequest {
             id: singleton.configuration.id,
             direction: Direction::Outbound,
         }
-    }
-}
-
-impl Display for TraceEvent {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "trace {}: {}: hop: {}, time: {}, {} ",
-            self.request_id, self.id, self.hop_count, self.local_time, self.direction
-        )
     }
 }
 

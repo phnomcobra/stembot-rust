@@ -1,14 +1,16 @@
 use crate::core::{
     backlog::{push_message_collection_to_backlog, request_backlog},
-    messaging::{
-        send_message_collection_to_url, Message, MessageCollection, RouteAdvertisement,
-        RouteRecall, TraceResponse,
-    },
+    messaging::{send_message_collection_to_url, Message, MessageCollection},
     peering::{lookup_peer_url, touch_peer},
-    routing::{remove_routes_by_gateway_and_destination, remove_routes_by_url, resolve_gateway_id},
+    routing::{
+        remove_routes_by_gateway_and_destination, remove_routes_by_url, resolve_gateway_id,
+        RouteAdvertisement,
+    },
     state::Singleton,
     ticketing::{process_ticket_request, process_ticket_response},
 };
+
+use super::{routing::RouteRecall, tracing::TraceResponse};
 
 pub async fn process_message_collection(
     mut inbound_message_collection: MessageCollection,

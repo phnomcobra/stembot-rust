@@ -8,10 +8,11 @@ use tokio::time::sleep;
 use stembot_rust::{
     core::{
         backlog::{poll_backlogs, process_backlog, push_message_collection_to_backlog},
-        messaging::{Message, MessageCollection, TraceRequest},
+        messaging::{Message, MessageCollection},
         peering::initialize_peers,
         routing::{advertise, age_routes, initialize_routes},
         state::Singleton,
+        tracing::TraceRequest,
     },
     init_logger,
     private::http::server::ticketing::{

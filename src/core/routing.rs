@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::core::{
-    messaging::{send_message_collection_to_url, Message, MessageCollection, RouteAdvertisement},
+    messaging::{send_message_collection_to_url, Message, MessageCollection},
     processing::process_message_collection,
     state::Singleton,
 };
@@ -11,6 +11,16 @@ pub struct Route {
     pub gateway_id: String,
     pub destination_id: String,
     pub weight: Option<usize>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct RouteAdvertisement {
+    pub routes: Vec<Route>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct RouteRecall {
+    pub destination_id: String,
 }
 
 pub async fn resolve_gateway_id(destination_id: String, singleton: Singleton) -> Option<String> {

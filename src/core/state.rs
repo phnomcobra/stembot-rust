@@ -2,13 +2,12 @@ use std::{collections::HashMap, sync::Arc};
 
 use tokio::sync::RwLock;
 
-use crate::core::{
-    messaging::{MessageCollection, Ticket, TraceEvent},
-    peering::Peer,
-    routing::Route,
-};
+use crate::core::{messaging::MessageCollection, peering::Peer, routing::Route};
 
 use crate::config::Configuration;
+
+use super::ticketing::Ticket;
+use super::tracing::TraceEvent;
 
 #[derive(Clone, Debug)]
 pub struct Singleton {

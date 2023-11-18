@@ -1,15 +1,39 @@
+use serde::{Deserialize, Serialize};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::time::sleep;
 
 use crate::core::{
     backlog::push_message_collection_to_backlog,
-    messaging::{Message, MessageCollection, Ticket, TicketRequest, TicketResponse},
+    messaging::{Message, MessageCollection},
     state::Singleton,
 };
 
 use anyhow::Result;
 
-use super::messaging::TraceRequest;
+use super::tracing::{Trace, TraceRequest};
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum Ticket {
+    Test,
+    BeginTrace(Trace),
+    DrainTrace(Trace),
+    SyncTrace(Trace),
+    PollTrace(Trace),
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct TicketRequest {
+    pub ticket: Ticket,
+    pub ticket_id: String,
+    pub start_time: u128,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct TicketResponse {
+    pub ticket: Ticket,
+    pub ticket_id: String,
+    pub start_time: u128,
+}
 
 pub async fn process_ticket_request(
     ticket_request: TicketRequest,

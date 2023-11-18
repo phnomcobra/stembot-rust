@@ -5,10 +5,7 @@ use tokio::time::sleep;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::{
-    core::{
-        messaging::{Ticket, Trace},
-        state::Singleton,
-    },
+    core::{state::Singleton, ticketing::Ticket, tracing::Trace},
     private::http::client::ticketing::request_ticket_synchronization,
 };
 
@@ -51,7 +48,7 @@ pub async fn trace(destination_id: String, singleton: Singleton) -> anyhow::Resu
                     trace = polled_trace;
                     diff_time = now()?;
                     for i in hop_count..trace.events.len() {
-                        log::info!("{:?}", trace.events[i])
+                        log::info!("{}", trace.events[i])
                     }
                     hop_count = trace.events.len();
                 } else if now()? - diff_time > singleton.configuration.ticketexpiration.into() {

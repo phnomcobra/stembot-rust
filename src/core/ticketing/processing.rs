@@ -12,6 +12,51 @@ pub async fn process_ticket_request(
     singleton: Singleton,
 ) -> TicketResponse {
     match ticket_request.ticket {
+        Ticket::RouteQuery(query) => {
+            let mut query = query.clone();
+
+            let routes = singleton.routes.read().await;
+
+            match (&query.destination_ids, &query.gateway_ids) {
+                (Some(destination_ids), Some(gateway_ids)) => {
+                    query.routes = Some(
+                        routes
+                            .iter()
+                            .filter(|route| destination_ids.contains(&route.destination_id))
+                            .filter(|route| gateway_ids.contains(&route.gateway_id))
+                            .cloned()
+                            .collect(),
+                    );
+                }
+                (Some(destination_ids), None) => {
+                    query.routes = Some(
+                        routes
+                            .iter()
+                            .filter(|route| destination_ids.contains(&route.destination_id))
+                            .cloned()
+                            .collect(),
+                    );
+                }
+                (None, Some(gateway_ids)) => {
+                    query.routes = Some(
+                        routes
+                            .iter()
+                            .filter(|route| gateway_ids.contains(&route.gateway_id))
+                            .cloned()
+                            .collect(),
+                    );
+                }
+                (None, None) => {
+                    query.routes = Some(routes.clone());
+                }
+            }
+
+            TicketResponse {
+                ticket: Ticket::RouteQuery(query),
+                ticket_id: ticket_request.ticket_id,
+                start_time: ticket_request.start_time,
+            }
+        }
         Ticket::Test => TicketResponse {
             ticket: ticket_request.ticket,
             ticket_id: ticket_request.ticket_id,

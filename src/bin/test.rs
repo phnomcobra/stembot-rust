@@ -1,4 +1,8 @@
-use stembot_rust::{core::state::Singleton, init_logger, interface::debug::trace};
+use stembot_rust::{
+    core::state::Singleton,
+    init_logger,
+    interface::debug::{route_query, trace},
+};
 
 #[actix_web::main]
 async fn main() -> anyhow::Result<()> {
@@ -10,7 +14,8 @@ async fn main() -> anyhow::Result<()> {
 
     let singleton = Singleton::new_from_cli();
 
-    trace(String::from("docker-bot4"), singleton).await?;
+    trace(String::from("docker-bot4"), singleton.clone()).await?;
+    route_query(Some(String::from("docker-bot4")), singleton).await?;
 
     Ok(())
 }

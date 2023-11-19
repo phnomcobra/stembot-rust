@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use serde::{Deserialize, Serialize};
 
 use crate::core::{
@@ -11,6 +13,23 @@ pub struct Route {
     pub gateway_id: String,
     pub destination_id: String,
     pub weight: Option<usize>,
+}
+
+impl Display for Route {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} {} {:?}",
+            self.destination_id, self.gateway_id, self.weight
+        )
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct RouteQuery {
+    pub routes: Option<Vec<Route>>,
+    pub destination_ids: Option<Vec<String>>,
+    pub gateway_ids: Option<Vec<String>>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]

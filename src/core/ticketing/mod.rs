@@ -12,12 +12,15 @@ use crate::core::{
     tracing::Trace,
 };
 
+use super::routing::RouteQuery;
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum Ticket {
     Test,
     BeginTrace(Trace),
     DrainTrace(Trace),
     PollTrace(Trace),
+    RouteQuery(RouteQuery),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

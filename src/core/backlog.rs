@@ -4,8 +4,8 @@ use actix_web::rt::spawn;
 use serde::{Deserialize, Serialize};
 
 use crate::core::{
+    messaging::processing::process_message_collection,
     messaging::{Message, MessageCollection},
-    processing::process_message_collection,
     routing::resolve_gateway_id,
     state::Singleton,
 };

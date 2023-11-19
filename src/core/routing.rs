@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::core::{
+    messaging::processing::process_message_collection,
     messaging::{send_message_collection_to_url, Message, MessageCollection},
-    processing::process_message_collection,
     state::Singleton,
 };
 

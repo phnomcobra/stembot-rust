@@ -1,7 +1,6 @@
-use std::collections::HashMap;
-
 use clap::Parser;
 use serde::Deserialize;
+use std::collections::HashMap;
 use toml::de::Error;
 
 use crate::core::peering::Peer;

@@ -5,7 +5,8 @@ use std::error::Error;
 use magic_crypt::{new_magic_crypt, MagicCryptTrait};
 
 use crate::core::{
-    messaging::MessageCollection, processing::process_message_collection, state::Singleton,
+    messaging::processing::process_message_collection, messaging::MessageCollection,
+    state::Singleton,
 };
 
 pub async fn message_handler(

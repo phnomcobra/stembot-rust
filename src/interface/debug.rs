@@ -1,8 +1,5 @@
-use std::time::Duration;
-
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::time::sleep;
-
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::{
     core::{state::Singleton, ticketing::Ticket, tracing::Trace},

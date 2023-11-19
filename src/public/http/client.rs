@@ -1,9 +1,7 @@
+use anyhow::Result;
+use magic_crypt::{new_magic_crypt, MagicCryptTrait};
 use reqwest::Client;
 use reqwest::StatusCode;
-
-use anyhow::Result;
-
-use magic_crypt::{new_magic_crypt, MagicCryptTrait};
 
 use crate::config::Configuration;
 

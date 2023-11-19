@@ -1,7 +1,6 @@
-use serde::{Deserialize, Serialize};
-
 use reqwest::Client;
 use reqwest::StatusCode;
+use serde::{Deserialize, Serialize};
 
 use crate::core::ticketing::Ticket;
 

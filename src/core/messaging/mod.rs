@@ -1,14 +1,18 @@
-use crate::core::state::Singleton;
-use crate::public::http::client::send_raw_message;
+pub mod processing;
+pub mod promiscuous_decoding;
+pub mod selective_decoding;
+
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
-use super::{
+use crate::core::{
     backlog::{BacklogRequest, BacklogResponse},
     routing::{RouteAdvertisement, RouteRecall},
+    state::Singleton,
     ticketing::{TicketRequest, TicketResponse},
     tracing::{TraceEvent, TraceRequest, TraceResponse},
 };
+use crate::public::http::client::send_raw_message;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum Message {

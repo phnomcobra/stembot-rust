@@ -1,9 +1,8 @@
+use serde::{Deserialize, Serialize};
 use std::{
     fmt::{self, Display},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
-
-use serde::{Deserialize, Serialize};
 
 use crate::core::state::Singleton;
 

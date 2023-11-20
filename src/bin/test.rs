@@ -1,7 +1,8 @@
 use stembot_rust::{
-    core::state::Singleton,
+    core::{state::Singleton, ticketing::Ticket},
     init_logger,
-    interface::debug::{peer_query, route_query, trace},
+    interface::debug::{peer_query, route_query, ticket_query},
+    private::http::client::ticketing::{request_ticket_initialization, request_ticket_retrieval},
 };
 
 #[actix_web::main]
@@ -14,7 +15,28 @@ async fn main() -> anyhow::Result<()> {
 
     let singleton = Singleton::new_from_cli();
 
+    let url = format!(
+        "http://{}:{}{}",
+        singleton.configuration.private_http.host,
+        singleton.configuration.private_http.port,
+        singleton.configuration.private_http.ticket_async_endpoint
+    );
+
     // trace(String::from("docker-bot4"), singleton.clone()).await?;
+
+    let mut ticket_ids_to_receive = vec![];
+    for id in [
+        "docker-bot0",
+        "docker-bot1",
+        "docker-bot2",
+        "docker-bot3",
+        "docker-bot4",
+    ] {
+        ticket_ids_to_receive.push(
+            request_ticket_initialization(Ticket::Test, None, Some(String::from(id)), url.clone())
+                .await?,
+        );
+    }
 
     for id in [
         "docker-bot0",
@@ -23,10 +45,16 @@ async fn main() -> anyhow::Result<()> {
         "docker-bot3",
         "docker-bot4",
     ] {
-        log::info!("- Peers -- {id} ----------------------");
+        log::info!("- Peers --- {id}");
         peer_query(Some(String::from(id)), singleton.clone()).await?;
-        log::info!("- Routes - {id} ----------------------");
+        log::info!("- Routes -- {id}");
         route_query(Some(String::from(id)), singleton.clone()).await?;
+        log::info!("- Tickets - {id}");
+        ticket_query(Some(String::from(id)), singleton.clone()).await?;
+    }
+
+    for id in ticket_ids_to_receive {
+        request_ticket_retrieval(id, url.clone()).await?;
     }
 
     Ok(())

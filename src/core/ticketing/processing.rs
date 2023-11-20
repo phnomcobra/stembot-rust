@@ -12,6 +12,24 @@ pub async fn process_ticket_request(
     singleton: Singleton,
 ) -> TicketResponse {
     match ticket_request.ticket {
+        Ticket::TicketQuery(query) => {
+            let mut query = query.clone();
+
+            let mut results = vec![];
+            let tickets = singleton.tickets.read().await;
+
+            for (ticket_id, ticket) in tickets.iter() {
+                results.push((ticket_id.clone(), ticket.clone()));
+            }
+
+            query.tickets = Some(results);
+
+            TicketResponse {
+                ticket: Ticket::TicketQuery(query),
+                ticket_id: ticket_request.ticket_id,
+                start_time: ticket_request.start_time,
+            }
+        }
         Ticket::PeerQuery(query) => {
             let mut query = query.clone();
 
@@ -141,5 +159,11 @@ pub async fn process_ticket_request(
 
 pub async fn process_ticket_response(ticket_response: TicketResponse, singleton: Singleton) {
     let mut tickets = singleton.tickets.write().await;
-    tickets.insert(ticket_response.ticket_id, Some(ticket_response.ticket));
+    match tickets.get_mut(&ticket_response.ticket_id) {
+        Some(ticket) => ticket.1 = Some(ticket_response.ticket),
+        None => log::warn!(
+            "unsolicited ticket response received!: {}",
+            ticket_response.ticket_id
+        ),
+    }
 }

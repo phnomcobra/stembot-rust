@@ -3,7 +3,10 @@ use tokio::time::sleep;
 
 use crate::{
     core::{
-        peering::PeerQuery, routing::RouteQuery, state::Singleton, ticketing::Ticket,
+        peering::PeerQuery,
+        routing::RouteQuery,
+        state::Singleton,
+        ticketing::{Ticket, TicketQuery},
         tracing::Trace,
     },
     private::http::client::ticketing::request_ticket_synchronization,
@@ -11,6 +14,46 @@ use crate::{
 
 fn now() -> anyhow::Result<u128> {
     Ok(SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis())
+}
+
+pub async fn ticket_query(
+    destination_id: Option<String>,
+    singleton: Singleton,
+) -> anyhow::Result<TicketQuery> {
+    let query = TicketQuery { tickets: None };
+
+    let url = format!(
+        "http://{}:{}{}",
+        singleton.configuration.private_http.host,
+        singleton.configuration.private_http.port,
+        singleton.configuration.private_http.ticket_sync_endpoint
+    );
+
+    if let Ticket::TicketQuery(query) = request_ticket_synchronization(
+        Ticket::TicketQuery(query),
+        None,
+        destination_id,
+        url.clone(),
+    )
+    .await?
+    {
+        if let Some(tickets) = &query.tickets {
+            for ticket in tickets.iter() {
+                let completed = if ticket.1 .1.is_some() {
+                    "(completed)"
+                } else {
+                    ""
+                };
+                log::info!("{} {completed}", ticket.1 .0);
+            }
+        }
+
+        Ok(query)
+    } else {
+        Err(anyhow::Error::msg(
+            "unexpected ticket variant received during synchronization",
+        ))
+    }
 }
 
 pub async fn peer_query(

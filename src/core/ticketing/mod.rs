@@ -2,17 +2,20 @@ pub mod processing;
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::{
+    fmt::Display,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 use tokio::time::sleep;
 
 use crate::core::{
     backlog::push_message_collection_to_backlog,
     messaging::{Message, MessageCollection},
+    peering::PeerQuery,
+    routing::RouteQuery,
     state::Singleton,
     tracing::Trace,
 };
-
-use super::{peering::PeerQuery, routing::RouteQuery};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum Ticket {
@@ -22,6 +25,38 @@ pub enum Ticket {
     PollTrace(Trace),
     RouteQuery(RouteQuery),
     PeerQuery(PeerQuery),
+    TicketQuery(TicketQuery),
+}
+
+impl Display for Ticket {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match *self {
+            Ticket::Test => write!(f, "Test"),
+            Ticket::BeginTrace(_) => write!(f, "BeginTrace"),
+            Ticket::DrainTrace(_) => write!(f, "DrainTrace"),
+            Ticket::PollTrace(_) => write!(f, "PollTrace"),
+            Ticket::RouteQuery(_) => write!(f, "RouteQuery"),
+            Ticket::PeerQuery(_) => write!(f, "PeerQuery"),
+            Ticket::TicketQuery(_) => write!(f, "TicketQuery"),
+        }
+    }
+}
+
+pub type TicketSlice = (TicketRequest, Option<Ticket>);
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct TicketQuery {
+    pub tickets: Option<Vec<(String, TicketSlice)>>,
+}
+
+impl Display for TicketRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} {} {:?} {}",
+            self.ticket_id, self.origin_id, self.destination_id, self.ticket
+        )
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -29,6 +64,8 @@ pub struct TicketRequest {
     pub ticket: Ticket,
     pub ticket_id: String,
     pub start_time: u128,
+    pub destination_id: Option<String>,
+    pub origin_id: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -49,12 +86,6 @@ pub async fn send_ticket(
         None => rand::random::<usize>().to_string(),
     };
 
-    singleton
-        .tickets
-        .write()
-        .await
-        .insert(ticket_id.clone(), None);
-
     let start_time = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or(Duration::from_millis(0))
@@ -64,7 +95,15 @@ pub async fn send_ticket(
         ticket_id: ticket_id.clone(),
         ticket,
         start_time,
+        origin_id: singleton.configuration.id.clone(),
+        destination_id: destination_id.clone(),
     };
+
+    singleton
+        .tickets
+        .write()
+        .await
+        .insert(ticket_id.clone(), (ticket_request.clone(), None));
 
     let message_collection = MessageCollection {
         origin_id: singleton.configuration.id.clone(),
@@ -84,7 +123,7 @@ pub async fn receive_ticket(ticket_id: String, singleton: Singleton) -> Result<T
     while millis_to_delay < singleton.configuration.ticketexpiration {
         let mut tickets = singleton.tickets.write().await;
         match tickets.get(&ticket_id) {
-            Some(ticket_option) => match ticket_option {
+            Some(tickets_value) => match tickets_value.1.clone() {
                 Some(ticket_value) => {
                     ticket = Some(ticket_value.clone());
                     tickets.remove(&ticket_id);

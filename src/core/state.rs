@@ -4,7 +4,10 @@ use tokio::sync::RwLock;
 use crate::{
     config::Configuration,
     core::{
-        messaging::MessageCollection, peering::Peer, routing::Route, ticketing::Ticket,
+        messaging::MessageCollection,
+        peering::Peer,
+        routing::Route,
+        ticketing::TicketSlice,
         tracing::TraceEvent,
     },
 };
@@ -15,7 +18,7 @@ pub struct Singleton {
     pub peers: Arc<RwLock<Vec<Peer>>>,
     pub routes: Arc<RwLock<Vec<Route>>>,
     pub backlog: Arc<RwLock<Vec<MessageCollection>>>,
-    pub tickets: Arc<RwLock<HashMap<String, Option<Ticket>>>>,
+    pub tickets: Arc<RwLock<HashMap<String, TicketSlice>>>,
     pub traces: Arc<RwLock<HashMap<String, Vec<TraceEvent>>>>,
 }
 

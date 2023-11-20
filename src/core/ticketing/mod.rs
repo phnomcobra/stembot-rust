@@ -12,7 +12,7 @@ use crate::core::{
     tracing::Trace,
 };
 
-use super::routing::RouteQuery;
+use super::{peering::PeerQuery, routing::RouteQuery};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum Ticket {
@@ -21,6 +21,7 @@ pub enum Ticket {
     DrainTrace(Trace),
     PollTrace(Trace),
     RouteQuery(RouteQuery),
+    PeerQuery(PeerQuery),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

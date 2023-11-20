@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use serde::{Deserialize, Serialize};
 
 use crate::core::state::Singleton;
@@ -9,9 +11,21 @@ pub struct Peer {
     pub polling: bool,
 }
 
+impl Display for Peer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let polling = if self.polling { "polling" } else { "" };
+        write!(f, "{:?} {:?} {polling}", self.id, self.url)
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PeerTable {
     pub peers: Vec<Peer>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct PeerQuery {
+    pub peers: Option<Vec<Peer>>,
 }
 
 pub async fn initialize_peers(singleton: Singleton) {
@@ -28,28 +42,6 @@ pub async fn initialize_peers(singleton: Singleton) {
             url: peer.url.clone(),
             polling: peer.polling,
         })
-    }
-}
-
-pub async fn touch_peer(id: &String, singleton: Singleton) {
-    let peers_read = singleton.peers.read().await;
-
-    let peers: Vec<&Peer> = peers_read
-        .iter()
-        .filter(|x| x.id == Some(id.to_string()))
-        .collect();
-    let present = !peers.is_empty();
-
-    drop(peers);
-    drop(peers_read);
-
-    if !present {
-        let mut peers_write = singleton.peers.write().await;
-        peers_write.push(Peer {
-            id: Some(id.to_string()),
-            url: None,
-            polling: false,
-        });
     }
 }
 

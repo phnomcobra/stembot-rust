@@ -95,16 +95,18 @@ pub async fn remove_routes_by_gateway_and_destination(
 }
 
 pub async fn advertise(singleton: Singleton) {
-    let mut local_peers = singleton.peers.read().await.clone();
+    let mut peers = singleton.peers.write().await;
+    let mut message_collections_to_process = vec![];
+    let mut urls_to_remove = vec![];
 
     let advertisement_message: Message = Message::RouteAdvertisement(
         RouteAdvertisement::from_routes(singleton.routes.read().await.clone()),
     );
 
-    for peer in local_peers.iter_mut().filter(|x| x.url.is_some()) {
+    for peer in peers.iter_mut().filter(|x| x.url.is_some()) {
         let configuration = singleton.configuration.clone();
 
-        let outgoing_message_collection = MessageCollection {
+        let advertisement_message_collection = MessageCollection {
             messages: vec![advertisement_message.clone()],
             origin_id: configuration.id.clone(),
             destination_id: peer.id.clone(),
@@ -115,24 +117,33 @@ pub async fn advertise(singleton: Singleton) {
             None => continue,
         };
 
-        match send_message_collection_to_url(outgoing_message_collection, url, singleton.clone())
-            .await
+        match send_message_collection_to_url(
+            advertisement_message_collection,
+            url.clone(),
+            singleton.clone(),
+        )
+        .await
         {
             Ok(incoming_message_collection) => {
                 peer.id = Some(incoming_message_collection.origin_id.clone());
-
-                process_message_collection(incoming_message_collection, singleton.clone()).await;
+                message_collections_to_process.push(incoming_message_collection);
             }
             Err(error) => {
-                remove_routes_by_url(peer.url.clone().unwrap(), singleton.clone()).await;
+                urls_to_remove.push(url);
                 log::error!("{}", error)
             }
         };
     }
 
-    let mut shared_peers = singleton.peers.write().await;
-    shared_peers.clear();
-    shared_peers.append(&mut local_peers);
+    drop(peers);
+
+    for url in urls_to_remove {
+        remove_routes_by_url(url, singleton.clone()).await;
+    }
+
+    for message_collection in message_collections_to_process {
+        process_message_collection(message_collection, singleton.clone()).await;
+    }
 }
 
 impl RouteAdvertisement {

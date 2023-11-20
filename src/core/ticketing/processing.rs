@@ -12,6 +12,19 @@ pub async fn process_ticket_request(
     singleton: Singleton,
 ) -> TicketResponse {
     match ticket_request.ticket {
+        Ticket::PeerQuery(query) => {
+            let mut query = query.clone();
+
+            let peers = singleton.peers.read().await;
+
+            query.peers = Some(peers.clone());
+
+            TicketResponse {
+                ticket: Ticket::PeerQuery(query),
+                ticket_id: ticket_request.ticket_id,
+                start_time: ticket_request.start_time,
+            }
+        }
         Ticket::RouteQuery(query) => {
             let mut query = query.clone();
 

@@ -1,9 +1,9 @@
 use actix_web::{web, HttpResponse};
 use std::error::Error;
 
-use crate::core::ticketing::receive_ticket;
-use crate::core::ticketing::send_ticket;
-use crate::core::{state::Singleton, ticketing::send_and_receive_ticket};
+use crate::core::ticketing::exchange::receive_ticket;
+use crate::core::ticketing::exchange::send_ticket;
+use crate::core::{state::Singleton, ticketing::exchange::send_and_receive_ticket};
 use crate::private::http::Session;
 
 pub async fn ticket_synchronization_endpoint(

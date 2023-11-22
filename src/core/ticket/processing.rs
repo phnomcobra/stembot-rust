@@ -1,6 +1,6 @@
 use crate::core::{
     backlog::push_message_collection_to_backlog,
-    messaging::{Message, MessageCollection},
+    message::{Message, MessageCollection},
     state::Singleton,
     tracing::TraceRequest,
 };

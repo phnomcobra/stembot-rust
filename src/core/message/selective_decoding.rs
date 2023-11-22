@@ -1,9 +1,9 @@
 use crate::core::{
     backlog::{push_message_collection_to_backlog, request_backlog},
-    messaging::{Message, MessageCollection},
+    message::{Message, MessageCollection},
     routing::{remove_routes_by_gateway_and_destination, RouteAdvertisement},
     state::Singleton,
-    ticketing::processing::{process_ticket_request, process_ticket_response},
+    ticket::processing::{process_ticket_request, process_ticket_response},
     tracing::TraceResponse,
 };
 

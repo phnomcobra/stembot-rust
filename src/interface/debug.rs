@@ -6,7 +6,7 @@ use crate::{
         peering::PeerQuery,
         routing::RouteQuery,
         state::Singleton,
-        ticketing::{Ticket, TicketQuery},
+        ticket::{Ticket, TicketQuery},
         tracing::Trace,
     },
     private::http::client::ticketing::request_ticket_synchronization,

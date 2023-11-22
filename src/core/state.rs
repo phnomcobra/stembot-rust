@@ -4,7 +4,7 @@ use tokio::sync::RwLock;
 use crate::{
     config::Configuration,
     core::{
-        messaging::MessageCollection, peering::Peer, routing::Route, ticketing::TicketSlice,
+        message::MessageCollection, peering::Peer, routing::Route, ticket::TicketSlice,
         tracing::TraceEvent,
     },
 };

@@ -1,6 +1,6 @@
 use crate::core::{
     backlog::push_message_collection_to_backlog,
-    messaging::{send_message_collection_to_url, Message, MessageCollection},
+    message::{send_message_collection_to_url, Message, MessageCollection},
     peering::lookup_peer_url,
     routing::{remove_routes_by_url, resolve_gateway_id, RouteRecall},
     state::Singleton,

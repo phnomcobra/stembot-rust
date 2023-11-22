@@ -9,7 +9,7 @@ use crate::core::{
     backlog::{BacklogRequest, BacklogResponse},
     routing::{RouteAdvertisement, RouteRecall},
     state::Singleton,
-    ticketing::{TicketRequest, TicketResponse},
+    ticket::{TicketRequest, TicketResponse},
     tracing::{TraceEvent, TraceRequest, TraceResponse},
 };
 use crate::public::http::client::send_raw_message;

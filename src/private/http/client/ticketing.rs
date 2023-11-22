@@ -2,7 +2,7 @@ use reqwest::Client;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 
-use crate::core::ticketing::Ticket;
+use crate::core::ticket::Ticket;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 struct Session {

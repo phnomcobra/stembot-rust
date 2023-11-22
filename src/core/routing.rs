@@ -3,8 +3,8 @@ use std::fmt::Display;
 use serde::{Deserialize, Serialize};
 
 use crate::core::{
-    messaging::processing::process_message_collection,
-    messaging::{send_message_collection_to_url, Message, MessageCollection},
+    message::processing::process_message_collection,
+    message::{send_message_collection_to_url, Message, MessageCollection},
     state::Singleton,
 };
 

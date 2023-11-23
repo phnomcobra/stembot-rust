@@ -10,14 +10,12 @@ use crate::core::state::Singleton;
 pub struct TraceRequest {
     pub hop_count: usize,
     pub request_id: String,
-    pub start_time: u128,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TraceResponse {
     pub hop_count: usize,
     pub request_id: String,
-    pub start_time: u128,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -57,38 +55,44 @@ impl Display for TraceEvent {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Trace {
     pub events: Vec<TraceEvent>,
-    pub period: Option<u64>,
     pub request_id: Option<String>,
     pub destination_id: String,
+    pub start_time: Option<u128>,
+    pub stop_time: Option<u128>,
+}
+
+impl Display for Trace {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let duration_ms =
+            if let (Some(start_time), Some(stop_time)) = (self.start_time, self.stop_time) {
+                Some(stop_time - start_time)
+            } else {
+                None
+            };
+
+        write!(
+            f,
+            "destination: {}, duration msec: {duration_ms:?}, hops: {}",
+            &self.destination_id,
+            &self.events.len(),
+        )
+    }
 }
 
 impl Default for TraceRequest {
     fn default() -> Self {
-        let request_id: String = rand::random::<usize>().to_string();
-        let start_time = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or(Duration::from_millis(0))
-            .as_millis();
-
         Self {
             hop_count: 0,
-            request_id,
-            start_time,
+            request_id: rand::random::<usize>().to_string(),
         }
     }
 }
 
 impl TraceRequest {
     pub fn new(request_id: String) -> Self {
-        let start_time = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or(Duration::from_millis(0))
-            .as_millis();
-
         Self {
             hop_count: 0,
             request_id,
-            start_time,
         }
     }
 
@@ -115,7 +119,6 @@ impl TraceResponse {
         Self {
             hop_count: trace_request.hop_count,
             request_id: trace_request.request_id.clone(),
-            start_time: trace_request.start_time,
         }
     }
 
@@ -139,17 +142,10 @@ impl TraceResponse {
 
 impl Display for TraceResponse {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let end_time = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or(Duration::from_millis(0))
-            .as_millis();
-
         write!(
             f,
-            "trace response {}: hops: {}, elapsed time {} ms",
-            self.request_id,
-            self.hop_count,
-            end_time - self.start_time
+            "trace response {}: hops: {}",
+            self.request_id, self.hop_count,
         )
     }
 }

@@ -57,7 +57,7 @@ async fn main() -> anyhow::Result<()> {
         request_ticket_retrieval(id, url.clone()).await?;
     }
 
-    trace(String::from("docker-bot2"), singleton).await?;
+    log::info!("{}", trace(String::from("docker-bot2"), singleton).await?);
 
     Ok(())
 }

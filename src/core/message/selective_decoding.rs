@@ -1,3 +1,5 @@
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
 use crate::core::{
     backlog::{push_message_collection_to_backlog, request_backlog},
     message::{Message, MessageCollection},
@@ -81,19 +83,23 @@ async fn decode_message(
                 )));
         }
         Message::TraceResponse(trace_response) => {
-            log::info!("{trace_response}")
+            log::info!("{trace_response}");
+            let mut traces = singleton.traces.write().await;
+            if let Some(trace) = traces.get_mut(&trace_response.request_id) {
+                trace.stop_time = Some(
+                    SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap_or(Duration::from_millis(0))
+                        .as_millis(),
+                );
+            }
         }
         Message::TraceEvent(trace_event) => {
             log::info!("{trace_event}");
             let mut traces = singleton.traces.write().await;
-            match traces.get_mut(&trace_event.request_id) {
-                Some(events) => {
-                    events.push(trace_event.clone());
-                }
-                None => {
-                    traces.insert(trace_event.request_id.clone(), vec![trace_event.clone()]);
-                }
-            };
+            if let Some(trace) = traces.get_mut(&trace_event.request_id) {
+                trace.events.push(trace_event.clone());
+            }
         }
         Message::TicketRequest(ticket_request) => {
             log::warn!("ticket request received");

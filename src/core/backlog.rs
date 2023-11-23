@@ -87,13 +87,13 @@ pub async fn request_backlog(
 }
 
 pub async fn process_backlog(singleton: Singleton) {
-    let mut local_backlog = singleton.backlog.write().await;
+    let mut backlog = singleton.backlog.write().await;
 
     let mut message_buckets: HashMap<(Option<String>, String), MessageCollection> =
         HashMap::default();
 
     // Condense message collections with common destination options
-    while let Some(mut message_collection) = local_backlog.pop() {
+    while let Some(mut message_collection) = backlog.pop() {
         if message_collection.messages.is_empty() {
             continue;
         }
@@ -122,9 +122,9 @@ pub async fn process_backlog(singleton: Singleton) {
         }
     }
 
-    drop(local_backlog);
+    drop(backlog);
 
-    // Process condesnsed message collections
+    // Process condensed message collections
     for outbound_message_collection in message_buckets.values() {
         spawn({
             let singleton = singleton.clone();

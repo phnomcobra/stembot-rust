@@ -31,19 +31,32 @@ impl Display for Ticket {
     }
 }
 
-pub type TicketSlice = (TicketRequest, Option<Ticket>);
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct TicketState {
+    request: TicketRequest,
+    response: Option<Ticket>,
+    destination_id: Option<String>,
+    start_time: u128,
+    stop_time: Option<u128>,
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct TicketQuery {
-    pub tickets: Option<Vec<(String, TicketSlice)>>,
+    pub tickets: Option<Vec<TicketState>>,
 }
 
-impl Display for TicketRequest {
+impl Display for TicketState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let progress = if self.response.is_some() {
+            "(complete)"
+        } else {
+            "(in progress)"
+        };
+
         write!(
             f,
-            "{} {} {:?} {}",
-            self.ticket_id, self.origin_id, self.destination_id, self.ticket
+            "{} {:?} {} {}",
+            self.request.ticket_id, self.destination_id, self.request.ticket, progress
         )
     }
 }
@@ -52,14 +65,10 @@ impl Display for TicketRequest {
 pub struct TicketRequest {
     pub ticket: Ticket,
     pub ticket_id: String,
-    pub start_time: u128,
-    pub destination_id: Option<String>,
-    pub origin_id: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TicketResponse {
     pub ticket: Ticket,
     pub ticket_id: String,
-    pub start_time: u128,
 }

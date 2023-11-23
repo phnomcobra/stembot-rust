@@ -1,3 +1,5 @@
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
 use crate::core::{
     backlog::push_message_collection_to_backlog,
     message::{Message, MessageCollection},
@@ -18,8 +20,8 @@ pub async fn process_ticket_request(
             let mut results = vec![];
             let tickets = singleton.tickets.read().await;
 
-            for (ticket_id, ticket) in tickets.iter() {
-                results.push((ticket_id.clone(), ticket.clone()));
+            for ticket_state in tickets.values() {
+                results.push(ticket_state.clone());
             }
 
             query.tickets = Some(results);
@@ -27,7 +29,6 @@ pub async fn process_ticket_request(
             TicketResponse {
                 ticket: Ticket::TicketQuery(query),
                 ticket_id: ticket_request.ticket_id,
-                start_time: ticket_request.start_time,
             }
         }
         Ticket::PeerQuery(query) => {
@@ -40,7 +41,6 @@ pub async fn process_ticket_request(
             TicketResponse {
                 ticket: Ticket::PeerQuery(query),
                 ticket_id: ticket_request.ticket_id,
-                start_time: ticket_request.start_time,
             }
         }
         Ticket::RouteQuery(query) => {
@@ -85,23 +85,36 @@ pub async fn process_ticket_request(
             TicketResponse {
                 ticket: Ticket::RouteQuery(query),
                 ticket_id: ticket_request.ticket_id,
-                start_time: ticket_request.start_time,
             }
         }
         Ticket::Test => TicketResponse {
             ticket: ticket_request.ticket,
             ticket_id: ticket_request.ticket_id,
-            start_time: ticket_request.start_time,
         },
         Ticket::BeginTrace(trace) => {
             let mut trace = trace.clone();
+
+            trace.start_time = Some(
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or(Duration::from_millis(0))
+                    .as_millis(),
+            );
 
             let trace_request = match trace.request_id.clone() {
                 Some(request_id) => TraceRequest::new(request_id),
                 None => TraceRequest::default(),
             };
 
+            let mut traces = singleton.traces.write().await;
+
             let request_id = trace_request.request_id.clone();
+
+            if traces.contains_key(&request_id) {
+                traces.remove(&request_id);
+            }
+
+            traces.insert(request_id.clone(), trace.clone());
 
             trace.request_id = Some(request_id.clone());
 
@@ -118,7 +131,6 @@ pub async fn process_ticket_request(
             TicketResponse {
                 ticket: Ticket::BeginTrace(trace),
                 ticket_id: ticket_request.ticket_id,
-                start_time: ticket_request.start_time,
             }
         }
         Ticket::DrainTrace(trace) => {
@@ -126,32 +138,30 @@ pub async fn process_ticket_request(
 
             let mut traces = singleton.traces.write().await;
 
-            if trace.request_id.is_some() {
-                let request_id = trace.request_id.clone().unwrap();
-                trace.events = traces.get(&request_id).unwrap().to_vec();
-                traces.remove(&request_id);
+            if let Some(request_id) = trace.request_id.clone() {
+                if let Some(updated_trace) = traces.get(&request_id) {
+                    trace = updated_trace.clone();
+                    traces.remove(&request_id);
+                }
             }
 
             TicketResponse {
                 ticket: Ticket::DrainTrace(trace),
                 ticket_id: ticket_request.ticket_id,
-                start_time: ticket_request.start_time,
             }
         }
         Ticket::PollTrace(trace) => {
             let mut trace = trace.clone();
 
-            let traces = singleton.traces.read().await;
-
-            if trace.request_id.is_some() {
-                let request_id = trace.request_id.clone().unwrap();
-                trace.events = traces.get(&request_id).unwrap().to_vec();
+            if let Some(request_id) = trace.request_id.clone() {
+                if let Some(updated_trace) = singleton.traces.read().await.get(&request_id) {
+                    trace = updated_trace.clone();
+                }
             }
 
             TicketResponse {
                 ticket: Ticket::PollTrace(trace),
                 ticket_id: ticket_request.ticket_id,
-                start_time: ticket_request.start_time,
             }
         }
     }
@@ -160,7 +170,16 @@ pub async fn process_ticket_request(
 pub async fn process_ticket_response(ticket_response: TicketResponse, singleton: Singleton) {
     let mut tickets = singleton.tickets.write().await;
     match tickets.get_mut(&ticket_response.ticket_id) {
-        Some(ticket) => ticket.1 = Some(ticket_response.ticket),
+        Some(ticket_state) => {
+            ticket_state.response = Some(ticket_response.ticket);
+
+            ticket_state.stop_time = Some(
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or(Duration::from_millis(0))
+                    .as_millis(),
+            )
+        }
         None => log::warn!(
             "unsolicited ticket response received!: {}",
             ticket_response.ticket_id

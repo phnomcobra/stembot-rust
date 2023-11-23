@@ -9,7 +9,7 @@ use crate::core::{
     state::Singleton,
 };
 
-use super::{Ticket, TicketRequest};
+use super::{Ticket, TicketRequest, TicketState};
 
 pub async fn send_ticket(
     ticket: Ticket,
@@ -30,16 +30,21 @@ pub async fn send_ticket(
     let ticket_request = TicketRequest {
         ticket_id: ticket_id.clone(),
         ticket,
-        start_time,
-        origin_id: singleton.configuration.id.clone(),
+    };
+
+    let ticket_state = TicketState {
+        request: ticket_request.clone(),
+        response: None,
         destination_id: destination_id.clone(),
+        start_time,
+        stop_time: None,
     };
 
     singleton
         .tickets
         .write()
         .await
-        .insert(ticket_id.clone(), (ticket_request.clone(), None));
+        .insert(ticket_id.clone(), ticket_state);
 
     let message_collection = MessageCollection {
         origin_id: singleton.configuration.id.clone(),
@@ -59,9 +64,9 @@ pub async fn receive_ticket(ticket_id: String, singleton: Singleton) -> Result<T
     while millis_to_delay < singleton.configuration.ticketexpiration {
         let mut tickets = singleton.tickets.write().await;
         match tickets.get(&ticket_id) {
-            Some(tickets_value) => match tickets_value.1.clone() {
-                Some(ticket_value) => {
-                    ticket = Some(ticket_value.clone());
+            Some(ticket_state) => match ticket_state.response.clone() {
+                Some(ticket_response) => {
+                    ticket = Some(ticket_response.clone());
                     tickets.remove(&ticket_id);
                     drop(tickets);
                     break;

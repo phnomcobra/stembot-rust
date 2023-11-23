@@ -1,5 +1,5 @@
 pub mod backlog;
-pub mod broadcast;
+pub mod broadcasting;
 pub mod message;
 pub mod peering;
 pub mod routing;

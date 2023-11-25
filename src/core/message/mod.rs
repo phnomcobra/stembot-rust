@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::core::{
     backlog::{BacklogRequest, BacklogResponse},
+    broadcasting::{BroadcastRequest, BroadcastResponse},
     routing::{RouteAdvertisement, RouteRecall},
     state::Singleton,
     ticket::{TicketRequest, TicketResponse},
@@ -27,6 +28,8 @@ pub enum Message {
     TraceEvent(TraceEvent),
     TicketRequest(TicketRequest),
     TicketResponse(TicketResponse),
+    BroadcastRequest(BroadcastRequest),
+    BroadcastResponse(BroadcastResponse),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

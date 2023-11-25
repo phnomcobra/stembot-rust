@@ -20,6 +20,7 @@ pub struct Configuration {
     pub ticketexpiration: u64,
     pub public_http: PublicHttp,
     pub private_http: PrivateHttp,
+    pub broadcastexpiration: u64,
 }
 
 #[allow(clippy::struct_excessive_bools)]

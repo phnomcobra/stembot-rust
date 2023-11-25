@@ -6,7 +6,7 @@ use crate::{
         peering::PeerQuery,
         routing::RouteQuery,
         state::Singleton,
-        ticket::{Ticket, TicketQuery},
+        ticket::{TicketMessage, TicketQuery},
         tracing::Trace,
     },
     private::http::client::ticketing::request_ticket_synchronization,
@@ -25,8 +25,8 @@ pub async fn ticket_query(
         singleton.configuration.private_http.ticket_sync_endpoint
     );
 
-    if let Ticket::TicketQuery(query) = request_ticket_synchronization(
-        Ticket::TicketQuery(query),
+    if let TicketMessage::TicketQuery(query) = request_ticket_synchronization(
+        TicketMessage::TicketQuery(query),
         None,
         destination_id,
         url.clone(),
@@ -60,9 +60,13 @@ pub async fn peer_query(
         singleton.configuration.private_http.ticket_sync_endpoint
     );
 
-    if let Ticket::PeerQuery(query) =
-        request_ticket_synchronization(Ticket::PeerQuery(query), None, destination_id, url.clone())
-            .await?
+    if let TicketMessage::PeerQuery(query) = request_ticket_synchronization(
+        TicketMessage::PeerQuery(query),
+        None,
+        destination_id,
+        url.clone(),
+    )
+    .await?
     {
         if let Some(peers) = &query.peers {
             for peer in peers {
@@ -95,9 +99,13 @@ pub async fn route_query(
         singleton.configuration.private_http.ticket_sync_endpoint
     );
 
-    if let Ticket::RouteQuery(query) =
-        request_ticket_synchronization(Ticket::RouteQuery(query), None, destination_id, url.clone())
-            .await?
+    if let TicketMessage::RouteQuery(query) = request_ticket_synchronization(
+        TicketMessage::RouteQuery(query),
+        None,
+        destination_id,
+        url.clone(),
+    )
+    .await?
     {
         if let Some(routes) = &query.routes {
             for route in routes {
@@ -129,15 +137,16 @@ pub async fn trace(destination_id: String, singleton: Singleton) -> anyhow::Resu
         singleton.configuration.private_http.ticket_sync_endpoint
     );
 
-    if let Ticket::BeginTrace(initial_trace) =
-        request_ticket_synchronization(Ticket::BeginTrace(trace), None, None, url.clone()).await?
+    if let TicketMessage::BeginTrace(initial_trace) =
+        request_ticket_synchronization(TicketMessage::BeginTrace(trace), None, None, url.clone())
+            .await?
     {
         trace = initial_trace;
         let mut hop_count = 0;
 
         loop {
-            if let Ticket::PollTrace(polled_trace) = request_ticket_synchronization(
-                Ticket::PollTrace(trace.clone()),
+            if let TicketMessage::PollTrace(polled_trace) = request_ticket_synchronization(
+                TicketMessage::PollTrace(trace.clone()),
                 None,
                 None,
                 url.clone(),
@@ -162,8 +171,13 @@ pub async fn trace(destination_id: String, singleton: Singleton) -> anyhow::Resu
             }
         }
 
-        request_ticket_synchronization(Ticket::DrainTrace(trace.clone()), None, None, url.clone())
-            .await?;
+        request_ticket_synchronization(
+            TicketMessage::DrainTrace(trace.clone()),
+            None,
+            None,
+            url.clone(),
+        )
+        .await?;
     } else {
         return Err(anyhow::Error::msg(
             "unexpected ticket variant received during synchronization",

@@ -1,5 +1,6 @@
 use crate::core::{
     backlog::push_message_collection_to_backlog,
+    broadcasting::processing::process_broadcast_request,
     message::{Message, MessageCollection},
     state::Singleton,
 };
@@ -32,7 +33,7 @@ async fn decode_message(
             };
 
             push_message_collection_to_backlog(message_collection, singleton.clone()).await
-        }
+        },
         Message::TraceResponse(trace_response) => {
             let trace_event = trace_response.process(singleton.clone());
 
@@ -45,7 +46,10 @@ async fn decode_message(
 
                 push_message_collection_to_backlog(message_collection, singleton.clone()).await
             }
-        }
-        _ => {}
+        },
+        Message::BroadcastRequest(broadcast_request) => {
+            process_broadcast_request(singleton.clone(), broadcast_request.clone()).await
+        },
+        _ => {},
     }
 }

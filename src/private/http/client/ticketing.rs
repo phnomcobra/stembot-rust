@@ -2,17 +2,17 @@ use reqwest::Client;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 
-use crate::core::ticket::Ticket;
+use crate::core::ticket::TicketMessage;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 struct Session {
-    ticket: Option<Ticket>,
+    ticket_message: Option<TicketMessage>,
     ticket_id: Option<String>,
     destination_id: Option<String>,
 }
 
 pub async fn request_ticket_initialization(
-    ticket: Ticket,
+    ticket_message: TicketMessage,
     ticket_id: Option<String>,
     destination_id: Option<String>,
     url: String,
@@ -20,7 +20,7 @@ pub async fn request_ticket_initialization(
     let client = Client::new();
 
     let session = Session {
-        ticket: Some(ticket),
+        ticket_message: Some(ticket_message),
         ticket_id,
         destination_id,
     };
@@ -51,11 +51,11 @@ pub async fn request_ticket_initialization(
 pub async fn request_ticket_retrieval(
     ticket_id: Option<String>,
     url: String,
-) -> anyhow::Result<Ticket> {
+) -> anyhow::Result<TicketMessage> {
     let client = Client::new();
 
     let session = Session {
-        ticket: None,
+        ticket_message: None,
         ticket_id,
         destination_id: None,
     };
@@ -68,8 +68,8 @@ pub async fn request_ticket_retrieval(
                 let response_body_bytes = response.bytes().await?.to_vec();
 
                 match serde_json::from_slice::<Session>(&response_body_bytes) {
-                    Ok(session) => match session.ticket {
-                        Some(ticket) => Ok(ticket),
+                    Ok(session) => match session.ticket_message {
+                        Some(ticket_message) => Ok(ticket_message),
                         None => Err(anyhow::Error::msg("ticket not set in session body")),
                     },
                     Err(error) => Err(anyhow::Error::msg(format!(
@@ -87,15 +87,15 @@ pub async fn request_ticket_retrieval(
 }
 
 pub async fn request_ticket_synchronization(
-    ticket: Ticket,
+    ticket_message: TicketMessage,
     ticket_id: Option<String>,
     destination_id: Option<String>,
     url: String,
-) -> anyhow::Result<Ticket> {
+) -> anyhow::Result<TicketMessage> {
     let client = Client::new();
 
     let session = Session {
-        ticket: Some(ticket),
+        ticket_message: Some(ticket_message),
         ticket_id,
         destination_id,
     };
@@ -108,8 +108,8 @@ pub async fn request_ticket_synchronization(
                 let response_body_bytes = response.bytes().await?.to_vec();
 
                 match serde_json::from_slice::<Session>(&response_body_bytes) {
-                    Ok(session) => match session.ticket {
-                        Some(ticket) => Ok(ticket),
+                    Ok(session) => match session.ticket_message {
+                        Some(ticket_message) => Ok(ticket_message),
                         None => Err(anyhow::Error::msg("ticket not set in session body")),
                     },
                     Err(error) => Err(anyhow::Error::msg(format!(

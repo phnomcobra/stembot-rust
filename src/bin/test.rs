@@ -1,5 +1,5 @@
 use stembot_rust::{
-    core::{state::Singleton, ticket::Ticket},
+    core::{state::Singleton, ticket::TicketMessage},
     init_logger,
     interface::debug::{peer_query, route_query, ticket_query, trace},
     private::http::client::ticketing::{request_ticket_initialization, request_ticket_retrieval},
@@ -33,8 +33,13 @@ async fn main() -> anyhow::Result<()> {
         "docker-bot4",
     ] {
         ticket_ids_to_receive.push(
-            request_ticket_initialization(Ticket::Test, None, Some(String::from(id)), url.clone())
-                .await?,
+            request_ticket_initialization(
+                TicketMessage::Test,
+                None,
+                Some(String::from(id)),
+                url.clone(),
+            )
+            .await?,
         );
     }
 

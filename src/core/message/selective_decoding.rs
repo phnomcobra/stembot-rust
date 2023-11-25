@@ -2,6 +2,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::core::{
     backlog::{push_message_collection_to_backlog, request_backlog},
+    broadcasting::processing::process_broadcast_response,
     message::{Message, MessageCollection},
     routing::{remove_routes_by_gateway_and_destination, RouteAdvertisement},
     state::Singleton,
@@ -113,5 +114,14 @@ async fn decode_message(
             log::warn!("ticket response received");
             process_ticket_response(ticket_response.clone(), singleton.clone()).await;
         }
+        Message::BroadcastResponse(broadcast_response) => {
+            process_broadcast_response(
+                singleton.clone(),
+                broadcast_response.clone(),
+                origin_id.into(),
+            )
+            .await
+        }
+        _ => {}
     }
 }

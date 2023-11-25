@@ -1,17 +1,33 @@
+pub mod processing;
+
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct Broadcast {}
+pub enum BroadcastMessage {
+    Ping,
+    Pong,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct Broadcast {
+    pub request: BroadcastRequest,
+    pub responses: HashMap<String, BroadcastResponse>,
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct BroadcastRequest {
-    origin_id: Option<String>,
-    request_id: String,
+    pub origin_id: Option<String>,
+    pub request_id: String,
+    pub broadcast_message: BroadcastMessage,
+    // forwarding_tags: Vec<String>
+    // executive_tags: Vec<String>
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct BroadcastResponse {
-    origin_id: String,
-    destination_id: String,
-    request_id: String,
+    pub request_id: String,
+    pub broadcast: BroadcastMessage,
+    pub local_time: u128,
 }

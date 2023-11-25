@@ -1,11 +1,11 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc, time::SystemTime};
 use tokio::sync::RwLock;
 
 use crate::{
     config::Configuration,
     core::{
-        message::MessageCollection, peering::Peer, routing::Route, ticket::TicketState,
-        tracing::Trace,
+        broadcasting::Broadcast, message::MessageCollection, peering::Peer, routing::Route,
+        ticket::Ticket, tracing::Trace,
     },
 };
 
@@ -15,8 +15,10 @@ pub struct Singleton {
     pub peers: Arc<RwLock<Vec<Peer>>>,
     pub routes: Arc<RwLock<Vec<Route>>>,
     pub backlog: Arc<RwLock<Vec<MessageCollection>>>,
-    pub tickets: Arc<RwLock<HashMap<String, TicketState>>>,
+    pub tickets: Arc<RwLock<HashMap<String, Ticket>>>,
     pub traces: Arc<RwLock<HashMap<String, Trace>>>,
+    pub broadcasts: Arc<RwLock<HashMap<String, Broadcast>>>,
+    pub broadcast_history: Arc<RwLock<HashMap<String, SystemTime>>>,
 }
 
 impl Singleton {
@@ -28,6 +30,8 @@ impl Singleton {
             backlog: Arc::new(RwLock::new(vec![])),
             tickets: Arc::new(RwLock::new(HashMap::new())),
             traces: Arc::new(RwLock::new(HashMap::new())),
+            broadcasts: Arc::new(RwLock::new(HashMap::new())),
+            broadcast_history: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 }

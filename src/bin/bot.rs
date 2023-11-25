@@ -8,6 +8,7 @@ use tokio::time::sleep;
 use stembot_rust::{
     core::{
         backlog::{poll_backlogs, process_backlog, push_message_collection_to_backlog},
+        broadcasting::processing::poll_broadcasts,
         message::{Message, MessageCollection},
         peering::initialize_peers,
         routing::{advertise, age_routes, initialize_routes},
@@ -129,6 +130,11 @@ async fn main() -> Result<(), std::io::Error> {
     scheduler.every(Seconds(1)).run({
         let singleton = singleton.clone();
         move || test(singleton.clone())
+    });
+
+    scheduler.every(Seconds(1)).run({
+        let singleton = singleton.clone();
+        move || poll_broadcasts(singleton.clone())
     });
 
     log::info!("Starting scheduler...");

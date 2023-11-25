@@ -4,10 +4,12 @@ pub mod processing;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
-use crate::core::{peering::PeerQuery, routing::RouteQuery, tracing::Trace};
+use crate::core::{
+    broadcasting::Broadcast, peering::PeerQuery, routing::RouteQuery, tracing::Trace,
+};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub enum Ticket {
+pub enum TicketMessage {
     Test,
     BeginTrace(Trace),
     DrainTrace(Trace),
@@ -15,26 +17,32 @@ pub enum Ticket {
     RouteQuery(RouteQuery),
     PeerQuery(PeerQuery),
     TicketQuery(TicketQuery),
+    BeginBroadcast(Broadcast),
+    DrainBroadcast(Broadcast),
+    PollBroadcast(Broadcast),
 }
 
-impl Display for Ticket {
+impl Display for TicketMessage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match *self {
-            Ticket::Test => write!(f, "Test"),
-            Ticket::BeginTrace(_) => write!(f, "BeginTrace"),
-            Ticket::DrainTrace(_) => write!(f, "DrainTrace"),
-            Ticket::PollTrace(_) => write!(f, "PollTrace"),
-            Ticket::RouteQuery(_) => write!(f, "RouteQuery"),
-            Ticket::PeerQuery(_) => write!(f, "PeerQuery"),
-            Ticket::TicketQuery(_) => write!(f, "TicketQuery"),
+            TicketMessage::Test => write!(f, "Test"),
+            TicketMessage::BeginTrace(_) => write!(f, "BeginTrace"),
+            TicketMessage::DrainTrace(_) => write!(f, "DrainTrace"),
+            TicketMessage::PollTrace(_) => write!(f, "PollTrace"),
+            TicketMessage::RouteQuery(_) => write!(f, "RouteQuery"),
+            TicketMessage::PeerQuery(_) => write!(f, "PeerQuery"),
+            TicketMessage::TicketQuery(_) => write!(f, "TicketQuery"),
+            TicketMessage::BeginBroadcast(_) => write!(f, "BeginBroadcast"),
+            TicketMessage::DrainBroadcast(_) => write!(f, "DrainBroadcast"),
+            TicketMessage::PollBroadcast(_) => write!(f, "PollBroadcast"),
         }
     }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct TicketState {
+pub struct Ticket {
     request: TicketRequest,
-    response: Option<Ticket>,
+    response: Option<TicketMessage>,
     destination_id: Option<String>,
     start_time: u128,
     stop_time: Option<u128>,
@@ -42,10 +50,10 @@ pub struct TicketState {
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct TicketQuery {
-    pub tickets: Option<Vec<TicketState>>,
+    pub tickets: Option<Vec<Ticket>>,
 }
 
-impl Display for TicketState {
+impl Display for Ticket {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let progress = if self.response.is_some() {
             "(complete)"
@@ -56,19 +64,19 @@ impl Display for TicketState {
         write!(
             f,
             "{} {:?} {} {}",
-            self.request.ticket_id, self.destination_id, self.request.ticket, progress
+            self.request.ticket_id, self.destination_id, self.request.ticket_message, progress
         )
     }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TicketRequest {
-    pub ticket: Ticket,
+    pub ticket_message: TicketMessage,
     pub ticket_id: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TicketResponse {
-    pub ticket: Ticket,
+    pub ticket_message: TicketMessage,
     pub ticket_id: String,
 }

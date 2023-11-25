@@ -7,14 +7,14 @@ use crate::core::{
     tracing::TraceRequest,
 };
 
-use super::{Ticket, TicketRequest, TicketResponse};
+use super::{TicketMessage, TicketRequest, TicketResponse};
 
 pub async fn process_ticket_request(
     ticket_request: TicketRequest,
     singleton: Singleton,
 ) -> TicketResponse {
-    match ticket_request.ticket {
-        Ticket::TicketQuery(query) => {
+    match ticket_request.ticket_message {
+        TicketMessage::TicketQuery(query) => {
             let mut query = query.clone();
 
             let mut results = vec![];
@@ -27,11 +27,11 @@ pub async fn process_ticket_request(
             query.tickets = Some(results);
 
             TicketResponse {
-                ticket: Ticket::TicketQuery(query),
+                ticket_message: TicketMessage::TicketQuery(query),
                 ticket_id: ticket_request.ticket_id,
             }
         }
-        Ticket::PeerQuery(query) => {
+        TicketMessage::PeerQuery(query) => {
             let mut query = query.clone();
 
             let peers = singleton.peers.read().await;
@@ -39,11 +39,11 @@ pub async fn process_ticket_request(
             query.peers = Some(peers.clone());
 
             TicketResponse {
-                ticket: Ticket::PeerQuery(query),
+                ticket_message: TicketMessage::PeerQuery(query),
                 ticket_id: ticket_request.ticket_id,
             }
         }
-        Ticket::RouteQuery(query) => {
+        TicketMessage::RouteQuery(query) => {
             let mut query = query.clone();
 
             let routes = singleton.routes.read().await;
@@ -83,15 +83,15 @@ pub async fn process_ticket_request(
             }
 
             TicketResponse {
-                ticket: Ticket::RouteQuery(query),
+                ticket_message: TicketMessage::RouteQuery(query),
                 ticket_id: ticket_request.ticket_id,
             }
         }
-        Ticket::Test => TicketResponse {
-            ticket: ticket_request.ticket,
+        TicketMessage::Test => TicketResponse {
+            ticket_message: ticket_request.ticket_message,
             ticket_id: ticket_request.ticket_id,
         },
-        Ticket::BeginTrace(trace) => {
+        TicketMessage::BeginTrace(trace) => {
             let mut trace = trace.clone();
 
             trace.start_time = Some(
@@ -129,11 +129,11 @@ pub async fn process_ticket_request(
             push_message_collection_to_backlog(message_collection, singleton.clone()).await;
 
             TicketResponse {
-                ticket: Ticket::BeginTrace(trace),
+                ticket_message: TicketMessage::BeginTrace(trace),
                 ticket_id: ticket_request.ticket_id,
             }
         }
-        Ticket::DrainTrace(trace) => {
+        TicketMessage::DrainTrace(trace) => {
             let mut trace = trace.clone();
 
             let mut traces = singleton.traces.write().await;
@@ -146,11 +146,11 @@ pub async fn process_ticket_request(
             }
 
             TicketResponse {
-                ticket: Ticket::DrainTrace(trace),
+                ticket_message: TicketMessage::DrainTrace(trace),
                 ticket_id: ticket_request.ticket_id,
             }
         }
-        Ticket::PollTrace(trace) => {
+        TicketMessage::PollTrace(trace) => {
             let mut trace = trace.clone();
 
             if let Some(request_id) = trace.request_id.clone() {
@@ -160,7 +160,58 @@ pub async fn process_ticket_request(
             }
 
             TicketResponse {
-                ticket: Ticket::PollTrace(trace),
+                ticket_message: TicketMessage::PollTrace(trace),
+                ticket_id: ticket_request.ticket_id,
+            }
+        }
+        TicketMessage::BeginBroadcast(broadcast) => {
+            if broadcast.request.origin_id.is_some() {
+                singleton
+                    .broadcasts
+                    .write()
+                    .await
+                    .insert(broadcast.request.request_id.clone(), broadcast.clone());
+            }
+
+            let message_collection = MessageCollection {
+                origin_id: singleton.configuration.id.clone(),
+                destination_id: None,
+                messages: vec![Message::BroadcastRequest(broadcast.request.clone())],
+            };
+
+            push_message_collection_to_backlog(message_collection, singleton.clone()).await;
+
+            TicketResponse {
+                ticket_message: TicketMessage::BeginBroadcast(broadcast),
+                ticket_id: ticket_request.ticket_id,
+            }
+        }
+        TicketMessage::PollBroadcast(broadcast) => {
+            let mut broadcast = broadcast.clone();
+
+            let broadcasts = singleton.broadcasts.read().await;
+
+            if let Some(stored_broadcast) = broadcasts.get(&broadcast.request.request_id) {
+                broadcast.responses = stored_broadcast.responses.clone()
+            }
+
+            TicketResponse {
+                ticket_message: TicketMessage::PollBroadcast(broadcast),
+                ticket_id: ticket_request.ticket_id,
+            }
+        }
+        TicketMessage::DrainBroadcast(broadcast) => {
+            let mut broadcast = broadcast.clone();
+
+            let mut broadcasts = singleton.broadcasts.write().await;
+
+            if let Some(stored_broadcast) = broadcasts.get(&broadcast.request.request_id) {
+                broadcast.responses = stored_broadcast.responses.clone();
+                broadcasts.remove(&broadcast.request.request_id);
+            }
+
+            TicketResponse {
+                ticket_message: TicketMessage::DrainBroadcast(broadcast),
                 ticket_id: ticket_request.ticket_id,
             }
         }
@@ -171,7 +222,7 @@ pub async fn process_ticket_response(ticket_response: TicketResponse, singleton:
     let mut tickets = singleton.tickets.write().await;
     match tickets.get_mut(&ticket_response.ticket_id) {
         Some(ticket_state) => {
-            ticket_state.response = Some(ticket_response.ticket);
+            ticket_state.response = Some(ticket_response.ticket_message);
 
             ticket_state.stop_time = Some(
                 SystemTime::now()

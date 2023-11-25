@@ -1,9 +1,9 @@
 use actix_web::{web, HttpResponse};
 use std::error::Error;
 
-use crate::core::ticket::exchange::receive_ticket;
-use crate::core::ticket::exchange::send_ticket;
-use crate::core::{state::Singleton, ticket::exchange::send_and_receive_ticket};
+use crate::core::ticket::exchange::receive_ticket_message;
+use crate::core::ticket::exchange::send_ticket_message;
+use crate::core::{state::Singleton, ticket::exchange::send_and_receive_ticket_message};
 use crate::private::http::Session;
 
 pub async fn ticket_synchronization_endpoint(
@@ -17,20 +17,20 @@ pub async fn ticket_synchronization_endpoint(
         Err(_) => return Err("failed to parse session body".into()),
     };
 
-    let ticket = match session.ticket {
-        Some(ticket) => ticket,
+    let ticket_message = match session.ticket_message {
+        Some(ticket_message) => ticket_message,
         None => return Err("ticket not set in session body".into()),
     };
 
-    match send_and_receive_ticket(
-        ticket,
+    match send_and_receive_ticket_message(
+        ticket_message,
         session.ticket_id.clone(),
         session.destination_id.clone(),
         singleton.clone(),
     )
     .await
     {
-        Ok(ticket) => session.ticket = Some(ticket),
+        Ok(ticket_message) => session.ticket_message = Some(ticket_message),
         Err(error) => return Err(error.into()),
     };
 
@@ -53,12 +53,12 @@ pub async fn ticket_initialization_endpoint(
         Err(_) => return Err("failed to parse session body".into()),
     };
 
-    let ticket = match session.ticket.clone() {
+    let ticket = match session.ticket_message.clone() {
         Some(ticket) => ticket,
         None => return Err("ticket not set in session body".into()),
     };
 
-    let ticket_id = send_ticket(
+    let ticket_id = send_ticket_message(
         ticket,
         session.ticket_id.clone(),
         session.destination_id.clone(),
@@ -92,8 +92,8 @@ pub async fn ticket_retrieval_endpoint(
         None => return Err("ticket id not set in session".into()),
     };
 
-    match receive_ticket(ticket_id, singleton.clone()).await {
-        Ok(ticket) => session.ticket = Some(ticket),
+    match receive_ticket_message(ticket_id, singleton.clone()).await {
+        Ok(ticket_message) => session.ticket_message = Some(ticket_message),
         Err(error) => return Err(error.to_string().into()),
     };
 

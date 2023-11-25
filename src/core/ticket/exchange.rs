@@ -9,10 +9,10 @@ use crate::core::{
     state::Singleton,
 };
 
-use super::{Ticket, TicketRequest, TicketState};
+use super::{Ticket, TicketMessage, TicketRequest};
 
-pub async fn send_ticket(
-    ticket: Ticket,
+pub async fn send_ticket_message(
+    ticket_message: TicketMessage,
     ticket_id: Option<String>,
     destination_id: Option<String>,
     singleton: Singleton,
@@ -29,10 +29,10 @@ pub async fn send_ticket(
 
     let ticket_request = TicketRequest {
         ticket_id: ticket_id.clone(),
-        ticket,
+        ticket_message,
     };
 
-    let ticket_state = TicketState {
+    let ticket_state = Ticket {
         request: ticket_request.clone(),
         response: None,
         destination_id: destination_id.clone(),
@@ -57,9 +57,12 @@ pub async fn send_ticket(
     ticket_id
 }
 
-pub async fn receive_ticket(ticket_id: String, singleton: Singleton) -> Result<Ticket> {
+pub async fn receive_ticket_message(
+    ticket_id: String,
+    singleton: Singleton,
+) -> Result<TicketMessage> {
     let mut millis_to_delay: u64 = 10;
-    let mut ticket: Option<Ticket> = None;
+    let mut ticket: Option<TicketMessage> = None;
 
     while millis_to_delay < singleton.configuration.ticketexpiration {
         let mut tickets = singleton.tickets.write().await;
@@ -92,12 +95,13 @@ pub async fn receive_ticket(ticket_id: String, singleton: Singleton) -> Result<T
     }
 }
 
-pub async fn send_and_receive_ticket(
-    ticket: Ticket,
+pub async fn send_and_receive_ticket_message(
+    ticket_message: TicketMessage,
     ticket_id: Option<String>,
     destination_id: Option<String>,
     singleton: Singleton,
-) -> Result<Ticket> {
-    let ticket_id = send_ticket(ticket, ticket_id, destination_id, singleton.clone()).await;
-    receive_ticket(ticket_id, singleton.clone()).await
+) -> Result<TicketMessage> {
+    let ticket_id =
+        send_ticket_message(ticket_message, ticket_id, destination_id, singleton.clone()).await;
+    receive_ticket_message(ticket_id, singleton.clone()).await
 }

@@ -53,7 +53,7 @@ async fn decode_message(
             log::warn!("pong received")
         }
         Message::RouteRecall(route_recall) => {
-            log::warn!("route recall received");
+            log::warn!("route recall received: {route_recall:?}");
             remove_routes_by_gateway_and_destination(
                 origin_id.to_owned(),
                 route_recall.destination_id.clone(),

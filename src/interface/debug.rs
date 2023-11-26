@@ -3,6 +3,7 @@ use tokio::time::sleep;
 
 use crate::{
     core::{
+        broadcasting::{Broadcast, BroadcastMessage},
         peering::PeerQuery,
         routing::RouteQuery,
         state::Singleton,
@@ -185,4 +186,55 @@ pub async fn trace(destination_id: String, singleton: Singleton) -> anyhow::Resu
     }
 
     Ok(trace)
+}
+
+pub async fn begin_broadcast(
+    singleton: Singleton,
+    broadcast_message: BroadcastMessage,
+) -> anyhow::Result<Broadcast> {
+    let url = format!(
+        "http://{}:{}{}",
+        singleton.configuration.private_http.host,
+        singleton.configuration.private_http.port,
+        singleton.configuration.private_http.ticket_sync_endpoint
+    );
+
+    let broadcast = Broadcast::new(broadcast_message, None, Some(String::from("")));
+
+    if let TicketMessage::BeginBroadcast(broadcast) =
+        request_ticket_synchronization(TicketMessage::BeginBroadcast(broadcast), None, None, url)
+            .await?
+    {
+        Ok(broadcast)
+    } else {
+        Err(anyhow::Error::msg(
+            "unexpected ticket variant received during synchronization",
+        ))
+    }
+}
+
+pub async fn drain_broadcast(
+    singleton: Singleton,
+    broadcast: Broadcast,
+) -> anyhow::Result<Broadcast> {
+    let url = format!(
+        "http://{}:{}{}",
+        singleton.configuration.private_http.host,
+        singleton.configuration.private_http.port,
+        singleton.configuration.private_http.ticket_sync_endpoint
+    );
+
+    if let TicketMessage::DrainBroadcast(broadcast) =
+        request_ticket_synchronization(TicketMessage::DrainBroadcast(broadcast), None, None, url)
+            .await?
+    {
+        for (id, response) in broadcast.responses.iter() {
+            log::info!("{id} {response}")
+        }
+        Ok(broadcast)
+    } else {
+        Err(anyhow::Error::msg(
+            "unexpected ticket variant received during synchronization",
+        ))
+    }
 }

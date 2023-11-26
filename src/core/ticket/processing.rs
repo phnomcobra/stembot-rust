@@ -165,7 +165,11 @@ pub async fn process_ticket_request(
             }
         }
         TicketMessage::BeginBroadcast(broadcast) => {
+            let mut broadcast = broadcast.clone();
+
             if broadcast.request.origin_id.is_some() {
+                broadcast.request.origin_id = Some(singleton.configuration.id.clone());
+
                 singleton
                     .broadcasts
                     .write()

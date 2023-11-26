@@ -1,7 +1,9 @@
 use stembot_rust::{
-    core::{state::Singleton, ticket::TicketMessage},
+    core::{broadcasting::BroadcastMessage, state::Singleton, ticket::TicketMessage},
     init_logger,
-    interface::debug::{peer_query, route_query, ticket_query, trace},
+    interface::debug::{
+        begin_broadcast, drain_broadcast, peer_query, route_query, ticket_query, trace,
+    },
     private::http::client::ticketing::{request_ticket_initialization, request_ticket_retrieval},
 };
 
@@ -22,7 +24,7 @@ async fn main() -> anyhow::Result<()> {
         singleton.configuration.private_http.ticket_async_endpoint
     );
 
-    // trace(String::from("docker-bot4"), singleton.clone()).await?;
+    let broadcast = begin_broadcast(singleton.clone(), BroadcastMessage::Ping).await?;
 
     let mut ticket_ids_to_receive = vec![];
     for id in [
@@ -62,7 +64,12 @@ async fn main() -> anyhow::Result<()> {
         request_ticket_retrieval(id, url.clone()).await?;
     }
 
-    log::info!("{}", trace(String::from("docker-bot2"), singleton).await?);
+    log::info!(
+        "{}",
+        trace(String::from("docker-bot2"), singleton.clone()).await?
+    );
+
+    drain_broadcast(singleton.clone(), broadcast).await?;
 
     Ok(())
 }

@@ -1,8 +1,8 @@
 use crate::core::{
     backlog::push_message_collection_to_backlog,
-    message::{send_message_collection_to_url, Message, MessageCollection},
+    message::{send_message_collection_to_url, MessageCollection},
     peering::lookup_peer_url,
-    routing::{remove_routes_by_url, resolve_gateway_id, RouteRecall},
+    routing::{remove_routes_by_url, resolve_gateway_id, recall_routes_by_destination_id},
     state::Singleton,
 };
 
@@ -81,34 +81,10 @@ pub async fn process_message_collection(
                 }
             }
             // Don't know where to forward to
+            // Issue route recalls to peers' routing tables
             None => {
-                let destination_ids: Vec<String> = singleton
-                    .peers
-                    .read()
-                    .await
-                    .iter()
-                    .filter(|x| x.id.is_some())
-                    .filter(|x| x.id != inbound_message_collection.destination_id)
-                    .map(|x| x.id.clone().unwrap())
-                    .collect();
-
-                if inbound_message_collection.destination_id.is_some() {
-                    for id in destination_ids.iter() {
-                        push_message_collection_to_backlog(
-                            MessageCollection {
-                                messages: vec![Message::RouteRecall(RouteRecall {
-                                    destination_id: inbound_message_collection
-                                        .destination_id
-                                        .clone()
-                                        .unwrap(),
-                                })],
-                                origin_id: singleton.configuration.id.clone(),
-                                destination_id: Some(id.clone()),
-                            },
-                            singleton.clone(),
-                        )
-                        .await;
-                    }
+                if let Some(destination_id) = inbound_message_collection.destination_id.clone() {
+                    recall_routes_by_destination_id(singleton.clone(), destination_id).await;
                 }
 
                 push_message_collection_to_backlog(inbound_message_collection, singleton.clone())

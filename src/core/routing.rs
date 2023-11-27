@@ -8,6 +8,8 @@ use crate::core::{
     state::Singleton,
 };
 
+use super::backlog::push_message_collection_to_backlog;
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Route {
     pub gateway_id: String,
@@ -40,6 +42,32 @@ pub struct RouteAdvertisement {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct RouteRecall {
     pub destination_id: String,
+}
+
+pub async fn recall_routes_by_destination_id(singleton: Singleton, destination_id: String) {
+    let destination_ids: Vec<String> = singleton
+        .peers
+        .read()
+        .await
+        .iter()
+        .filter(|x| x.id.is_some())
+        .filter(|x| x.id != Some(destination_id.clone()))
+        .map(|x| x.id.clone().unwrap())
+        .collect();
+
+    for id in destination_ids.iter() {
+        push_message_collection_to_backlog(
+            MessageCollection {
+                messages: vec![Message::RouteRecall(RouteRecall {
+                    destination_id: destination_id.clone(),
+                })],
+                origin_id: singleton.configuration.id.clone(),
+                destination_id: Some(id.clone()),
+            },
+            singleton.clone(),
+        )
+        .await;
+    }
 }
 
 pub async fn resolve_gateway_id(destination_id: String, singleton: Singleton) -> Option<String> {

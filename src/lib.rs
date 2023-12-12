@@ -2,6 +2,7 @@ use chrono::{SecondsFormat, Utc};
 use log::Level;
 use std::{io::Write, str::FromStr, thread};
 
+pub mod adapters;
 pub mod config;
 pub mod core;
 pub mod interface;

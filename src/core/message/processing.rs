@@ -2,7 +2,7 @@ use crate::core::{
     backlog::push_message_collection_to_backlog,
     message::{send_message_collection_to_url, MessageCollection},
     peering::lookup_peer_url,
-    routing::{remove_routes_by_url, resolve_gateway_id, recall_routes_by_destination_id},
+    routing::{recall_routes_by_destination_id, remove_routes_by_url, resolve_gateway_id},
     state::Singleton,
 };
 

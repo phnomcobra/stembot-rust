@@ -11,6 +11,10 @@ path = "src/bin/bot.rs"
 name = "test"
 path = "src/bin/test.rs"
 
+[[bin]]
+name = "dev"
+path = "src/bin/dev.rs"
+
 [dependencies]
 actix-web = "4.3.1"
 chrono = "0.4.23"

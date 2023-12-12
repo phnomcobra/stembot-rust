@@ -126,6 +126,7 @@ pub async fn trace(destination_id: String, singleton: Singleton) -> anyhow::Resu
     let mut trace = Trace {
         events: vec![],
         destination_id,
+        // request_id: Some(String::from("debug trace")),
         request_id: None,
         start_time: None,
         stop_time: None,
@@ -163,7 +164,7 @@ pub async fn trace(destination_id: String, singleton: Singleton) -> anyhow::Resu
                 } else if polled_trace.stop_time.is_some() {
                     break;
                 } else {
-                    sleep(Duration::from_millis(100)).await;
+                    sleep(Duration::from_millis(1000)).await;
                 }
             } else {
                 return Err(anyhow::Error::msg(

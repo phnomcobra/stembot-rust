@@ -109,14 +109,12 @@ pub async fn process_ticket_request(
             let mut traces = singleton.traces.write().await;
 
             let request_id = trace_request.request_id.clone();
-
+            trace.request_id = Some(request_id.clone());
             if traces.contains_key(&request_id) {
                 traces.remove(&request_id);
             }
 
             traces.insert(request_id.clone(), trace.clone());
-
-            trace.request_id = Some(request_id.clone());
 
             let trace_request_message = Message::TraceRequest(trace_request);
 

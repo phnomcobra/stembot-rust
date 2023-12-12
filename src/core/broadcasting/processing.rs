@@ -1,4 +1,7 @@
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::{
+    collections::HashSet,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 
 use crate::core::{
     backlog::push_message_collection_to_backlog,
@@ -29,17 +32,19 @@ pub async fn poll_broadcasts(singleton: Singleton) {
 
 pub async fn process_broadcast_request(singleton: Singleton, broadcast_request: BroadcastRequest) {
     let mut history = singleton.broadcast_history.write().await;
-    let peers = singleton.peers.read().await;
+    let routes = singleton.routes.read().await;
 
     if !history.contains_key(&broadcast_request.request_id) {
         history.insert(broadcast_request.request_id.clone(), SystemTime::now());
 
         // forward broadcast request
-        for peer in peers.iter() {
+        for gateway_id in
+            HashSet::<String>::from_iter(routes.iter().map(|route| route.gateway_id.clone()))
+        {
             let message_collection = MessageCollection {
                 messages: vec![Message::BroadcastRequest(broadcast_request.clone())],
                 origin_id: singleton.configuration.id.clone(),
-                destination_id: peer.id.clone(),
+                destination_id: Some(gateway_id.clone()),
             };
 
             push_message_collection_to_backlog(message_collection, singleton.clone()).await;

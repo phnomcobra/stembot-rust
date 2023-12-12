@@ -52,9 +52,9 @@ async fn main() -> anyhow::Result<()> {
         request_ticket_retrieval(id, url.clone()).await?;
     }
 
-    log::info!("{}", trace(String::from("s1"), singleton.clone()).await?);
-
     drain_broadcast(singleton.clone(), broadcast).await?;
+
+    log::info!("{}", trace(String::from("c1"), singleton.clone()).await?);
 
     Ok(())
 }

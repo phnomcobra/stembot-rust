@@ -27,13 +27,7 @@ async fn main() -> anyhow::Result<()> {
     let broadcast = begin_broadcast(singleton.clone(), BroadcastMessage::Ping).await?;
 
     let mut ticket_ids_to_receive = vec![];
-    for id in [
-        "docker-bot0",
-        "docker-bot1",
-        "docker-bot2",
-        "docker-bot3",
-        "docker-bot4",
-    ] {
+    for id in ["c0", "c1", "s0", "s1"] {
         ticket_ids_to_receive.push(
             request_ticket_initialization(
                 TicketMessage::Test,
@@ -45,13 +39,7 @@ async fn main() -> anyhow::Result<()> {
         );
     }
 
-    for id in [
-        "docker-bot0",
-        "docker-bot1",
-        "docker-bot2",
-        "docker-bot3",
-        "docker-bot4",
-    ] {
+    for id in ["c0", "c1", "s0", "s1"] {
         log::info!("- Peers --- {id}");
         peer_query(Some(String::from(id)), singleton.clone()).await?;
         log::info!("- Routes -- {id}");
@@ -64,10 +52,7 @@ async fn main() -> anyhow::Result<()> {
         request_ticket_retrieval(id, url.clone()).await?;
     }
 
-    log::info!(
-        "{}",
-        trace(String::from("docker-bot2"), singleton.clone()).await?
-    );
+    log::info!("{}", trace(String::from("s1"), singleton.clone()).await?);
 
     drain_broadcast(singleton.clone(), broadcast).await?;
 

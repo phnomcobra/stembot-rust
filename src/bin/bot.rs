@@ -154,7 +154,10 @@ async fn main() -> Result<(), std::io::Error> {
             loop {
                 process_backlog(singleton.clone()).await;
 
-                sleep(Duration::from_millis(10)).await;
+                sleep(Duration::from_millis(
+                    singleton.configuration.backlog_period,
+                ))
+                .await;
             }
         }
     });

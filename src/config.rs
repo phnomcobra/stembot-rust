@@ -21,6 +21,7 @@ pub struct Configuration {
     pub public_http: PublicHttp,
     pub private_http: PrivateHttp,
     pub broadcastexpiration: u64,
+    pub backlog_period: u64,
 }
 
 #[allow(clippy::struct_excessive_bools)]

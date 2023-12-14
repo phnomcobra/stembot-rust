@@ -3,6 +3,7 @@ maxrouteweight=10
 loglevel="info"
 ticketexpiration=10000
 broadcastexpiration=10000
+backlog_period=250
 
 [public_http]
 host="0.0.0.0"

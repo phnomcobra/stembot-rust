@@ -1,6 +1,6 @@
-use chrono::{SecondsFormat, Utc};
+use chrono::Utc;
 use log::Level;
-use std::{io::Write, str::FromStr, thread};
+use std::{io::Write, path::Path, str::FromStr};
 
 pub mod adapters;
 pub mod config;
@@ -17,18 +17,22 @@ pub fn init_logger(loglevel: String) {
                 .to_level_filter(),
         )
         .format(move |buf, record| {
+            let short_filename = record
+                .file()
+                .and_then(|f| Path::new(f).file_name())
+                .and_then(|n| n.to_str())
+                .unwrap_or("unknown");
             writeln!(
                 buf,
-                "[{:<5} {} {} {}:{:<3}] {}",
-                buf.default_styled_level(record.level()),
-                Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true),
-                thread::current().name().unwrap_or("_"),
-                record.file().unwrap(),
-                record.line().unwrap(),
+                "{}|{}|{}:L{}|{}|{}",
+                record.level(),
+                Utc::now().format("%Y-%m-%d %H:%M:%S%.3f"),
+                short_filename,
+                record.line().unwrap_or(0),
+                record.target(),
                 record.args()
             )
         })
         .parse_default_env()
-        .write_style(env_logger::WriteStyle::Auto)
         .init();
 }

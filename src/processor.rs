@@ -2,7 +2,7 @@ use actix_web::{web, HttpRequest, HttpResponse, Result};
 use reqwest::header::{HeaderName, HeaderValue};
 use std::error::Error;
 
-use crate::core::state::Singleton;
+use crate::state::Singleton;
 
 pub async fn test_handler(
     body: web::Bytes,

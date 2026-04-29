@@ -6,7 +6,7 @@ use std::time::Duration;
 use tokio::time::sleep;
 
 use stembot_rust::{
-    core::state::Singleton,
+    state::Singleton,
     processor::test_handler,
     init_logger,
 };
@@ -17,7 +17,9 @@ async fn main() -> Result<(), std::io::Error> {
         std::env::set_var("RUST_BACKTRACE", "1");
     }
 
-    let singleton = Singleton::new_from_cli();
+    let singleton = Singleton::default();
+    log::info!("{:?}", singleton.configuration);
+    
 
     init_logger("debug".to_string());
 
@@ -29,6 +31,9 @@ async fn main() -> Result<(), std::io::Error> {
         }
     });
 
+    
+    log::info!("Starting scheduler");
+    
     spawn({
         async move {
             loop {
@@ -38,14 +43,22 @@ async fn main() -> Result<(), std::io::Error> {
         }
     });
 
+    let donor = singleton.clone();
     let server = HttpServer::new(
         move || {
             App::new()
                 .wrap(TracingLogger::default())
-                .app_data(web::Data::new(singleton.clone()))
+                .app_data(web::Data::new(donor.clone()))
                 .route("/test", web::post().to(test_handler),)
         }
     );
 
-    server.bind(("0.0.0.0", 8080,))?.run().await
+    log::info!("Starting server");
+
+    server.bind(
+        (
+            singleton.configuration.host.clone(),
+            singleton.configuration.port
+        )
+    )?.run().await
 }

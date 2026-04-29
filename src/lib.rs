@@ -8,6 +8,7 @@ pub mod core;
 pub mod interface;
 pub mod private;
 pub mod public;
+pub mod processor;
 
 pub fn init_logger(loglevel: String) {
     env_logger::builder()

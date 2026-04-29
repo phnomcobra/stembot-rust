@@ -4,8 +4,8 @@ version = "1.0.0"
 edition = "2021"
 
 [[bin]]
-name = "bot"
-path = "src/bin/bot.rs"
+name = "agt-server"
+path = "src/bin/server.rs"
 
 [[bin]]
 name = "test"

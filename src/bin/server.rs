@@ -8,7 +8,7 @@ use tokio::time::sleep;
 use stembot_rust::{
     state::Singleton,
     processor::test_handler,
-    init_logger,
+    logger::init_logger,
 };
 
 #[actix_web::main]

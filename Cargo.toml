@@ -7,6 +7,10 @@ edition = "2021"
 name = "agt-server"
 path = "src/bin/server.rs"
 
+[[bin]]
+name = "agt-configure"
+path = "src/bin/configure.rs"
+
 [dependencies]
 actix-web = "4.13.0"
 chrono = "0.4.23"

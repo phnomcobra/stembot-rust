@@ -4,7 +4,7 @@ use serde::Deserialize;
 // use toml::de::Error;
 
 fn default_id() -> String { String::new() }
-fn default_port() -> u16 { 8080 }
+fn default_port() -> u16 { 8081 }
 fn default_host() -> String { String::from("0.0.0.0") }
 
 #[allow(clippy::struct_excessive_bools)]

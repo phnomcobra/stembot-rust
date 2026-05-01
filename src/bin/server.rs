@@ -18,7 +18,7 @@ async fn main() -> Result<(), std::io::Error> {
     }
 
     let singleton = Singleton::default();
-    log::info!("{:?}", singleton.configuration);
+    singleton.config.log();
     
 
     init_logger("debug".to_string());
@@ -57,8 +57,8 @@ async fn main() -> Result<(), std::io::Error> {
 
     server.bind(
         (
-            singleton.configuration.host.clone(),
-            singleton.configuration.port
+            singleton.config.socket_host.clone(),
+            singleton.config.socket_port,
         )
     )?.run().await
 }

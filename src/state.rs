@@ -1,13 +1,12 @@
-// use std::{collections::HashMap, sync::Arc, time::SystemTime};
-// use tokio::sync::RwLock;
+use crate::models::config::Config;
 
-use crate::{
-    models::config::Configuration,
-};
-
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct Singleton {
-    pub configuration: Configuration
-    // pub peers: Arc<RwLock<Vec<Peer>>>,
-    // pub routes: Arc<RwLock<Vec<Route>>>,
+    pub config: Config,
+}
+
+impl Default for Singleton {
+    fn default() -> Self {
+        Self { config: Config::load() }
+    }
 }

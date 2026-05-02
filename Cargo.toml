@@ -34,3 +34,13 @@ rusqlite = "0.32"
 regex = "1"
 uuid = { version = "1", features = ["v4"] }
 base64 = "0.22"
+flate2 = "1"
+md5 = "0.7"
+aes = "0.8"
+eax = "0.5"
+hex = "0.4"
+libc = "0.2"
+
+[dev-dependencies]
+tempfile = "3"
+mockito = "1"

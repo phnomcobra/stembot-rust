@@ -145,6 +145,16 @@ impl Config {
         }
     }
 
+    /// Decode `secret_digest` (hex string) into a 32-byte AES-256 key.
+    pub fn key(&self) -> [u8; 32] {
+        let bytes = hex::decode(&self.secret_digest)
+            .expect("secret_digest is not valid hex");
+        assert!(bytes.len() >= 32, "secret_digest must decode to at least 32 bytes");
+        let mut key = [0u8; 32];
+        key.copy_from_slice(&bytes[..32]);
+        key
+    }
+
     /// Log the current configuration values.
     pub fn log(&self) {
         log::info!(

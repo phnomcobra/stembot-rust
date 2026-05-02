@@ -52,9 +52,10 @@ impl KVStore {
         }
     }
 
-    pub fn commit(&self, name: impl Into<String>, value: Value) -> Result<()> {
+    pub fn commit(&self, name: impl Into<String>, value: impl Into<Value>) -> Result<()> {
         let name = name.into();
         let results = self.collection.find(&[("name", &name)])?;
+        let value = value.into();
         if let Some(mut kv) = results.into_iter().next() {
             kv.object.value = value;
             kv.commit()?;
@@ -89,7 +90,7 @@ pub fn get(name: impl Into<String>, default: Option<Value>) -> Result<Value> {
     KVStore::new(None)?.get(name, default)
 }
 
-pub fn commit(name: impl Into<String>, value: Value) -> Result<()> {
+pub fn commit(name: impl Into<String>, value: impl Into<Value>) -> Result<()> {
     KVStore::new(None)?.commit(name, value)
 }
 

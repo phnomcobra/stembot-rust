@@ -1,5 +1,4 @@
 use clap::Parser;
-use serde_json::json;
 use stembot_rust::{
     dao::kvstore::KVStore,
     models::config::LogLevel,
@@ -62,77 +61,77 @@ struct Args {
 
 fn load_from_environment(store: &KVStore) {
     if let Ok(v) = std::env::var("AGT_UUID") {
-        store.commit("agtuuid", json!(v.clone())).unwrap();
+        store.commit("agtuuid", v.as_str()).unwrap();
         println!("✓ Loaded AGT_UUID: {v}");
     }
     if let Ok(v) = std::env::var("AGT_HOST") {
-        store.commit("socket_host", json!(v.clone())).unwrap();
+        store.commit("socket_host", v.as_str()).unwrap();
         println!("✓ Loaded AGT_HOST: {v}");
     }
     if let Ok(v) = std::env::var("AGT_PORT") {
         if let Ok(port) = v.parse::<u16>() {
-            store.commit("socket_port", json!(port)).unwrap();
+            store.commit("socket_port", port).unwrap();
             println!("✓ Loaded AGT_PORT: {v}");
         }
     }
     if let Ok(v) = std::env::var("AGT_LOG_PATH") {
-        store.commit("log_path", json!(v.clone())).unwrap();
+        store.commit("log_path", v.as_str()).unwrap();
         println!("✓ Loaded AGT_LOG_PATH: {v}");
     }
     if let Ok(v) = std::env::var("AGT_SECRET") {
         let digest = sha256::digest(v.as_str());
-        store.commit("secret_digest", json!(digest)).unwrap();
+        store.commit("secret_digest", digest).unwrap();
         println!("✓ Loaded AGT_SECRET (hashed to 32 bytes)");
     }
     if let Ok(v) = std::env::var("AGT_CLIENT_CONTROL_URL") {
-        store.commit("client_control_url", json!(v.clone())).unwrap();
+        store.commit("client_control_url", v.as_str()).unwrap();
         println!("✓ Loaded AGT_CLIENT_CONTROL_URL: {v}");
     }
     if let Ok(v) = std::env::var("AGT_WORKERS") {
         if let Ok(w) = v.parse::<u32>() {
-            store.commit("workers", json!(w)).unwrap();
+            store.commit("workers", w).unwrap();
             println!("✓ Loaded AGT_WORKERS: {v}");
         }
     }
     if let Ok(v) = std::env::var("AGT_LOG_LEVEL_APP") {
         if v.to_uppercase().parse::<LogLevel>().is_ok() {
-            store.commit("log_level_app", json!(v.to_uppercase())).unwrap();
+            store.commit("log_level_app", v.to_uppercase()).unwrap();
             println!("✓ Loaded AGT_LOG_LEVEL_APP: {v}");
         }
     }
     if let Ok(v) = std::env::var("AGT_LOG_LEVEL_API") {
         if v.to_uppercase().parse::<LogLevel>().is_ok() {
-            store.commit("log_level_api", json!(v.to_uppercase())).unwrap();
+            store.commit("log_level_api", v.to_uppercase()).unwrap();
             println!("✓ Loaded AGT_LOG_LEVEL_API: {v}");
         }
     }
     if let Ok(v) = std::env::var("AGT_PEER_TIMEOUT_SECS") {
         if let Ok(n) = v.parse::<u32>() {
-            store.commit("peer_timeout_secs", json!(n)).unwrap();
+            store.commit("peer_timeout_secs", n).unwrap();
             println!("✓ Loaded AGT_PEER_TIMEOUT_SECS: {v}");
         }
     }
     if let Ok(v) = std::env::var("AGT_PEER_REFRESH_SECS") {
         if let Ok(n) = v.parse::<u32>() {
-            store.commit("peer_refresh_secs", json!(n)).unwrap();
+            store.commit("peer_refresh_secs", n).unwrap();
             println!("✓ Loaded AGT_PEER_REFRESH_SECS: {v}");
         }
     }
     if let Ok(v) = std::env::var("AGT_MAX_WEIGHT") {
         if let Ok(n) = v.parse::<u32>() {
-            store.commit("max_weight", json!(n)).unwrap();
+            store.commit("max_weight", n).unwrap();
             println!("✓ Loaded AGT_MAX_WEIGHT: {v}");
         }
     }
     if let Ok(v) = std::env::var("AGT_TICKET_TIMEOUT_SECS") {
         if let Ok(n) = v.parse::<u32>() {
-            store.commit("ticket_timeout_secs", json!(n)).unwrap();
+            store.commit("ticket_timeout_secs", n).unwrap();
             println!("✓ Loaded AGT_TICKET_TIMEOUT_SECS: {v}");
         }
     }
     if let Ok(v) = std::env::var("AGT_MESSAGE_TIMEOUT_SECS") {
         if let Ok(n) = v.parse::<u32>() {
-            store.commit("message_timeout_secs", json!(n)).unwrap();
+            store.commit("message_timeout_secs", n).unwrap();
             println!("✓ Loaded AGT_MESSAGE_TIMEOUT_SECS: {v}");
         }
     }
@@ -184,45 +183,45 @@ fn main() {
     }
 
     if let Some(v) = args.agtuuid {
-        store.commit("agtuuid", json!(v.clone())).unwrap();
+        store.commit("agtuuid", v.as_str()).unwrap();
         println!("✓ Set Agent UUID: {v}");
         modified = true;
     }
     if let Some(v) = args.host {
-        store.commit("socket_host", json!(v.clone())).unwrap();
+        store.commit("socket_host", v.as_str()).unwrap();
         println!("✓ Set Host: {v}");
         modified = true;
     }
     if let Some(v) = args.port {
-        store.commit("socket_port", json!(v)).unwrap();
+        store.commit("socket_port", v).unwrap();
         println!("✓ Set Port: {v}");
         modified = true;
     }
     if let Some(v) = args.log_path {
-        store.commit("log_path", json!(v.clone())).unwrap();
+        store.commit("log_path", v.as_str()).unwrap();
         println!("✓ Set Log Path: {v}");
         modified = true;
     }
     if let Some(v) = args.secret {
         let digest = sha256::digest(v.as_str());
-        store.commit("secret_digest", json!(digest)).unwrap();
+        store.commit("secret_digest", digest).unwrap();
         println!("✓ Set Secret (hashed to 32 bytes)");
         modified = true;
     }
     if let Some(v) = args.client_url {
-        store.commit("client_control_url", json!(v.clone())).unwrap();
+        store.commit("client_control_url", v.as_str()).unwrap();
         println!("✓ Set Client Control URL: {v}");
         modified = true;
     }
     if let Some(v) = args.workers {
-        store.commit("workers", json!(v)).unwrap();
+        store.commit("workers", v).unwrap();
         println!("✓ Set Workers: {v}");
         modified = true;
     }
     if let Some(v) = args.log_level_app {
         let upper = v.to_uppercase();
         if upper.parse::<LogLevel>().is_ok() {
-            store.commit("log_level_app", json!(upper.clone())).unwrap();
+            store.commit("log_level_app", upper.as_str()).unwrap();
             println!("✓ Set Log Level App: {upper}");
             modified = true;
         } else {
@@ -232,7 +231,7 @@ fn main() {
     if let Some(v) = args.log_level_api {
         let upper = v.to_uppercase();
         if upper.parse::<LogLevel>().is_ok() {
-            store.commit("log_level_api", json!(upper.clone())).unwrap();
+            store.commit("log_level_api", upper.as_str()).unwrap();
             println!("✓ Set Log Level API: {upper}");
             modified = true;
         } else {
@@ -240,27 +239,27 @@ fn main() {
         }
     }
     if let Some(v) = args.peer_timeout_secs {
-        store.commit("peer_timeout_secs", json!(v)).unwrap();
+        store.commit("peer_timeout_secs", v).unwrap();
         println!("✓ Set Peer Timeout Secs: {v}");
         modified = true;
     }
     if let Some(v) = args.peer_refresh_secs {
-        store.commit("peer_refresh_secs", json!(v)).unwrap();
+        store.commit("peer_refresh_secs", v).unwrap();
         println!("✓ Set Peer Refresh Secs: {v}");
         modified = true;
     }
     if let Some(v) = args.max_weight {
-        store.commit("max_weight", json!(v)).unwrap();
+        store.commit("max_weight", v).unwrap();
         println!("✓ Set Max Weight: {v}");
         modified = true;
     }
     if let Some(v) = args.ticket_timeout_secs {
-        store.commit("ticket_timeout_secs", json!(v)).unwrap();
+        store.commit("ticket_timeout_secs", v).unwrap();
         println!("✓ Set Ticket Timeout Secs: {v}");
         modified = true;
     }
     if let Some(v) = args.message_timeout_secs {
-        store.commit("message_timeout_secs", json!(v)).unwrap();
+        store.commit("message_timeout_secs", v).unwrap();
         println!("✓ Set Message Timeout Secs: {v}");
         modified = true;
     }
@@ -270,7 +269,7 @@ fn main() {
             .and_then(|j| j.as_u64())
             .unwrap_or(8080) as u16;
         let local_url = format!("http://127.0.0.1:{port}/control");
-        store.commit("client_control_url", json!(local_url.clone())).unwrap();
+        store.commit("client_control_url", local_url.as_str()).unwrap();
         println!("✓ Set Client Control URL to local: {local_url}");
         modified = true;
     }

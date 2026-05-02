@@ -86,8 +86,8 @@ impl KVStore {
 
 // ── Module-level convenience functions (mirror Python's module API) ───────────
 
-pub fn get(name: impl Into<String>, default: Option<Value>) -> Result<Value> {
-    KVStore::new(None)?.get(name, default)
+pub fn get(name: impl Into<String>, default: Option<impl Into<Value>>) -> Result<Value> {
+    KVStore::new(None)?.get(name, default.map(|d| d.into()))
 }
 
 pub fn commit(name: impl Into<String>, value: impl Into<Value>) -> Result<()> {

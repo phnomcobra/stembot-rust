@@ -33,7 +33,7 @@ impl Document {
 
         conn.execute_batch("PRAGMA foreign_keys = ON;")?;
         conn.execute_batch(
-            "CREATE TABLE IF NOT EXISTS TBL_COLLECTIONS (
+        "CREATE TABLE IF NOT EXISTS TBL_COLLECTIONS (
                 COLUUID VARCHAR(36),
                 NAME    VARCHAR(64) UNIQUE NOT NULL,
                 PRIMARY KEY (COLUUID)

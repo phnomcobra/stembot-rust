@@ -36,8 +36,9 @@ impl KVStore {
         Ok(Self { collection: col })
     }
 
-    pub fn get(&self, name: &str, default: Option<Value>) -> Result<Value> {
-        let results = self.collection.find(&[("name", name)])?;
+    pub fn get(&self, name: impl Into<String>, default: Option<Value>) -> Result<Value> {
+        let name = name.into();
+        let results = self.collection.find(&[("name", &name)])?;
         if let Some(kv) = results.into_iter().next() {
             Ok(kv.object.value)
         } else {
@@ -51,8 +52,9 @@ impl KVStore {
         }
     }
 
-    pub fn commit(&self, name: &str, value: Value) -> Result<()> {
-        let results = self.collection.find(&[("name", name)])?;
+    pub fn commit(&self, name: impl Into<String>, value: Value) -> Result<()> {
+        let name = name.into();
+        let results = self.collection.find(&[("name", &name)])?;
         if let Some(mut kv) = results.into_iter().next() {
             kv.object.value = value;
             kv.commit()?;
@@ -66,8 +68,9 @@ impl KVStore {
         Ok(())
     }
 
-    pub fn delete(&self, name: &str) -> Result<()> {
-        self.collection.pop(&[("name", name)])?;
+    pub fn delete(&self, name: impl Into<String>) -> Result<()> {
+        let name = name.into();
+        self.collection.pop(&[("name", &name)])?;
         Ok(())
     }
 
@@ -82,15 +85,15 @@ impl KVStore {
 
 // ── Module-level convenience functions (mirror Python's module API) ───────────
 
-pub fn get(name: &str, default: Option<Value>) -> Result<Value> {
+pub fn get(name: impl Into<String>, default: Option<Value>) -> Result<Value> {
     KVStore::new(None)?.get(name, default)
 }
 
-pub fn commit(name: &str, value: Value) -> Result<()> {
+pub fn commit(name: impl Into<String>, value: Value) -> Result<()> {
     KVStore::new(None)?.commit(name, value)
 }
 
-pub fn delete(name: &str) -> Result<()> {
+pub fn delete(name: impl Into<String>) -> Result<()> {
     KVStore::new(None)?.delete(name)
 }
 

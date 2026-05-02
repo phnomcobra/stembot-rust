@@ -1,3 +1,4 @@
+pub mod enums;
 pub mod executor;
 pub mod dao;
 pub mod models;

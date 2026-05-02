@@ -2,21 +2,22 @@ use serde::{Deserialize, Serialize};
 
 /// Control form operation types.
 /// Maps to Python's `ControlFormType(UpperCaseStrEnum)`.
+/// Serde renames use lowercase to match Python's StrEnum wire format.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ControlFormType {
-    #[serde(rename = "CREATE_PEER")]   CreatePeer,
-    #[serde(rename = "DISCOVER_PEER")] DiscoverPeer,
-    #[serde(rename = "DELETE_PEERS")]  DeletePeers,
-    #[serde(rename = "GET_PEERS")]     GetPeers,
-    #[serde(rename = "GET_ROUTES")]    GetRoutes,
-    #[serde(rename = "SYNC_PROCESS")]  SyncProcess,
-    #[serde(rename = "WRITE_FILE")]    WriteFile,
-    #[serde(rename = "LOAD_FILE")]     LoadFile,
-    #[serde(rename = "CREATE_TICKET")] CreateTicket,
-    #[serde(rename = "READ_TICKET")]   ReadTicket,
-    #[serde(rename = "DELETE_TICKET")] DeleteTicket,
-    #[serde(rename = "CLOSE_TICKET")]  CloseTicket,
-    #[serde(rename = "GET_CONFIG")]    GetConfig,
+    #[serde(rename = "create_peer")]   CreatePeer,
+    #[serde(rename = "discover_peer")] DiscoverPeer,
+    #[serde(rename = "delete_peers")]  DeletePeers,
+    #[serde(rename = "get_peers")]     GetPeers,
+    #[serde(rename = "get_routes")]    GetRoutes,
+    #[serde(rename = "sync_process")]  SyncProcess,
+    #[serde(rename = "write_file")]    WriteFile,
+    #[serde(rename = "load_file")]     LoadFile,
+    #[serde(rename = "create_ticket")] CreateTicket,
+    #[serde(rename = "read_ticket")]   ReadTicket,
+    #[serde(rename = "delete_ticket")] DeleteTicket,
+    #[serde(rename = "close_ticket")]  CloseTicket,
+    #[serde(rename = "get_config")]    GetConfig,
 }
 
 impl std::fmt::Display for ControlFormType {
@@ -42,16 +43,17 @@ impl std::fmt::Display for ControlFormType {
 
 /// Network message types.
 /// Maps to Python's `NetworkMessageType(UpperCaseStrEnum)`.
+/// Serde renames use lowercase to match Python's StrEnum wire format.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum NetworkMessageType {
-    #[serde(rename = "ADVERTISEMENT")]         Advertisement,
-    #[serde(rename = "MESSAGES_REQUEST")]      MessagesRequest,
-    #[serde(rename = "MESSAGES_RESPONSE")]     MessagesResponse,
-    #[serde(rename = "TICKET_REQUEST")]        TicketRequest,
-    #[serde(rename = "TICKET_RESPONSE")]       TicketResponse,
-    #[serde(rename = "TICKET_TRACE_RESPONSE")] TicketTraceResponse,
-    #[serde(rename = "PING")]                  Ping,
-    #[serde(rename = "ACKNOWLEDGEMENT")]       Acknowledgement,
+    #[serde(rename = "advertisement")]        Advertisement,
+    #[serde(rename = "messages_request")]     MessagesRequest,
+    #[serde(rename = "messages_response")]    MessagesResponse,
+    #[serde(rename = "ticket_request")]       TicketRequest,
+    #[serde(rename = "ticket_response")]      TicketResponse,
+    #[serde(rename = "ticket_trace_response")] TicketTraceResponse,
+    #[serde(rename = "ping")]                 Ping,
+    #[serde(rename = "acknowledgement")]      Acknowledgement,
 }
 
 impl std::fmt::Display for NetworkMessageType {
@@ -69,3 +71,5 @@ impl std::fmt::Display for NetworkMessageType {
         write!(f, "{s}")
     }
 }
+
+

@@ -39,24 +39,20 @@ impl Default for CommandArg {
 
 // ── Individual control form structs ──────────────────────────────────────────
 // These structs do NOT carry a `type` field; the type is encoded by the
-// `ControlFormVariant` tagged enum when serialised as part of a ticket.
+// `ControlFormVariant` tagged enum when serialised.
+// All Option fields serialize as null (no skip_serializing_if) to match
+// the Python protocol wire format.
 
 /// Request to load a file from a remote agent.
 /// Maps to Python's `LoadFile(ControlForm)`.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct LoadFile {
-    pub path: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path:    String,
     pub b64zlib: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub size: Option<i64>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub md5sum: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub size:    Option<i64>,
+    pub md5sum:  Option<String>,
+    pub error:   Option<String>,
     pub objuuid: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub coluuid: Option<String>,
 }
 
@@ -65,16 +61,11 @@ pub struct LoadFile {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct WriteFile {
     pub b64zlib: String,
-    pub path: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub size: Option<i64>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub md5sum: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path:    String,
+    pub size:    Option<i64>,
+    pub md5sum:  Option<String>,
+    pub error:   Option<String>,
     pub objuuid: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub coluuid: Option<String>,
 }
 
@@ -82,25 +73,17 @@ pub struct WriteFile {
 /// Maps to Python's `SyncProcess(ControlForm)`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SyncProcess {
-    pub command: CommandArg,
+    pub command:      CommandArg,
     #[serde(default = "default_sync_timeout")]
-    pub timeout: i64,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub stdout: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub stderr: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub status: Option<i64>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub start_time: Option<f64>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timeout:      i64,
+    pub stdout:       Option<String>,
+    pub stderr:       Option<String>,
+    pub status:       Option<i64>,
+    pub start_time:   Option<f64>,
     pub elapsed_time: Option<f64>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub objuuid: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub coluuid: Option<String>,
+    pub error:        Option<String>,
+    pub objuuid:      Option<String>,
+    pub coluuid:      Option<String>,
 }
 
 fn default_sync_timeout() -> i64 { 15 }
@@ -112,15 +95,10 @@ pub struct CreatePeer {
     pub agtuuid: String,
     #[serde(default)]
     pub polling: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub url: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub ttl: Option<f64>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url:     Option<String>,
+    pub ttl:     Option<f64>,
+    pub error:   Option<String>,
     pub objuuid: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub coluuid: Option<String>,
 }
 
@@ -128,18 +106,13 @@ pub struct CreatePeer {
 /// Maps to Python's `DiscoverPeer(ControlForm)`.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct DiscoverPeer {
-    pub url: String,
+    pub url:     String,
     #[serde(default)]
     pub polling: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agtuuid: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub ttl: Option<f64>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ttl:     Option<f64>,
+    pub error:   Option<String>,
     pub objuuid: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub coluuid: Option<String>,
 }
 
@@ -147,14 +120,10 @@ pub struct DiscoverPeer {
 /// Maps to Python's `DeletePeers(ControlForm)`.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct DeletePeers {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agtuuids: Option<Vec<String>>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub objuuid: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub coluuid: Option<String>,
+    pub error:    Option<String>,
+    pub objuuid:  Option<String>,
+    pub coluuid:  Option<String>,
 }
 
 /// Request to retrieve all current peer connections.
@@ -162,12 +131,9 @@ pub struct DeletePeers {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct GetPeers {
     #[serde(default)]
-    pub peers: Vec<Peer>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub peers:   Vec<Peer>,
+    pub error:   Option<String>,
     pub objuuid: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub coluuid: Option<String>,
 }
 
@@ -176,12 +142,9 @@ pub struct GetPeers {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct GetRoutes {
     #[serde(default)]
-    pub routes: Vec<Route>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub routes:  Vec<Route>,
+    pub error:   Option<String>,
     pub objuuid: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub coluuid: Option<String>,
 }
 
@@ -189,13 +152,9 @@ pub struct GetRoutes {
 /// Maps to Python's `GetConfig(ControlForm)`.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct GetConfig {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub config: Option<Value>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub config:  Option<Value>,
+    pub error:   Option<String>,
     pub objuuid: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub coluuid: Option<String>,
 }
 
@@ -203,21 +162,21 @@ pub struct GetConfig {
 
 /// Internally-tagged union of all control forms.
 ///
-/// Serialises as `{ "type": "<TYPE>", ...fields }`.
+/// Serialises as `{ "type": "<type>", ...fields }`.
+/// Tag values are lowercase to match Python's StrEnum wire format.
 /// Used as the `form` field in `ControlFormTicket` and `NetworkTicket`.
-/// Maps to Python's `Union[CreatePeer, DiscoverPeer, ...]` field annotations.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum ControlFormVariant {
-    #[serde(rename = "CREATE_PEER")]   CreatePeer(CreatePeer),
-    #[serde(rename = "DISCOVER_PEER")] DiscoverPeer(DiscoverPeer),
-    #[serde(rename = "DELETE_PEERS")]  DeletePeers(DeletePeers),
-    #[serde(rename = "GET_PEERS")]     GetPeers(GetPeers),
-    #[serde(rename = "GET_ROUTES")]    GetRoutes(GetRoutes),
-    #[serde(rename = "SYNC_PROCESS")]  SyncProcess(SyncProcess),
-    #[serde(rename = "WRITE_FILE")]    WriteFile(WriteFile),
-    #[serde(rename = "LOAD_FILE")]     LoadFile(LoadFile),
-    #[serde(rename = "GET_CONFIG")]    GetConfig(GetConfig),
+    #[serde(rename = "create_peer")]   CreatePeer(CreatePeer),
+    #[serde(rename = "discover_peer")] DiscoverPeer(DiscoverPeer),
+    #[serde(rename = "delete_peers")]  DeletePeers(DeletePeers),
+    #[serde(rename = "get_peers")]     GetPeers(GetPeers),
+    #[serde(rename = "get_routes")]    GetRoutes(GetRoutes),
+    #[serde(rename = "sync_process")]  SyncProcess(SyncProcess),
+    #[serde(rename = "write_file")]    WriteFile(WriteFile),
+    #[serde(rename = "load_file")]     LoadFile(LoadFile),
+    #[serde(rename = "get_config")]    GetConfig(GetConfig),
 }
 
 // ── Hop ───────────────────────────────────────────────────────────────────────
@@ -235,32 +194,501 @@ pub struct Hop {
 
 /// A ticket for asynchronous control form delivery.
 /// Maps to Python's `ControlFormTicket(ControlForm)`.
-///
-/// Unlike the individual form structs, this struct carries its own `type`
-/// field (serialised as `"type"`) since it is not embedded in a tagged enum.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ControlFormTicket {
     #[serde(rename = "type", default = "default_create_ticket")]
-    pub form_type: ControlFormType,
+    pub form_type:    ControlFormType,
     #[serde(default = "gen_uuid")]
-    pub tckuuid: String,
+    pub tckuuid:      String,
     #[serde(default)]
-    pub src: String,
+    pub src:          String,
     #[serde(default)]
-    pub dst: String,
+    pub dst:          String,
     #[serde(default = "unix_now_f64")]
-    pub create_time: f64,
+    pub create_time:  f64,
     #[serde(default)]
-    pub tracing: bool,
+    pub tracing:      bool,
     #[serde(default)]
-    pub hops: Vec<Hop>,
-    pub form: ControlFormVariant,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hops:         Vec<Hop>,
+    pub form:         ControlFormVariant,
     pub service_time: Option<f64>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub objuuid: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub coluuid: Option<String>,
+    pub error:        Option<String>,
+    pub objuuid:      Option<String>,
+    pub coluuid:      Option<String>,
 }
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Compare serialized struct against a canonical JSON string (order-insensitive).
+    /// Used to verify Rust output matches the Python protocol wire format.
+    fn assert_ser_eq(value: &impl Serialize, expected_json: &str) {
+        let got: serde_json::Value = serde_json::to_value(value).unwrap();
+        let exp: serde_json::Value = serde_json::from_str(expected_json).unwrap();
+        assert_eq!(got, exp);
+    }
+
+    /// Deserialize a canonical JSON string, re-serialize, and compare (round-trip).
+    /// Proves the Rust types can consume and reproduce every protocol message.
+    fn assert_deser_roundtrip<T>(json: &str)
+    where
+        T: serde::de::DeserializeOwned + Serialize,
+    {
+        let parsed: T = serde_json::from_str(json).unwrap();
+        let got: serde_json::Value = serde_json::to_value(&parsed).unwrap();
+        let exp: serde_json::Value = serde_json::from_str(json).unwrap();
+        assert_eq!(got, exp);
+    }
+
+    // ── LoadFile ──────────────────────────────────────────────────────────────
+
+    const LOAD_FILE_REQUEST_JSON: &str = concat!(
+        r#"{"type":"load_file","error":null,"objuuid":null,"coluuid":null,"#,
+        r#""b64zlib":null,"path":"/etc/hosts","size":null,"md5sum":null}"#
+    );
+    const LOAD_FILE_RESPONSE_JSON: &str = concat!(
+        r#"{"type":"load_file","error":null,"objuuid":null,"coluuid":null,"#,
+        r#""b64zlib":"abc123","path":"/etc/hosts","size":1024,"#,
+        r#""md5sum":"d8e8fca2dc0f896fd7cb4cb0031ba249"}"#
+    );
+
+    #[test]
+    fn test_ser_load_file_request() {
+        let form = ControlFormVariant::LoadFile(LoadFile {
+            path: "/etc/hosts".into(),
+            ..Default::default()
+        });
+        assert_ser_eq(&form, LOAD_FILE_REQUEST_JSON);
+    }
+
+    #[test]
+    fn test_ser_load_file_response() {
+        let form = ControlFormVariant::LoadFile(LoadFile {
+            path: "/etc/hosts".into(),
+            b64zlib: Some("abc123".into()),
+            size: Some(1024),
+            md5sum: Some("d8e8fca2dc0f896fd7cb4cb0031ba249".into()),
+            ..Default::default()
+        });
+        assert_ser_eq(&form, LOAD_FILE_RESPONSE_JSON);
+    }
+
+    #[test]
+    fn test_deser_load_file_request() {
+        assert_deser_roundtrip::<ControlFormVariant>(LOAD_FILE_REQUEST_JSON);
+    }
+
+    #[test]
+    fn test_deser_load_file_response() {
+        assert_deser_roundtrip::<ControlFormVariant>(LOAD_FILE_RESPONSE_JSON);
+    }
+
+    // ── WriteFile ─────────────────────────────────────────────────────────────
+
+    const WRITE_FILE_REQUEST_JSON: &str = concat!(
+        r#"{"type":"write_file","error":null,"objuuid":null,"coluuid":null,"#,
+        r#""b64zlib":"abc123","path":"/tmp/out.txt","size":null,"md5sum":null}"#
+    );
+    const WRITE_FILE_RESPONSE_JSON: &str = concat!(
+        r#"{"type":"write_file","error":null,"objuuid":null,"coluuid":null,"#,
+        r#""b64zlib":"abc123","path":"/tmp/out.txt","size":6,"#,
+        r#""md5sum":"d8e8fca2dc0f896fd7cb4cb0031ba249"}"#
+    );
+
+    #[test]
+    fn test_ser_write_file_request() {
+        let form = ControlFormVariant::WriteFile(WriteFile {
+            b64zlib: "abc123".into(),
+            path: "/tmp/out.txt".into(),
+            ..Default::default()
+        });
+        assert_ser_eq(&form, WRITE_FILE_REQUEST_JSON);
+    }
+
+    #[test]
+    fn test_ser_write_file_response() {
+        let form = ControlFormVariant::WriteFile(WriteFile {
+            b64zlib: "abc123".into(),
+            path: "/tmp/out.txt".into(),
+            size: Some(6),
+            md5sum: Some("d8e8fca2dc0f896fd7cb4cb0031ba249".into()),
+            ..Default::default()
+        });
+        assert_ser_eq(&form, WRITE_FILE_RESPONSE_JSON);
+    }
+
+    #[test]
+    fn test_deser_write_file_request() {
+        assert_deser_roundtrip::<ControlFormVariant>(WRITE_FILE_REQUEST_JSON);
+    }
+
+    #[test]
+    fn test_deser_write_file_response() {
+        assert_deser_roundtrip::<ControlFormVariant>(WRITE_FILE_RESPONSE_JSON);
+    }
+
+    // ── SyncProcess ───────────────────────────────────────────────────────────
+
+    const SYNC_PROCESS_STR_CMD_JSON: &str = concat!(
+        r#"{"type":"sync_process","error":null,"objuuid":null,"coluuid":null,"#,
+        r#""timeout":15,"command":"ls /","stdout":null,"stderr":null,"#,
+        r#""status":null,"start_time":null,"elapsed_time":null}"#
+    );
+    const SYNC_PROCESS_LIST_CMD_JSON: &str = concat!(
+        r#"{"type":"sync_process","error":null,"objuuid":null,"coluuid":null,"#,
+        r#""timeout":15,"command":["ls","/"],"stdout":null,"stderr":null,"#,
+        r#""status":null,"start_time":null,"elapsed_time":null}"#
+    );
+    const SYNC_PROCESS_RESPONSE_JSON: &str = concat!(
+        r#"{"type":"sync_process","error":null,"objuuid":null,"coluuid":null,"#,
+        r#""timeout":15,"command":"ls /","stdout":"bin\nboot\n","stderr":""#,
+        r#"","status":0,"start_time":1000.0,"elapsed_time":0.01}"#
+    );
+
+    #[test]
+    fn test_ser_sync_process_str_command() {
+        let form = ControlFormVariant::SyncProcess(SyncProcess {
+            command: CommandArg::Single("ls /".into()),
+            timeout: 15,
+            stdout: None, stderr: None, status: None,
+            start_time: None, elapsed_time: None,
+            error: None, objuuid: None, coluuid: None,
+        });
+        assert_ser_eq(&form, SYNC_PROCESS_STR_CMD_JSON);
+    }
+
+    #[test]
+    fn test_ser_sync_process_list_command() {
+        let form = ControlFormVariant::SyncProcess(SyncProcess {
+            command: CommandArg::Multi(vec!["ls".into(), "/".into()]),
+            timeout: 15,
+            stdout: None, stderr: None, status: None,
+            start_time: None, elapsed_time: None,
+            error: None, objuuid: None, coluuid: None,
+        });
+        assert_ser_eq(&form, SYNC_PROCESS_LIST_CMD_JSON);
+    }
+
+    #[test]
+    fn test_ser_sync_process_response() {
+        let form = ControlFormVariant::SyncProcess(SyncProcess {
+            command: CommandArg::Single("ls /".into()),
+            timeout: 15,
+            stdout: Some("bin\nboot\n".into()),
+            stderr: Some("".into()),
+            status: Some(0),
+            start_time: Some(1000.0),
+            elapsed_time: Some(0.01),
+            error: None, objuuid: None, coluuid: None,
+        });
+        assert_ser_eq(&form, SYNC_PROCESS_RESPONSE_JSON);
+    }
+
+    #[test]
+    fn test_deser_sync_process_str_command() {
+        assert_deser_roundtrip::<ControlFormVariant>(SYNC_PROCESS_STR_CMD_JSON);
+    }
+
+    #[test]
+    fn test_deser_sync_process_list_command() {
+        assert_deser_roundtrip::<ControlFormVariant>(SYNC_PROCESS_LIST_CMD_JSON);
+    }
+
+    #[test]
+    fn test_deser_sync_process_response() {
+        assert_deser_roundtrip::<ControlFormVariant>(SYNC_PROCESS_RESPONSE_JSON);
+    }
+
+    // ── CreatePeer ────────────────────────────────────────────────────────────
+
+    // Python's HttpUrl normalises by appending a trailing slash
+    const CREATE_PEER_JSON: &str = concat!(
+        r#"{"type":"create_peer","error":null,"objuuid":null,"coluuid":null,"#,
+        r#""url":"http://10.0.0.1:8080/","ttl":null,"polling":false,"agtuuid":"a1"}"#
+    );
+
+    #[test]
+    fn test_ser_create_peer() {
+        let form = ControlFormVariant::CreatePeer(CreatePeer {
+            agtuuid: "a1".into(),
+            url: Some("http://10.0.0.1:8080/".into()),
+            ..Default::default()
+        });
+        assert_ser_eq(&form, CREATE_PEER_JSON);
+    }
+
+    #[test]
+    fn test_deser_create_peer() {
+        assert_deser_roundtrip::<ControlFormVariant>(CREATE_PEER_JSON);
+    }
+
+    // ── DiscoverPeer ──────────────────────────────────────────────────────────
+
+    const DISCOVER_PEER_JSON: &str = concat!(
+        r#"{"type":"discover_peer","error":null,"objuuid":null,"coluuid":null,"#,
+        r#""agtuuid":null,"url":"http://10.0.0.1:8080","ttl":null,"polling":false}"#
+    );
+
+    #[test]
+    fn test_ser_discover_peer() {
+        let form = ControlFormVariant::DiscoverPeer(DiscoverPeer {
+            url: "http://10.0.0.1:8080".into(),
+            ..Default::default()
+        });
+        assert_ser_eq(&form, DISCOVER_PEER_JSON);
+    }
+
+    #[test]
+    fn test_deser_discover_peer() {
+        assert_deser_roundtrip::<ControlFormVariant>(DISCOVER_PEER_JSON);
+    }
+
+    // ── DeletePeers ───────────────────────────────────────────────────────────
+
+    const DELETE_PEERS_JSON: &str = concat!(
+        r#"{"type":"delete_peers","error":null,"objuuid":null,"coluuid":null,"#,
+        r#""agtuuids":["a1","a2"]}"#
+    );
+    const DELETE_PEERS_ALL_JSON: &str = concat!(
+        r#"{"type":"delete_peers","error":null,"objuuid":null,"coluuid":null,"#,
+        r#""agtuuids":null}"#
+    );
+
+    #[test]
+    fn test_ser_delete_peers() {
+        let form = ControlFormVariant::DeletePeers(DeletePeers {
+            agtuuids: Some(vec!["a1".into(), "a2".into()]),
+            ..Default::default()
+        });
+        assert_ser_eq(&form, DELETE_PEERS_JSON);
+    }
+
+    #[test]
+    fn test_ser_delete_peers_all() {
+        let form = ControlFormVariant::DeletePeers(DeletePeers {
+            agtuuids: None,
+            ..Default::default()
+        });
+        assert_ser_eq(&form, DELETE_PEERS_ALL_JSON);
+    }
+
+    #[test]
+    fn test_deser_delete_peers() {
+        assert_deser_roundtrip::<ControlFormVariant>(DELETE_PEERS_JSON);
+    }
+
+    #[test]
+    fn test_deser_delete_peers_all() {
+        assert_deser_roundtrip::<ControlFormVariant>(DELETE_PEERS_ALL_JSON);
+    }
+
+    // ── GetPeers ──────────────────────────────────────────────────────────────
+
+    const GET_PEERS_EMPTY_JSON: &str = concat!(
+        r#"{"type":"get_peers","error":null,"objuuid":null,"coluuid":null,"peers":[]}"#
+    );
+    const GET_PEERS_DATA_JSON: &str = concat!(
+        r#"{"type":"get_peers","error":null,"objuuid":null,"coluuid":null,"#,
+        r#""peers":[{"agtuuid":"a2","polling":false,"destroy_time":2000.0,"#,
+        r#""refresh_time":1000.0,"url":"http://10.0.0.2:8080","objuuid":null,"coluuid":null}]}"#
+    );
+
+    #[test]
+    fn test_ser_get_peers_empty() {
+        let form = ControlFormVariant::GetPeers(GetPeers::default());
+        assert_ser_eq(&form, GET_PEERS_EMPTY_JSON);
+    }
+
+    #[test]
+    fn test_ser_get_peers_with_data() {
+        use crate::models::routing::Peer;
+        let form = ControlFormVariant::GetPeers(GetPeers {
+            peers: vec![Peer {
+                agtuuid: Some("a2".into()),
+                polling: false,
+                destroy_time: Some(2000.0),
+                refresh_time: Some(1000.0),
+                url: Some("http://10.0.0.2:8080".into()),
+                objuuid: None,
+                coluuid: None,
+            }],
+            ..Default::default()
+        });
+        assert_ser_eq(&form, GET_PEERS_DATA_JSON);
+    }
+
+    #[test]
+    fn test_deser_get_peers_empty() {
+        assert_deser_roundtrip::<ControlFormVariant>(GET_PEERS_EMPTY_JSON);
+    }
+
+    #[test]
+    fn test_deser_get_peers_with_data() {
+        assert_deser_roundtrip::<ControlFormVariant>(GET_PEERS_DATA_JSON);
+    }
+
+    // ── GetRoutes ─────────────────────────────────────────────────────────────
+
+    const GET_ROUTES_EMPTY_JSON: &str = concat!(
+        r#"{"type":"get_routes","error":null,"objuuid":null,"coluuid":null,"routes":[]}"#
+    );
+    const GET_ROUTES_DATA_JSON: &str = concat!(
+        r#"{"type":"get_routes","error":null,"objuuid":null,"coluuid":null,"#,
+        r#""routes":[{"agtuuid":"a2","gtwuuid":"a1","weight":1,"objuuid":null,"coluuid":null}]}"#
+    );
+
+    #[test]
+    fn test_ser_get_routes_empty() {
+        let form = ControlFormVariant::GetRoutes(GetRoutes::default());
+        assert_ser_eq(&form, GET_ROUTES_EMPTY_JSON);
+    }
+
+    #[test]
+    fn test_ser_get_routes_with_data() {
+        use crate::models::routing::Route;
+        let form = ControlFormVariant::GetRoutes(GetRoutes {
+            routes: vec![Route { agtuuid: "a2".into(), gtwuuid: "a1".into(), weight: 1, objuuid: None, coluuid: None }],
+            ..Default::default()
+        });
+        assert_ser_eq(&form, GET_ROUTES_DATA_JSON);
+    }
+
+    #[test]
+    fn test_deser_get_routes_empty() {
+        assert_deser_roundtrip::<ControlFormVariant>(GET_ROUTES_EMPTY_JSON);
+    }
+
+    #[test]
+    fn test_deser_get_routes_with_data() {
+        assert_deser_roundtrip::<ControlFormVariant>(GET_ROUTES_DATA_JSON);
+    }
+
+    // ── GetConfig ─────────────────────────────────────────────────────────────
+
+    const GET_CONFIG_REQUEST_JSON: &str = concat!(
+        r#"{"type":"get_config","error":null,"objuuid":null,"coluuid":null,"config":null}"#
+    );
+    const GET_CONFIG_RESPONSE_JSON: &str = concat!(
+        r#"{"type":"get_config","error":null,"objuuid":null,"coluuid":null,"#,
+        r#""config":{"agtuuid":"a1","port":8080}}"#
+    );
+
+    #[test]
+    fn test_ser_get_config_request() {
+        let form = ControlFormVariant::GetConfig(GetConfig::default());
+        assert_ser_eq(&form, GET_CONFIG_REQUEST_JSON);
+    }
+
+    #[test]
+    fn test_ser_get_config_response() {
+        let form = ControlFormVariant::GetConfig(GetConfig {
+            config: Some(serde_json::json!({"agtuuid": "a1", "port": 8080})),
+            ..Default::default()
+        });
+        assert_ser_eq(&form, GET_CONFIG_RESPONSE_JSON);
+    }
+
+    #[test]
+    fn test_deser_get_config_request() {
+        assert_deser_roundtrip::<ControlFormVariant>(GET_CONFIG_REQUEST_JSON);
+    }
+
+    #[test]
+    fn test_deser_get_config_response() {
+        assert_deser_roundtrip::<ControlFormVariant>(GET_CONFIG_RESPONSE_JSON);
+    }
+
+    // ── Hop ───────────────────────────────────────────────────────────────────
+
+    const HOP_JSON: &str =
+        r#"{"agtuuid":"a1","hop_time":1000.0,"type_str":"ticket_request"}"#;
+
+    #[test]
+    fn test_ser_hop() {
+        let hop = Hop { agtuuid: "a1".into(), hop_time: 1000.0, type_str: "ticket_request".into() };
+        assert_ser_eq(&hop, HOP_JSON);
+    }
+
+    #[test]
+    fn test_deser_hop() {
+        assert_deser_roundtrip::<Hop>(HOP_JSON);
+    }
+
+    // ── ControlFormTicket ─────────────────────────────────────────────────────
+
+    const CFT_CREATE_JSON: &str = concat!(
+        r#"{"type":"create_ticket","error":null,"objuuid":null,"coluuid":null,"#,
+        r#""tckuuid":"t1","src":"a1","dst":"a2","create_time":1000.0,"#,
+        r#""service_time":null,"tracing":false,"hops":[],"#,
+        r#""form":{"type":"sync_process","error":null,"objuuid":null,"coluuid":null,"#,
+        r#""timeout":15,"command":"ls /","stdout":null,"stderr":null,"#,
+        r#""status":null,"start_time":null,"elapsed_time":null}}"#
+    );
+    const CFT_CLOSE_WITH_HOPS_JSON: &str = concat!(
+        r#"{"type":"close_ticket","error":null,"objuuid":null,"coluuid":null,"#,
+        r#""tckuuid":"t1","src":"a1","dst":"a2","create_time":1000.0,"#,
+        r#""service_time":0.5,"tracing":true,"#,
+        r#""hops":[{"agtuuid":"a1","hop_time":1001.0,"type_str":"ticket_request"}],"#,
+        r#""form":{"type":"sync_process","error":null,"objuuid":null,"coluuid":null,"#,
+        r#""timeout":15,"command":"ls /","stdout":null,"stderr":null,"#,
+        r#""status":null,"start_time":null,"elapsed_time":null}}"#
+    );
+
+    fn sync_process_ls() -> ControlFormVariant {
+        ControlFormVariant::SyncProcess(SyncProcess {
+            command: CommandArg::Single("ls /".into()),
+            timeout: 15,
+            stdout: None, stderr: None, status: None,
+            start_time: None, elapsed_time: None,
+            error: None, objuuid: None, coluuid: None,
+        })
+    }
+
+    #[test]
+    fn test_ser_control_form_ticket_create() {
+        let ticket = ControlFormTicket {
+            form_type: ControlFormType::CreateTicket,
+            tckuuid: "t1".into(),
+            src: "a1".into(),
+            dst: "a2".into(),
+            create_time: 1000.0,
+            service_time: None,
+            tracing: false,
+            hops: vec![],
+            form: sync_process_ls(),
+            error: None, objuuid: None, coluuid: None,
+        };
+        assert_ser_eq(&ticket, CFT_CREATE_JSON);
+    }
+
+    #[test]
+    fn test_ser_control_form_ticket_close_with_hops() {
+        let ticket = ControlFormTicket {
+            form_type: ControlFormType::CloseTicket,
+            tckuuid: "t1".into(),
+            src: "a1".into(),
+            dst: "a2".into(),
+            create_time: 1000.0,
+            service_time: Some(0.5),
+            tracing: true,
+            hops: vec![Hop { agtuuid: "a1".into(), hop_time: 1001.0, type_str: "ticket_request".into() }],
+            form: sync_process_ls(),
+            error: None, objuuid: None, coluuid: None,
+        };
+        assert_ser_eq(&ticket, CFT_CLOSE_WITH_HOPS_JSON);
+    }
+
+    #[test]
+    fn test_deser_control_form_ticket_create() {
+        assert_deser_roundtrip::<ControlFormTicket>(CFT_CREATE_JSON);
+    }
+
+    #[test]
+    fn test_deser_control_form_ticket_close_with_hops() {
+        assert_deser_roundtrip::<ControlFormTicket>(CFT_CLOSE_WITH_HOPS_JSON);
+    }
+}
+

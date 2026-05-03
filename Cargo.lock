@@ -2355,7 +2355,6 @@ dependencies = [
  "env_logger",
  "flate2",
  "hex",
- "libc",
  "log",
  "magic-crypt",
  "md5",

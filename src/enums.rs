@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 /// Control form operation types.
 /// Maps to Python's `ControlFormType(UpperCaseStrEnum)`.
 /// Serde renames use lowercase to match Python's StrEnum wire format.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ControlFormType {
     #[serde(rename = "create_peer")]   CreatePeer,
     #[serde(rename = "discover_peer")] DiscoverPeer,
@@ -13,6 +13,7 @@ pub enum ControlFormType {
     #[serde(rename = "sync_process")]  SyncProcess,
     #[serde(rename = "write_file")]    WriteFile,
     #[serde(rename = "load_file")]     LoadFile,
+    #[default]
     #[serde(rename = "create_ticket")] CreateTicket,
     #[serde(rename = "read_ticket")]   ReadTicket,
     #[serde(rename = "delete_ticket")] DeleteTicket,
@@ -44,7 +45,7 @@ impl std::fmt::Display for ControlFormType {
 /// Network message types.
 /// Maps to Python's `NetworkMessageType(UpperCaseStrEnum)`.
 /// Serde renames use lowercase to match Python's StrEnum wire format.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum NetworkMessageType {
     #[serde(rename = "advertisement")]        Advertisement,
     #[serde(rename = "messages_request")]     MessagesRequest,
@@ -52,6 +53,7 @@ pub enum NetworkMessageType {
     #[serde(rename = "ticket_request")]       TicketRequest,
     #[serde(rename = "ticket_response")]      TicketResponse,
     #[serde(rename = "ticket_trace_response")] TicketTraceResponse,
+    #[default]
     #[serde(rename = "ping")]                 Ping,
     #[serde(rename = "acknowledgement")]      Acknowledgement,
 }

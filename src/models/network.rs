@@ -77,6 +77,22 @@ pub struct Acknowledgement {
     pub coluuid:   Option<String>,
 }
 
+impl Default for Acknowledgement {
+    fn default() -> Self {
+        Self {
+            ack_type:  NetworkMessageType::default(),
+            src:       String::new(),
+            dest:      None,
+            isrc:      None,
+            timestamp: None,
+            forwarded: None,
+            error:     None,
+            objuuid:   None,
+            coluuid:   None,
+        }
+    }
+}
+
 /// Advertisement of routes known by an agent.
 /// Maps to Python's `Advertisement(NetworkMessage)`.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -140,6 +156,22 @@ impl TicketTraceResponse {
     }
 }
 
+impl Default for TicketTraceResponse {
+    fn default() -> Self {
+        Self {
+            tckuuid:             String::new(),
+            network_ticket_type: NetworkMessageType::default(),
+            hop_time:            0.0,
+            src:                 String::new(),
+            dest:                None,
+            isrc:                None,
+            timestamp:           None,
+            objuuid:             None,
+            coluuid:             None,
+        }
+    }
+}
+
 /// A ticket for asynchronous message delivery across the network.
 /// Maps to Python's `NetworkTicket(NetworkMessage)`.
 ///
@@ -183,6 +215,12 @@ pub enum NetworkMessageVariant {
     #[serde(rename = "ticket_trace_response")] TicketTraceResponse(TicketTraceResponse),
     #[serde(rename = "ticket_request")]        TicketRequest(NetworkTicket),
     #[serde(rename = "ticket_response")]       TicketResponse(NetworkTicket),
+}
+
+impl Default for NetworkMessageVariant {
+    fn default() -> Self {
+        Self::Ping(Ping::default())
+    }
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────

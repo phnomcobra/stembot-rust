@@ -179,6 +179,12 @@ pub enum ControlFormVariant {
     #[serde(rename = "get_config")]    GetConfig(GetConfig),
 }
 
+impl Default for ControlFormVariant {
+    fn default() -> Self {
+        Self::GetConfig(GetConfig::default())
+    }
+}
+
 // ── Hop ───────────────────────────────────────────────────────────────────────
 
 /// A single hop in a ticket trace.
@@ -215,6 +221,25 @@ pub struct ControlFormTicket {
     pub error:        Option<String>,
     pub objuuid:      Option<String>,
     pub coluuid:      Option<String>,
+}
+
+impl Default for ControlFormTicket {
+    fn default() -> Self {
+        Self {
+            form_type:    ControlFormType::CreateTicket,
+            tckuuid:      gen_uuid(),
+            src:          String::new(),
+            dst:          String::new(),
+            create_time:  unix_now_f64(),
+            tracing:      false,
+            hops:         Vec::new(),
+            form:         ControlFormVariant::default(),
+            service_time: None,
+            error:        None,
+            objuuid:      None,
+            coluuid:      None,
+        }
+    }
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────

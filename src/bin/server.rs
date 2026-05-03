@@ -18,7 +18,7 @@ async fn main() -> Result<(), std::io::Error> {
     let config = config();
 
 
-    init_logger(config.log_level_app.to_string());
+    init_logger(config.log_level_app.to_string(), config.log_level_api.to_string());
 
     config.log();
 
@@ -55,7 +55,8 @@ async fn main() -> Result<(), std::io::Error> {
                 .app_data(web::Data::new(config.clone()))
                 .route("/test", web::post().to(test_handler),)
         }
-    );
+    )
+    .workers(config.workers as usize);
 
     log::info!("Starting server");
 

@@ -6,7 +6,11 @@ use std::time::Duration;
 use tokio::time::sleep;
 
 use stembot_rust::{
-    config::config, logger::init_logger, messaging::expire_network_messages, processor::test_handler, ticketing::expire_tickets
+    config::config,
+    logger::init_logger,
+    messaging::expire_network_messages,
+    processor::{advertizing, control_handler, mpi_handler, polling, replay},
+    ticketing::expire_tickets,
 };
 
 #[actix_web::main]
@@ -37,6 +41,10 @@ async fn main() -> Result<(), std::io::Error> {
         }
     });
 
+    scheduler.every(Seconds(1)).run(|| async { replay().await });
+    scheduler.every(Seconds(1)).run(|| async { polling().await });
+    scheduler.every(Seconds(10)).run(|| async { advertizing().await });
+
     log::info!("Starting scheduler");
 
     spawn({
@@ -53,7 +61,8 @@ async fn main() -> Result<(), std::io::Error> {
             App::new()
                 .wrap(TracingLogger::default())
                 .app_data(web::Data::new(config.clone()))
-                .route("/test", web::post().to(test_handler),)
+                .route("/control", web::post().to(control_handler))
+                .route("/mpi",     web::post().to(mpi_handler))
         }
     )
     .workers(config.workers as usize);

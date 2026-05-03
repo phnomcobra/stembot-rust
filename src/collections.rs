@@ -32,15 +32,16 @@ static INIT: OnceLock<()> = OnceLock::new();
 /// the `OnceLock` short-circuits with a single atomic load.
 fn ensure_init() {
     INIT.get_or_init(|| {
-        if let Ok(c) = Collection::<NetworkMessageVariant>::new("messages", Some(CONN_MESSAGES)) {
+        log::info!("Initializing collection attributes");
+        if let Ok(c) = Collection::<NetworkMessageVariant>::new("messages", None) {
             c.create_attribute("dest",      "/dest").ok();
             c.create_attribute("timestamp", "/timestamp").ok();
         }
-        if let Ok(c) = Collection::<ControlFormTicket>::new("tickets", Some(CONN_TICKETS)) {
+        if let Ok(c) = Collection::<ControlFormTicket>::new("tickets", None) {
             c.create_attribute("tckuuid",     "/tckuuid").ok();
             c.create_attribute("create_time", "/create_time").ok();
         }
-        if let Ok(c) = Collection::<TicketTraceResponse>::new("traces", Some(CONN_TRACES)) {
+        if let Ok(c) = Collection::<TicketTraceResponse>::new("traces", None) {
             c.create_attribute("tckuuid",             "/tckuuid").ok();
             c.create_attribute("hop_time",            "/hop_time").ok();
             c.create_attribute("network_ticket_type", "/network_ticket_type").ok();
@@ -50,7 +51,7 @@ fn ensure_init() {
             c.create_attribute("polling", "/polling").ok();
             c.create_attribute("url",     "/url").ok();
         }
-        if let Ok(c) = Collection::<Route>::new("routes", Some(CONN_ROUTES)) {
+        if let Ok(c) = Collection::<Route>::new("routes", None) {
             c.create_attribute("agtuuid", "/agtuuid").ok();
             c.create_attribute("gtwuuid", "/gtwuuid").ok();
             c.create_attribute("weight",  "/weight").ok();
@@ -66,19 +67,19 @@ fn ensure_init() {
 /// Open the in-memory `messages` collection.
 pub fn open_messages() -> Result<Collection<NetworkMessageVariant>> {
     ensure_init();
-    Collection::new("messages", Some(CONN_MESSAGES))
+    Collection::new("messages", None)
 }
 
 /// Open the in-memory `tickets` collection.
 pub fn open_tickets() -> Result<Collection<ControlFormTicket>> {
     ensure_init();
-    Collection::new("tickets", Some(CONN_TICKETS))
+    Collection::new("tickets", None)
 }
 
 /// Open the in-memory `traces` collection.
 pub fn open_traces() -> Result<Collection<TicketTraceResponse>> {
     ensure_init();
-    Collection::new("traces", Some(CONN_TRACES))
+    Collection::new("traces", None)
 }
 
 /// Open the `peers` collection.
@@ -90,7 +91,7 @@ pub fn open_peers() -> Result<Collection<Peer>> {
 /// Open the in-memory `routes` collection.
 pub fn open_routes() -> Result<Collection<Route>> {
     ensure_init();
-    Collection::new("routes", Some(CONN_ROUTES))
+    Collection::new("routes", None)
 }
 
 /// Open the `kvstore` collection for key-value pairs.

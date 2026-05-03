@@ -15,7 +15,7 @@ use anyhow::Result;
 use crate::collections::{open_peers, open_routes};
 use crate::models::network::Advertisement;
 use crate::models::routing::{Peer, Route};
-use crate::state::config;
+use crate::config::config;
 
 fn unix_now() -> f64 {
     SystemTime::now()

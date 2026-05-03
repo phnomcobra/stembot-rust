@@ -18,7 +18,7 @@ use crate::collections::{open_tickets, open_traces};
 use crate::enums::{ControlFormType, NetworkMessageType};
 use crate::models::control::ControlFormTicket;
 use crate::models::network::{NetworkTicket, TicketTraceResponse};
-use crate::state::config;
+use crate::config::config;
 
 fn unix_now() -> f64 {
     SystemTime::now()

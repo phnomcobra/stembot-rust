@@ -6,9 +6,7 @@ use std::time::Duration;
 use tokio::time::sleep;
 
 use stembot_rust::{
-    state::Singleton,
-    processor::test_handler,
-    logger::init_logger,
+    logger::init_logger, processor::test_handler, config::config
 };
 
 #[actix_web::main]
@@ -17,11 +15,13 @@ async fn main() -> Result<(), std::io::Error> {
         std::env::set_var("RUST_BACKTRACE", "1");
     }
 
-    let singleton = Singleton::default();
-    singleton.config.log();
-    
+    let config = config();
 
-    init_logger("debug".to_string());
+
+    init_logger(config.log_level_app.to_string());
+
+    config.log();
+
 
     let mut scheduler = AsyncScheduler::new();
 
@@ -31,9 +31,9 @@ async fn main() -> Result<(), std::io::Error> {
         }
     });
 
-    
+
     log::info!("Starting scheduler");
-    
+
     spawn({
         async move {
             loop {
@@ -43,12 +43,11 @@ async fn main() -> Result<(), std::io::Error> {
         }
     });
 
-    let donor = singleton.clone();
     let server = HttpServer::new(
         move || {
             App::new()
                 .wrap(TracingLogger::default())
-                .app_data(web::Data::new(donor.clone()))
+                .app_data(web::Data::new(config.clone()))
                 .route("/test", web::post().to(test_handler),)
         }
     );
@@ -57,8 +56,8 @@ async fn main() -> Result<(), std::io::Error> {
 
     server.bind(
         (
-            singleton.config.socket_host.clone(),
-            singleton.config.socket_port,
+            config.socket_host.clone(),
+            config.socket_port,
         )
     )?.run().await
 }

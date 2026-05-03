@@ -14,7 +14,7 @@ use anyhow::Result;
 use crate::collections::{open_messages, open_peers, open_routes};
 use crate::executor::agent::AgentClient;
 use crate::models::network::{NetworkMessageVariant, NetworkMessagesRequest};
-use crate::state::config;
+use crate::config::config;
 
 fn unix_now() -> f64 {
     SystemTime::now()

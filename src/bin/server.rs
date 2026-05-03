@@ -6,7 +6,7 @@ use std::time::Duration;
 use tokio::time::sleep;
 
 use stembot_rust::{
-    logger::init_logger, processor::test_handler, config::config
+    config::config, logger::init_logger, messaging::expire_network_messages, processor::test_handler, ticketing::expire_tickets
 };
 
 #[actix_web::main]
@@ -25,12 +25,17 @@ async fn main() -> Result<(), std::io::Error> {
 
     let mut scheduler = AsyncScheduler::new();
 
-    scheduler.every(Seconds(5)).run({
+    scheduler.every(Seconds(config.message_timeout_secs)).run({
         move || async move {
-            log::info!("Scheduler demo");
+            expire_tickets().unwrap_or_else(|e| log::error!("Error expiring tickets: {e}"));
         }
     });
 
+    scheduler.every(Seconds(config.ticket_timeout_secs)).run({
+        move || async move {
+            expire_network_messages().unwrap_or_else(|e| log::error!("Error expiring network messages: {e}"));
+        }
+    });
 
     log::info!("Starting scheduler");
 

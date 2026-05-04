@@ -1,71 +1,97 @@
-version: "3"
-
 services:
-  c0:
-    build:
-      dockerfile: ./Dockerfile
+  r1:
+    build: .
+    ports:
+      - 8080:8080
+    expose:
+      - 8080
     volumes:
-      - ./:/src
+      - ./log/r1/:/log
+    environment:
+      - AGT_UUID=r1
+      - AGT_PORT=8080
+      - AGT_HOST=0.0.0.0
+      - AGT_SECRET=password
+      - AGT_LOG_PATH=/log
+      - AGT_LOG_LEVEL_API=error
+      - AGT_LOG_LEVEL_APP=info
+      - AGT_CLIENT_CONTROL_URL=http://127.0.0.1:8080/control
+      - AGT_WORKERS=2
     command:
       - bash
       - -c
       - |
-        set -e
-        mkdir -p /app
-        rsync -a --exclude 'target' /src/* /app/
-        cd /app
-        cargo run --release --bin bot -- --config-path /app/etc/c0.toml
-    ports:
-      - "8080:8080"
-      - "8090:8081"
-  c1:
-    build:
-      dockerfile: ./Dockerfile
+        agt-configure --load-env
+        agt-configure --view
+        agt-control discover http://r2:8080/mpi --delay 10 &
+        agt-server
+
+  r2:
+    build: .
+    expose:
+      - 8080
     volumes:
-      - ./:/src
+      - ./log/r2/:/log
     command:
       - bash
       - -c
       - |
-        set -e
-        mkdir -p /app
-        rsync -a --exclude 'target' /src/* /app/
-        cd /app
-        cargo run --release --bin bot -- --config-path /app/etc/c1.toml
-    ports:
-      - "8081:8080"
-      - "8091:8081"
-  s0:
-    build:
-      dockerfile: ./Dockerfile
+        agt-configure --agtuuid r2 --port 8080 --host 0.0.0.0 --secret password --log-path /log --workers 2
+        agt-configure --client-local
+        agt-configure --log-level-api error
+        agt-configure --log-level-app info
+        agt-control discover http://r1:8080/mpi --delay 10 &
+        agt-control discover http://r3:8080/mpi --delay 10 &
+        agt-server
+
+  r3:
+    build: .
+    expose:
+      - 8080
     volumes:
-      - ./:/src
+      - ./log/r3/:/log
     command:
       - bash
       - -c
       - |
-        set -e
-        mkdir -p /app
-        rsync -a --exclude 'target' /src/* /app/
-        cd /app
-        cargo run --release --bin bot -- --config-path /app/etc/s0.toml
-    ports:
-      - "8082:8080"
-      - "8092:8081"
-  s1:
-    build:
-      dockerfile: ./Dockerfile
+        agt-configure --agtuuid r3 --port 8080 --host 0.0.0.0 --secret password --log-path /log --workers 2
+        agt-configure --client-local
+        agt-configure --log-level-api error
+        agt-configure --log-level-app info
+        agt-control discover http://r2:8080/mpi --delay 10 &
+        agt-server
+
+  r4:
+    build: .
+    expose:
+      - 8080
     volumes:
-      - ./:/src
+      - ./log/r4/:/log
     command:
       - bash
       - -c
       - |
-        set -e
-        mkdir -p /app
-        rsync -a --exclude 'target' /src/* /app/
-        cd /app
-        cargo run --release --bin bot -- --config-path /app/etc/s1.toml
-    ports:
-      - "8083:8080"
-      - "8093:8081"
+        agt-configure --agtuuid r4 --port 8080 --host 0.0.0.0 --secret password --log-path /log --workers 2
+        agt-configure --client-local
+        agt-configure --log-level-api error
+        agt-configure --log-level-app info
+        agt-control discover http://r2:8080/mpi --polling --delay 10 &
+        agt-control discover http://r5:8080/mpi --delay 10 &
+        agt-server
+
+  r5:
+    build: .
+    expose:
+      - 8080
+    volumes:
+      - ./log/r5/:/log
+    command:
+      - bash
+      - -c
+      - |
+        agt-configure --agtuuid r5 --port 8080 --host 0.0.0.0 --secret password --log-path /log --workers 2
+        agt-configure --client-local
+        agt-configure --log-level-api error
+        agt-configure --log-level-app info
+        agt-control discover http://r4:8080/mpi --delay 10 &
+        agt-server

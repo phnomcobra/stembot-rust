@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # ── Builder ───────────────────────────────────────────────────────────────────
 FROM rust:slim AS builder
 
@@ -10,7 +11,11 @@ RUN apt-get update \
 
 WORKDIR /build
 COPY . .
-RUN cargo build --release
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/build/target \
+    cargo build --release \
+    && mkdir /out \
+    && cp target/release/agt-configure target/release/agt-server target/release/agt-control /out/
 
 # ── Runtime ───────────────────────────────────────────────────────────────────
 FROM ubuntu:24.04
@@ -24,6 +29,6 @@ RUN apt-get update \
        openssl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /build/target/release/agt-configure /usr/local/bin/
-COPY --from=builder /build/target/release/agt-server    /usr/local/bin/
-COPY --from=builder /build/target/release/agt-control   /usr/local/bin/
+COPY --from=builder /out/agt-configure /usr/local/bin/
+COPY --from=builder /out/agt-server    /usr/local/bin/
+COPY --from=builder /out/agt-control   /usr/local/bin/

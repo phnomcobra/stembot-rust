@@ -27,7 +27,10 @@ RUN apt-get update \
        libsqlite3-0 \
        rsync \
        openssl \
+       logrotate \
     && rm -rf /var/lib/apt/lists/*
+
+RUN printf '/log/agt-server.log {\n    hourly\n    rotate 24\n    compress\n    missingok\n    notifempty\n    copytruncate\n}\n' > /etc/logrotate.d/agt-server
 
 COPY --from=builder /out/agt-configure /usr/local/bin/
 COPY --from=builder /out/agt-server    /usr/local/bin/

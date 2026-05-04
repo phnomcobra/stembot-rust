@@ -20,10 +20,12 @@ services:
       - bash
       - -c
       - |
+        set -e
         agt-configure --load-env
         agt-configure --view
         agt-control discover http://r2:8080/mpi --delay 10 &
-        agt-server
+        while true; do sleep 3600; logrotate --force /etc/logrotate.d/agt-server; done &
+        agt-server 2>&1 | tee -a /log/agt-server.log
 
   r2:
     build: .
@@ -35,13 +37,15 @@ services:
       - bash
       - -c
       - |
-        agt-configure --agtuuid r2 --port 8080 --host 0.0.0.0 --secret password --log-path /log --workers 2
+        set -e
+        agt-configure --agtuuid r2 --port 8080 --host 0.0.0.0 --secret password --workers 2
         agt-configure --client-local
         agt-configure --log-level-api error
         agt-configure --log-level-app info
         agt-control discover http://r1:8080/mpi --delay 10 &
         agt-control discover http://r3:8080/mpi --delay 10 &
-        agt-server
+        while true; do sleep 3600; logrotate --force /etc/logrotate.d/agt-server; done &
+        agt-server 2>&1 | tee -a /log/agt-server.log
 
   r3:
     build: .
@@ -53,12 +57,14 @@ services:
       - bash
       - -c
       - |
-        agt-configure --agtuuid r3 --port 8080 --host 0.0.0.0 --secret password --log-path /log --workers 2
+        set -e
+        agt-configure --agtuuid r3 --port 8080 --host 0.0.0.0 --secret password --workers 2
         agt-configure --client-local
         agt-configure --log-level-api error
         agt-configure --log-level-app info
         agt-control discover http://r2:8080/mpi --delay 10 &
-        agt-server
+        while true; do sleep 3600; logrotate --force /etc/logrotate.d/agt-server; done &
+        agt-server 2>&1 | tee -a /log/agt-server.log
 
   r4:
     build: .
@@ -70,13 +76,15 @@ services:
       - bash
       - -c
       - |
-        agt-configure --agtuuid r4 --port 8080 --host 0.0.0.0 --secret password --log-path /log --workers 2
+        set -e
+        agt-configure --agtuuid r4 --port 8080 --host 0.0.0.0 --secret password --workers 2
         agt-configure --client-local
         agt-configure --log-level-api error
         agt-configure --log-level-app info
         agt-control discover http://r2:8080/mpi --polling --delay 10 &
         agt-control discover http://r5:8080/mpi --delay 10 &
-        agt-server
+        while true; do sleep 3600; logrotate --force /etc/logrotate.d/agt-server; done &
+        agt-server 2>&1 | tee -a /log/agt-server.log
 
   r5:
     build: .
@@ -88,9 +96,11 @@ services:
       - bash
       - -c
       - |
-        agt-configure --agtuuid r5 --port 8080 --host 0.0.0.0 --secret password --log-path /log --workers 2
+        set -e
+        agt-configure --agtuuid r5 --port 8080 --host 0.0.0.0 --secret password --workers 2
         agt-configure --client-local
         agt-configure --log-level-api error
         agt-configure --log-level-app info
         agt-control discover http://r4:8080/mpi --delay 10 &
-        agt-server
+        while true; do sleep 3600; logrotate --force /etc/logrotate.d/agt-server; done &
+        agt-server 2>&1 | tee -a /log/agt-server.log

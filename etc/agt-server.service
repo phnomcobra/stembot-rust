@@ -1,0 +1,13 @@
+[Unit]
+Description=Stembot Rust Agent Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/bin/agt-server
+WorkingDirectory=/var/agt
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

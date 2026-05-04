@@ -20,11 +20,15 @@ cargo build --release
 # Set up deb package directory structure
 mkdir -p "$BUILD_DIR/DEBIAN"
 mkdir -p "$BUILD_DIR/usr/bin"
+mkdir -p "$BUILD_DIR/lib/systemd/system"
 
 # Copy binaries
 cp target/release/agt-server "$BUILD_DIR/usr/bin/"
 cp target/release/agt-configure "$BUILD_DIR/usr/bin/"
 cp target/release/agt-control "$BUILD_DIR/usr/bin/"
+
+# Copy service file
+cp "$(dirname "$0")/../etc/agt-server.service" "$BUILD_DIR/lib/systemd/system/"
 
 # Write control file
 cat > "$BUILD_DIR/DEBIAN/control" <<EOF
@@ -35,6 +39,26 @@ Maintainer: Justin Dierking <phnomcobra@gmail.com>
 Depends: ca-certificates, libssl3, libsqlite3-0, openssl
 Description: Stembot Rust Agent
 EOF
+
+# Write postinst script
+cat > "$BUILD_DIR/DEBIAN/postinst" <<'EOF'
+#!/bin/sh
+set -e
+mkdir -p /var/agt
+systemctl daemon-reload
+systemctl enable agt-server
+systemctl start agt-server
+EOF
+chmod 0755 "$BUILD_DIR/DEBIAN/postinst"
+
+# Write prerm script
+cat > "$BUILD_DIR/DEBIAN/prerm" <<'EOF'
+#!/bin/sh
+set -e
+systemctl stop agt-server || true
+systemctl disable agt-server || true
+EOF
+chmod 0755 "$BUILD_DIR/DEBIAN/prerm"
 
 # Build the deb
 dpkg-deb --build "$BUILD_DIR" "$DIST_DIR/$DEB_NAME"

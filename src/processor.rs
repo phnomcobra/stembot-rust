@@ -133,7 +133,6 @@ pub async fn mpi_handler(
 ///
 /// Mirrors Python's `process_control_form(form)`.
 pub async fn process_control_form(form: ControlFormVariant) -> ControlFormVariant {
-    log::debug!("{:?}", form);
     match form {
         ControlFormVariant::DiscoverPeer(mut f) => {
             let client = AgentClient::with_credentials(
@@ -377,7 +376,6 @@ fn process_network_message(
     message: NetworkMessageVariant,
 ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Option<NetworkMessageVariant>> + Send>> {
     Box::pin(async move {
-        log::debug!("{:?}", &message);
     match message {
         NetworkMessageVariant::Ping(_) => None,
 

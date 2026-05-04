@@ -29,7 +29,6 @@ fn unix_now() -> f64 {
 ///
 /// Mirrors `push_network_message(message)`.
 pub fn push_network_message(message: NetworkMessageVariant) -> Result<()> {
-    log::debug!("push_network_message");
     open_messages()?.upsert_object(message)?;
     Ok(())
 }

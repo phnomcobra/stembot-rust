@@ -40,6 +40,7 @@ fn zlib_decompress(data: &[u8]) -> Result<Vec<u8>> {
 ///
 /// Mirrors `load_file_to_form(form: LoadFile) -> LoadFile`.
 pub fn load_file_to_form(mut form: LoadFile) -> LoadFile {
+    log::debug!("{}", form.path);
     match std::fs::read(&form.path) {
         Ok(data) => {
             form.size   = Some(data.len() as i64);
@@ -110,6 +111,7 @@ pub fn load_form_from_bytes(data: &[u8]) -> WriteFile {
 ///
 /// Mirrors `write_file_from_form(form: WriteFile) -> WriteFile`.
 pub fn write_file_from_form(mut form: WriteFile) -> WriteFile {
+    log::debug!("{}", form.path);
     match write_inner(&form) {
         Ok(()) => {
             form.error   = None;

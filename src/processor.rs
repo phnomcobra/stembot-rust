@@ -59,6 +59,7 @@ pub async fn control_handler(
         Some("create_ticket") | Some("read_ticket") | Some("close_ticket") => {
             let ticket: ControlFormTicket = serde_json::from_value(raw)
                 .map_err(actix_web::error::ErrorBadRequest)?;
+            log::debug!("{}", ticket.form_type);
             let result = process_ticket_form(ticket).await;
             serde_json::to_vec(&result)
                 .map_err(actix_web::error::ErrorInternalServerError)?
@@ -66,6 +67,7 @@ pub async fn control_handler(
         _ => {
             let form: ControlForm = serde_json::from_value(raw)
                 .map_err(actix_web::error::ErrorBadRequest)?;
+            log::debug!("{}", form.form_type());
             let result = process_control_form(form).await;
             serde_json::to_vec(&result)
                 .map_err(actix_web::error::ErrorInternalServerError)?
@@ -132,6 +134,7 @@ pub async fn mpi_handler(
 ///
 /// Mirrors Python's `process_control_form(form)`.
 pub async fn process_control_form(form: ControlForm) -> ControlForm {
+    log::debug!("{}", form.form_type());
     match form {
         ControlForm::DiscoverPeer(mut f) => {
             let client = AgentClient::with_credentials(
@@ -243,6 +246,7 @@ pub async fn process_control_form(form: ControlForm) -> ControlForm {
 ///
 /// Dispatches `create_ticket`, `read_ticket`, and `close_ticket` operations.
 async fn process_ticket_form(mut ticket: ControlFormTicket) -> ControlFormTicket {
+    log::debug!("{}", ticket.form_type);
     match ticket.form_type.as_str() {
         "create_ticket" => create_form_ticket(ticket).await,
         "read_ticket" => match read_ticket(&ticket) {
@@ -372,6 +376,7 @@ pub fn route_network_message(
 fn process_network_message(
     message: NetworkMessage,
 ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Option<NetworkMessage>> + Send>> {
+    log::debug!("{}", message.message_type());
     Box::pin(async move {
     match message {
         NetworkMessage::Ping(_) => None,

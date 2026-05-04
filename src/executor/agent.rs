@@ -112,6 +112,8 @@ impl AgentClient {
         &self,
         form: ControlForm,
     ) -> Result<ControlForm> {
+        log::debug!("{}", form.form_type());
+
         let plaintext = serde_json::to_vec(&form)?;
         let (nonce, tag, ct) = encrypt(&self.key, &plaintext)?;
 
@@ -135,6 +137,8 @@ impl AgentClient {
     /// Used for ticket lifecycle: create_ticket, read_ticket, close_ticket.
     /// Mirrors `send_control_form(ControlFormTicket(...))`.
     pub async fn send_ticket(&self, ticket: ControlFormTicket) -> Result<ControlFormTicket> {
+        log::debug!("{} -> {}", ticket.form_type, ticket.dst);
+
         let plaintext = serde_json::to_vec(&ticket)?;
         let (nonce, tag, ct) = encrypt(&self.key, &plaintext)?;
 

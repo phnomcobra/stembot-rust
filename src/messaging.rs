@@ -29,6 +29,7 @@ fn unix_now() -> f64 {
 ///
 /// Mirrors `push_network_message(message)`.
 pub fn push_network_message(message: NetworkMessage) -> Result<()> {
+    log::debug!("{}", message.message_type());
     open_messages()?.upsert_object(message)?;
     Ok(())
 }
@@ -161,7 +162,8 @@ pub async fn forward_network_message(message: NetworkMessage) -> Result<()> {
 pub fn expire_network_messages() -> Result<()> {
     let cutoff = unix_now() - config().message_timeout_secs as f64;
     for obj in open_messages()?.pop(&[("timestamp", &format!("$lt:{}", cutoff))])? {
-        log::warn!("expiring message: {:?}", obj.object);
+        log::warn!("expiring message: {}", obj.object.message_type());
+        log::debug!("{:?}", obj.object);
     }
     Ok(())
 }

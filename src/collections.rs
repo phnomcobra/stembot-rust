@@ -29,12 +29,12 @@ const CONN_ROUTES:   &str = "file:stembot_routes?mode=memory";
 
 // ── Singletons ────────────────────────────────────────────────────────────────
 
-static MESSAGES: OnceLock<Collection<NetworkMessage>> = OnceLock::new();
-static TICKETS:  OnceLock<Collection<ControlFormTicket>>     = OnceLock::new();
-static TRACES:   OnceLock<Collection<TicketTraceResponse>>   = OnceLock::new();
-static PEERS:    OnceLock<Collection<Peer>>                  = OnceLock::new();
-static ROUTES:   OnceLock<Collection<Route>>                 = OnceLock::new();
-static KVSTORE:  OnceLock<Collection<KeyValuePair>>          = OnceLock::new();
+static MESSAGES: OnceLock<Collection<NetworkMessage>>      = OnceLock::new();
+static TICKETS:  OnceLock<Collection<ControlFormTicket>>   = OnceLock::new();
+static TRACES:   OnceLock<Collection<TicketTraceResponse>> = OnceLock::new();
+static PEERS:    OnceLock<Collection<Peer>>                = OnceLock::new();
+static ROUTES:   OnceLock<Collection<Route>>               = OnceLock::new();
+static KVSTORE:  OnceLock<Collection<KeyValuePair>>        = OnceLock::new();
 
 // ── Collection openers ────────────────────────────────────────────────────────
 

@@ -22,7 +22,7 @@ use eax::aead::{Aead, AeadCore, KeyInit};
 use rand::rngs::OsRng;
 
 use crate::models::config::Config;
-use crate::models::control::ControlForm;
+use crate::models::control::{ControlForm, ControlFormTicket};
 use crate::models::network::NetworkMessage;
 
 type Aes256Eax = Eax<Aes256>;
@@ -79,6 +79,7 @@ pub(crate) fn decrypt(
 /// HTTP client for sending encrypted messages to a remote agent.
 ///
 /// Mirrors Python's `AgentClient`.
+#[derive(Clone)]
 pub struct AgentClient {
     /// Target URL (e.g., `http://agent:8080/control`).
     pub url: String,
@@ -112,6 +113,29 @@ impl AgentClient {
         form: ControlForm,
     ) -> Result<ControlForm> {
         let plaintext = serde_json::to_vec(&form)?;
+        let (nonce, tag, ct) = encrypt(&self.key, &plaintext)?;
+
+        let response = self
+            .client
+            .post(&self.url)
+            .header("Nonce", B64.encode(nonce))
+            .header("Tag", B64.encode(&tag))
+            .header("Content-Type", "application/octet-stream")
+            .body(B64.encode(&ct))
+            .send()
+            .await?;
+
+        response.error_for_status_ref()?;
+        let plain = self.decrypt_response(response).await?;
+        Ok(serde_json::from_slice(&plain)?)
+    }
+
+    /// Send a control form ticket and receive a typed response.
+    ///
+    /// Used for ticket lifecycle: create_ticket, read_ticket, close_ticket.
+    /// Mirrors `send_control_form(ControlFormTicket(...))`.
+    pub async fn send_ticket(&self, ticket: ControlFormTicket) -> Result<ControlFormTicket> {
+        let plaintext = serde_json::to_vec(&ticket)?;
         let (nonce, tag, ct) = encrypt(&self.key, &plaintext)?;
 
         let response = self

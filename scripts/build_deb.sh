@@ -32,6 +32,7 @@ Package: $PACKAGE_NAME
 Version: $VERSION
 Architecture: $ARCH
 Maintainer: Justin Dierking <phnomcobra@gmail.com>
+Depends: ca-certificates, libssl3, libsqlite3-0, openssl
 Description: Stembot Rust Agent
 EOF
 

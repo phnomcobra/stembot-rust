@@ -15,7 +15,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use anyhow::Result;
 
 use crate::collections::{open_tickets, open_traces};
-use crate::enums::ControlFormType;
 use crate::models::control::ControlFormTicket;
 use crate::models::network::{NetworkTicket, TicketTraceResponse};
 use crate::config::config;
@@ -47,7 +46,7 @@ pub fn read_ticket(control_form_ticket: &ControlFormTicket) -> Result<Option<Con
                 .map(|t| t.object.hop())
                 .collect();
         }
-        ticket.object.form_type = ControlFormType::ReadTicket;
+        ticket.object.form_type = "read_ticket".to_string();
         return Ok(Some(ticket.object));
     }
     Ok(None)

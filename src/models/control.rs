@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::enums::ControlFormType;
 use crate::models::routing::{Peer, Route};
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -17,8 +16,8 @@ fn unix_now_f64() -> f64 {
         .as_secs_f64()
 }
 
-fn default_create_ticket() -> ControlFormType {
-    ControlFormType::CreateTicket
+fn default_create_ticket() -> String {
+    "create_ticket".to_string()
 }
 
 // ── Command argument (str | List[str]) ───────────────────────────────────────
@@ -167,7 +166,7 @@ pub struct GetConfig {
 /// Used as the `form` field in `ControlFormTicket` and `NetworkTicket`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
-pub enum ControlFormVariant {
+pub enum ControlForm {
     #[serde(rename = "create_peer")]   CreatePeer(CreatePeer),
     #[serde(rename = "discover_peer")] DiscoverPeer(DiscoverPeer),
     #[serde(rename = "delete_peers")]  DeletePeers(DeletePeers),
@@ -179,9 +178,26 @@ pub enum ControlFormVariant {
     #[serde(rename = "get_config")]    GetConfig(GetConfig),
 }
 
-impl Default for ControlFormVariant {
+impl Default for ControlForm {
     fn default() -> Self {
         Self::GetConfig(GetConfig::default())
+    }
+}
+
+impl ControlForm {
+    /// Return the wire-format type string for this variant.
+    pub fn form_type(&self) -> &'static str {
+        match self {
+            Self::CreatePeer(_)   => "create_peer",
+            Self::DiscoverPeer(_) => "discover_peer",
+            Self::DeletePeers(_)  => "delete_peers",
+            Self::GetPeers(_)     => "get_peers",
+            Self::GetRoutes(_)    => "get_routes",
+            Self::SyncProcess(_)  => "sync_process",
+            Self::WriteFile(_)    => "write_file",
+            Self::LoadFile(_)     => "load_file",
+            Self::GetConfig(_)    => "get_config",
+        }
     }
 }
 
@@ -203,7 +219,7 @@ pub struct Hop {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ControlFormTicket {
     #[serde(rename = "type", default = "default_create_ticket")]
-    pub form_type:    ControlFormType,
+    pub form_type:    String,
     #[serde(default = "gen_uuid")]
     pub tckuuid:      String,
     #[serde(default)]
@@ -216,7 +232,7 @@ pub struct ControlFormTicket {
     pub tracing:      bool,
     #[serde(default)]
     pub hops:         Vec<Hop>,
-    pub form:         ControlFormVariant,
+    pub form:         ControlForm,
     pub service_time: Option<f64>,
     pub error:        Option<String>,
     pub objuuid:      Option<String>,
@@ -226,14 +242,14 @@ pub struct ControlFormTicket {
 impl Default for ControlFormTicket {
     fn default() -> Self {
         Self {
-            form_type:    ControlFormType::CreateTicket,
+            form_type:    "create_ticket".to_string(),
             tckuuid:      gen_uuid(),
             src:          String::new(),
             dst:          String::new(),
             create_time:  unix_now_f64(),
             tracing:      false,
             hops:         Vec::new(),
-            form:         ControlFormVariant::default(),
+            form:         ControlForm::default(),
             service_time: None,
             error:        None,
             objuuid:      None,
@@ -282,7 +298,7 @@ mod tests {
 
     #[test]
     fn test_ser_load_file_request() {
-        let form = ControlFormVariant::LoadFile(LoadFile {
+        let form = ControlForm::LoadFile(LoadFile {
             path: "/etc/hosts".into(),
             ..Default::default()
         });
@@ -291,7 +307,7 @@ mod tests {
 
     #[test]
     fn test_ser_load_file_response() {
-        let form = ControlFormVariant::LoadFile(LoadFile {
+        let form = ControlForm::LoadFile(LoadFile {
             path: "/etc/hosts".into(),
             b64zlib: Some("abc123".into()),
             size: Some(1024),
@@ -303,12 +319,12 @@ mod tests {
 
     #[test]
     fn test_deser_load_file_request() {
-        assert_deser_roundtrip::<ControlFormVariant>(LOAD_FILE_REQUEST_JSON);
+        assert_deser_roundtrip::<ControlForm>(LOAD_FILE_REQUEST_JSON);
     }
 
     #[test]
     fn test_deser_load_file_response() {
-        assert_deser_roundtrip::<ControlFormVariant>(LOAD_FILE_RESPONSE_JSON);
+        assert_deser_roundtrip::<ControlForm>(LOAD_FILE_RESPONSE_JSON);
     }
 
     // ── WriteFile ─────────────────────────────────────────────────────────────
@@ -325,7 +341,7 @@ mod tests {
 
     #[test]
     fn test_ser_write_file_request() {
-        let form = ControlFormVariant::WriteFile(WriteFile {
+        let form = ControlForm::WriteFile(WriteFile {
             b64zlib: "abc123".into(),
             path: "/tmp/out.txt".into(),
             ..Default::default()
@@ -335,7 +351,7 @@ mod tests {
 
     #[test]
     fn test_ser_write_file_response() {
-        let form = ControlFormVariant::WriteFile(WriteFile {
+        let form = ControlForm::WriteFile(WriteFile {
             b64zlib: "abc123".into(),
             path: "/tmp/out.txt".into(),
             size: Some(6),
@@ -347,12 +363,12 @@ mod tests {
 
     #[test]
     fn test_deser_write_file_request() {
-        assert_deser_roundtrip::<ControlFormVariant>(WRITE_FILE_REQUEST_JSON);
+        assert_deser_roundtrip::<ControlForm>(WRITE_FILE_REQUEST_JSON);
     }
 
     #[test]
     fn test_deser_write_file_response() {
-        assert_deser_roundtrip::<ControlFormVariant>(WRITE_FILE_RESPONSE_JSON);
+        assert_deser_roundtrip::<ControlForm>(WRITE_FILE_RESPONSE_JSON);
     }
 
     // ── SyncProcess ───────────────────────────────────────────────────────────
@@ -375,7 +391,7 @@ mod tests {
 
     #[test]
     fn test_ser_sync_process_str_command() {
-        let form = ControlFormVariant::SyncProcess(SyncProcess {
+        let form = ControlForm::SyncProcess(SyncProcess {
             command: CommandArg::Single("ls /".into()),
             timeout: 15,
             stdout: None, stderr: None, status: None,
@@ -387,7 +403,7 @@ mod tests {
 
     #[test]
     fn test_ser_sync_process_list_command() {
-        let form = ControlFormVariant::SyncProcess(SyncProcess {
+        let form = ControlForm::SyncProcess(SyncProcess {
             command: CommandArg::Multi(vec!["ls".into(), "/".into()]),
             timeout: 15,
             stdout: None, stderr: None, status: None,
@@ -399,7 +415,7 @@ mod tests {
 
     #[test]
     fn test_ser_sync_process_response() {
-        let form = ControlFormVariant::SyncProcess(SyncProcess {
+        let form = ControlForm::SyncProcess(SyncProcess {
             command: CommandArg::Single("ls /".into()),
             timeout: 15,
             stdout: Some("bin\nboot\n".into()),
@@ -414,17 +430,17 @@ mod tests {
 
     #[test]
     fn test_deser_sync_process_str_command() {
-        assert_deser_roundtrip::<ControlFormVariant>(SYNC_PROCESS_STR_CMD_JSON);
+        assert_deser_roundtrip::<ControlForm>(SYNC_PROCESS_STR_CMD_JSON);
     }
 
     #[test]
     fn test_deser_sync_process_list_command() {
-        assert_deser_roundtrip::<ControlFormVariant>(SYNC_PROCESS_LIST_CMD_JSON);
+        assert_deser_roundtrip::<ControlForm>(SYNC_PROCESS_LIST_CMD_JSON);
     }
 
     #[test]
     fn test_deser_sync_process_response() {
-        assert_deser_roundtrip::<ControlFormVariant>(SYNC_PROCESS_RESPONSE_JSON);
+        assert_deser_roundtrip::<ControlForm>(SYNC_PROCESS_RESPONSE_JSON);
     }
 
     // ── CreatePeer ────────────────────────────────────────────────────────────
@@ -437,7 +453,7 @@ mod tests {
 
     #[test]
     fn test_ser_create_peer() {
-        let form = ControlFormVariant::CreatePeer(CreatePeer {
+        let form = ControlForm::CreatePeer(CreatePeer {
             agtuuid: "a1".into(),
             url: Some("http://10.0.0.1:8080/".into()),
             ..Default::default()
@@ -447,7 +463,7 @@ mod tests {
 
     #[test]
     fn test_deser_create_peer() {
-        assert_deser_roundtrip::<ControlFormVariant>(CREATE_PEER_JSON);
+        assert_deser_roundtrip::<ControlForm>(CREATE_PEER_JSON);
     }
 
     // ── DiscoverPeer ──────────────────────────────────────────────────────────
@@ -459,7 +475,7 @@ mod tests {
 
     #[test]
     fn test_ser_discover_peer() {
-        let form = ControlFormVariant::DiscoverPeer(DiscoverPeer {
+        let form = ControlForm::DiscoverPeer(DiscoverPeer {
             url: "http://10.0.0.1:8080".into(),
             ..Default::default()
         });
@@ -468,7 +484,7 @@ mod tests {
 
     #[test]
     fn test_deser_discover_peer() {
-        assert_deser_roundtrip::<ControlFormVariant>(DISCOVER_PEER_JSON);
+        assert_deser_roundtrip::<ControlForm>(DISCOVER_PEER_JSON);
     }
 
     // ── DeletePeers ───────────────────────────────────────────────────────────
@@ -484,7 +500,7 @@ mod tests {
 
     #[test]
     fn test_ser_delete_peers() {
-        let form = ControlFormVariant::DeletePeers(DeletePeers {
+        let form = ControlForm::DeletePeers(DeletePeers {
             agtuuids: Some(vec!["a1".into(), "a2".into()]),
             ..Default::default()
         });
@@ -493,7 +509,7 @@ mod tests {
 
     #[test]
     fn test_ser_delete_peers_all() {
-        let form = ControlFormVariant::DeletePeers(DeletePeers {
+        let form = ControlForm::DeletePeers(DeletePeers {
             agtuuids: None,
             ..Default::default()
         });
@@ -502,12 +518,12 @@ mod tests {
 
     #[test]
     fn test_deser_delete_peers() {
-        assert_deser_roundtrip::<ControlFormVariant>(DELETE_PEERS_JSON);
+        assert_deser_roundtrip::<ControlForm>(DELETE_PEERS_JSON);
     }
 
     #[test]
     fn test_deser_delete_peers_all() {
-        assert_deser_roundtrip::<ControlFormVariant>(DELETE_PEERS_ALL_JSON);
+        assert_deser_roundtrip::<ControlForm>(DELETE_PEERS_ALL_JSON);
     }
 
     // ── GetPeers ──────────────────────────────────────────────────────────────
@@ -523,14 +539,14 @@ mod tests {
 
     #[test]
     fn test_ser_get_peers_empty() {
-        let form = ControlFormVariant::GetPeers(GetPeers::default());
+        let form = ControlForm::GetPeers(GetPeers::default());
         assert_ser_eq(&form, GET_PEERS_EMPTY_JSON);
     }
 
     #[test]
     fn test_ser_get_peers_with_data() {
         use crate::models::routing::Peer;
-        let form = ControlFormVariant::GetPeers(GetPeers {
+        let form = ControlForm::GetPeers(GetPeers {
             peers: vec![Peer {
                 agtuuid: Some("a2".into()),
                 polling: false,
@@ -547,12 +563,12 @@ mod tests {
 
     #[test]
     fn test_deser_get_peers_empty() {
-        assert_deser_roundtrip::<ControlFormVariant>(GET_PEERS_EMPTY_JSON);
+        assert_deser_roundtrip::<ControlForm>(GET_PEERS_EMPTY_JSON);
     }
 
     #[test]
     fn test_deser_get_peers_with_data() {
-        assert_deser_roundtrip::<ControlFormVariant>(GET_PEERS_DATA_JSON);
+        assert_deser_roundtrip::<ControlForm>(GET_PEERS_DATA_JSON);
     }
 
     // ── GetRoutes ─────────────────────────────────────────────────────────────
@@ -567,14 +583,14 @@ mod tests {
 
     #[test]
     fn test_ser_get_routes_empty() {
-        let form = ControlFormVariant::GetRoutes(GetRoutes::default());
+        let form = ControlForm::GetRoutes(GetRoutes::default());
         assert_ser_eq(&form, GET_ROUTES_EMPTY_JSON);
     }
 
     #[test]
     fn test_ser_get_routes_with_data() {
         use crate::models::routing::Route;
-        let form = ControlFormVariant::GetRoutes(GetRoutes {
+        let form = ControlForm::GetRoutes(GetRoutes {
             routes: vec![Route { agtuuid: "a2".into(), gtwuuid: "a1".into(), weight: 1, objuuid: None, coluuid: None }],
             ..Default::default()
         });
@@ -583,12 +599,12 @@ mod tests {
 
     #[test]
     fn test_deser_get_routes_empty() {
-        assert_deser_roundtrip::<ControlFormVariant>(GET_ROUTES_EMPTY_JSON);
+        assert_deser_roundtrip::<ControlForm>(GET_ROUTES_EMPTY_JSON);
     }
 
     #[test]
     fn test_deser_get_routes_with_data() {
-        assert_deser_roundtrip::<ControlFormVariant>(GET_ROUTES_DATA_JSON);
+        assert_deser_roundtrip::<ControlForm>(GET_ROUTES_DATA_JSON);
     }
 
     // ── GetConfig ─────────────────────────────────────────────────────────────
@@ -603,13 +619,13 @@ mod tests {
 
     #[test]
     fn test_ser_get_config_request() {
-        let form = ControlFormVariant::GetConfig(GetConfig::default());
+        let form = ControlForm::GetConfig(GetConfig::default());
         assert_ser_eq(&form, GET_CONFIG_REQUEST_JSON);
     }
 
     #[test]
     fn test_ser_get_config_response() {
-        let form = ControlFormVariant::GetConfig(GetConfig {
+        let form = ControlForm::GetConfig(GetConfig {
             config: Some(serde_json::json!({"agtuuid": "a1", "port": 8080})),
             ..Default::default()
         });
@@ -618,12 +634,12 @@ mod tests {
 
     #[test]
     fn test_deser_get_config_request() {
-        assert_deser_roundtrip::<ControlFormVariant>(GET_CONFIG_REQUEST_JSON);
+        assert_deser_roundtrip::<ControlForm>(GET_CONFIG_REQUEST_JSON);
     }
 
     #[test]
     fn test_deser_get_config_response() {
-        assert_deser_roundtrip::<ControlFormVariant>(GET_CONFIG_RESPONSE_JSON);
+        assert_deser_roundtrip::<ControlForm>(GET_CONFIG_RESPONSE_JSON);
     }
 
     // ── Hop ───────────────────────────────────────────────────────────────────
@@ -662,8 +678,8 @@ mod tests {
         r#""status":null,"start_time":null,"elapsed_time":null}}"#
     );
 
-    fn sync_process_ls() -> ControlFormVariant {
-        ControlFormVariant::SyncProcess(SyncProcess {
+    fn sync_process_ls() -> ControlForm {
+        ControlForm::SyncProcess(SyncProcess {
             command: CommandArg::Single("ls /".into()),
             timeout: 15,
             stdout: None, stderr: None, status: None,
@@ -675,7 +691,7 @@ mod tests {
     #[test]
     fn test_ser_control_form_ticket_create() {
         let ticket = ControlFormTicket {
-            form_type: ControlFormType::CreateTicket,
+            form_type: "create_ticket".to_string(),
             tckuuid: "t1".into(),
             src: "a1".into(),
             dst: "a2".into(),
@@ -692,7 +708,7 @@ mod tests {
     #[test]
     fn test_ser_control_form_ticket_close_with_hops() {
         let ticket = ControlFormTicket {
-            form_type: ControlFormType::CloseTicket,
+            form_type: "close_ticket".to_string(),
             tckuuid: "t1".into(),
             src: "a1".into(),
             dst: "a2".into(),

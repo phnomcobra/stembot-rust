@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::models::control::{ControlFormVariant, Hop};
+use crate::models::control::{ControlForm, Hop};
 use crate::models::routing::Route;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -180,7 +180,7 @@ impl Default for TicketTraceResponse {
 pub struct NetworkTicket {
     #[serde(default = "gen_uuid")]
     pub tckuuid:      String,
-    pub form:         ControlFormVariant,
+    pub form:         ControlForm,
     #[serde(default)]
     pub tracing:      bool,
     #[serde(default)]
@@ -512,8 +512,8 @@ mod tests {
         r#""status":0,"start_time":1000.0,"elapsed_time":0.1}}"#
     );
 
-    fn sync_ls_request() -> ControlFormVariant {
-        ControlFormVariant::SyncProcess(SyncProcess {
+    fn sync_ls_request() -> ControlForm {
+        ControlForm::SyncProcess(SyncProcess {
             command: CommandArg::Single("ls /".into()),
             timeout: 15,
             stdout: None, stderr: None, status: None,
@@ -544,7 +544,7 @@ mod tests {
             src: "a1".into(),
             timestamp: Some(1000.0),
             service_time: Some(0.5),
-            form: ControlFormVariant::SyncProcess(SyncProcess {
+            form: ControlForm::SyncProcess(SyncProcess {
                 command: CommandArg::Single("ls /".into()),
                 timeout: 15,
                 stdout: Some("bin\n".into()),

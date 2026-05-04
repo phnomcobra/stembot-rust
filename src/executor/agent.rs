@@ -22,7 +22,7 @@ use eax::aead::{Aead, AeadCore, KeyInit};
 use rand::rngs::OsRng;
 
 use crate::models::config::Config;
-use crate::models::control::ControlFormVariant;
+use crate::models::control::ControlForm;
 use crate::models::network::NetworkMessage;
 
 type Aes256Eax = Eax<Aes256>;
@@ -109,8 +109,8 @@ impl AgentClient {
     /// Mirrors `send_control_form(form)`.
     pub async fn send_control_form(
         &self,
-        form: ControlFormVariant,
-    ) -> Result<ControlFormVariant> {
+        form: ControlForm,
+    ) -> Result<ControlForm> {
         let plaintext = serde_json::to_vec(&form)?;
         let (nonce, tag, ct) = encrypt(&self.key, &plaintext)?;
 
@@ -316,11 +316,11 @@ mod tests {
             TEST_AGTUUID.to_string(),
         );
 
-        let form = ControlFormVariant::GetConfig(GetConfig::default());
+        let form = ControlForm::GetConfig(GetConfig::default());
         let result = client.send_control_form(form).await.unwrap();
 
         // Response should deserialise into GetConfig
-        assert!(matches!(result, ControlFormVariant::GetConfig(_)));
+        assert!(matches!(result, ControlForm::GetConfig(_)));
     }
 
     #[tokio::test]
@@ -345,10 +345,10 @@ mod tests {
             TEST_AGTUUID.to_string(),
         );
 
-        let form = ControlFormVariant::GetConfig(GetConfig::default());
+        let form = ControlForm::GetConfig(GetConfig::default());
         let result = client.send_control_form(form).await.unwrap();
 
-        assert!(matches!(result, ControlFormVariant::GetConfig(_)));
+        assert!(matches!(result, ControlForm::GetConfig(_)));
     }
 
     #[tokio::test]
@@ -373,7 +373,7 @@ mod tests {
             TEST_AGTUUID.to_string(),
         );
 
-        let form = ControlFormVariant::GetConfig(GetConfig::default());
+        let form = ControlForm::GetConfig(GetConfig::default());
         let result = client.send_control_form(form).await;
         assert!(result.is_ok());
     }
@@ -460,7 +460,7 @@ mod tests {
 
     #[test]
     fn test_get_config_canonical_json() {
-        let form = ControlFormVariant::GetConfig(GetConfig::default());
+        let form = ControlForm::GetConfig(GetConfig::default());
         let got: serde_json::Value = serde_json::to_value(&form).unwrap();
         let exp: serde_json::Value = serde_json::from_str(EXPECTED_GET_CONFIG_JSON).unwrap();
         assert_eq!(got, exp);

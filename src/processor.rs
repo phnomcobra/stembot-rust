@@ -18,7 +18,7 @@ use crate::executor::process::sync_process;
 use crate::messaging::{forward_network_message, pop_network_messages, pull_network_messages};
 use crate::models::config::Config;
 use crate::models::control::{
-    CommandArg, ControlFormTicket, ControlFormVariant, SyncProcess as SyncProcessForm,
+    CommandArg, ControlFormTicket, ControlForm, SyncProcess as SyncProcessForm,
 };
 use crate::models::network::{
     Acknowledgement, NetworkMessage, NetworkMessagesRequest, NetworkMessagesResponse,
@@ -64,7 +64,7 @@ pub async fn control_handler(
                 .map_err(actix_web::error::ErrorInternalServerError)?
         }
         _ => {
-            let form: ControlFormVariant = serde_json::from_value(raw)
+            let form: ControlForm = serde_json::from_value(raw)
                 .map_err(actix_web::error::ErrorBadRequest)?;
             let result = process_control_form(form).await;
             serde_json::to_vec(&result)
@@ -131,9 +131,9 @@ pub async fn mpi_handler(
 /// Process a control form by dispatching to the appropriate handler.
 ///
 /// Mirrors Python's `process_control_form(form)`.
-pub async fn process_control_form(form: ControlFormVariant) -> ControlFormVariant {
+pub async fn process_control_form(form: ControlForm) -> ControlForm {
     match form {
-        ControlFormVariant::DiscoverPeer(mut f) => {
+        ControlForm::DiscoverPeer(mut f) => {
             let client = AgentClient::with_credentials(
                 f.url.clone(),
                 config().key(),
@@ -168,19 +168,19 @@ pub async fn process_control_form(form: ControlFormVariant) -> ControlFormVarian
                     f.error = Some(e.to_string());
                 }
             }
-            ControlFormVariant::DiscoverPeer(f)
+            ControlForm::DiscoverPeer(f)
         }
 
-        ControlFormVariant::CreatePeer(mut f) => {
+        ControlForm::CreatePeer(mut f) => {
             if let Err(e) =
                 create_peer(&f.agtuuid, f.url.clone(), f.ttl.map(|t| t as u32), f.polling)
             {
                 f.error = Some(e.to_string());
             }
-            ControlFormVariant::CreatePeer(f)
+            ControlForm::CreatePeer(f)
         }
 
-        ControlFormVariant::DeletePeers(mut f) => {
+        ControlForm::DeletePeers(mut f) => {
             let result = match f.agtuuids {
                 Some(ref ids) => ids.iter().try_for_each(|id| delete_peer(id)),
                 None => delete_peers(),
@@ -188,31 +188,31 @@ pub async fn process_control_form(form: ControlFormVariant) -> ControlFormVarian
             if let Err(e) = result {
                 f.error = Some(e.to_string());
             }
-            ControlFormVariant::DeletePeers(f)
+            ControlForm::DeletePeers(f)
         }
 
-        ControlFormVariant::GetPeers(mut f) => {
+        ControlForm::GetPeers(mut f) => {
             match get_peers() {
                 Ok(peers) => f.peers = peers,
                 Err(e) => f.error = Some(e.to_string()),
             }
-            ControlFormVariant::GetPeers(f)
+            ControlForm::GetPeers(f)
         }
 
-        ControlFormVariant::GetRoutes(mut f) => {
+        ControlForm::GetRoutes(mut f) => {
             match get_routes() {
                 Ok(routes) => f.routes = routes,
                 Err(e) => f.error = Some(e.to_string()),
             }
-            ControlFormVariant::GetRoutes(f)
+            ControlForm::GetRoutes(f)
         }
 
-        ControlFormVariant::SyncProcess(f) => {
+        ControlForm::SyncProcess(f) => {
             match tokio::task::spawn_blocking(move || sync_process(f)).await {
-                Ok(result) => ControlFormVariant::SyncProcess(result),
+                Ok(result) => ControlForm::SyncProcess(result),
                 Err(e) => {
                     log::error!("sync_process task error: {e}");
-                    ControlFormVariant::SyncProcess(SyncProcessForm {
+                    ControlForm::SyncProcess(SyncProcessForm {
                         command:      CommandArg::default(),
                         timeout:      15,
                         stdout:       None,
@@ -228,13 +228,13 @@ pub async fn process_control_form(form: ControlFormVariant) -> ControlFormVarian
             }
         }
 
-        ControlFormVariant::LoadFile(f) => ControlFormVariant::LoadFile(load_file_to_form(f)),
+        ControlForm::LoadFile(f) => ControlForm::LoadFile(load_file_to_form(f)),
 
-        ControlFormVariant::WriteFile(f) => ControlFormVariant::WriteFile(write_file_from_form(f)),
+        ControlForm::WriteFile(f) => ControlForm::WriteFile(write_file_from_form(f)),
 
-        ControlFormVariant::GetConfig(mut f) => {
+        ControlForm::GetConfig(mut f) => {
             f.config = Some(config_to_json());
-            ControlFormVariant::GetConfig(f)
+            ControlForm::GetConfig(f)
         }
     }
 }
@@ -243,11 +243,9 @@ pub async fn process_control_form(form: ControlFormVariant) -> ControlFormVarian
 ///
 /// Dispatches `create_ticket`, `read_ticket`, and `close_ticket` operations.
 async fn process_ticket_form(mut ticket: ControlFormTicket) -> ControlFormTicket {
-    use crate::enums::ControlFormType;
-
-    match ticket.form_type {
-        ControlFormType::CreateTicket => create_form_ticket(ticket).await,
-        ControlFormType::ReadTicket => match read_ticket(&ticket) {
+    match ticket.form_type.as_str() {
+        "create_ticket" => create_form_ticket(ticket).await,
+        "read_ticket" => match read_ticket(&ticket) {
             Ok(Some(t)) => t,
             Ok(None)    => ticket,
             Err(e) => {
@@ -255,7 +253,7 @@ async fn process_ticket_form(mut ticket: ControlFormTicket) -> ControlFormTicket
                 ticket
             }
         },
-        ControlFormType::CloseTicket => {
+        "close_ticket" => {
             close_ticket(&ticket).unwrap_or_else(|e| log::error!("close_ticket error: {e}"));
             ticket
         }

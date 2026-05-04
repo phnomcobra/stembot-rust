@@ -15,7 +15,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use anyhow::Result;
 
 use crate::collections::{open_tickets, open_traces};
-use crate::enums::{ControlFormType, NetworkMessageType};
+use crate::enums::ControlFormType;
 use crate::models::control::ControlFormTicket;
 use crate::models::network::{NetworkTicket, TicketTraceResponse};
 use crate::config::config;
@@ -89,13 +89,13 @@ pub fn service_trace(ticket_trace: TicketTraceResponse) -> Result<()> {
 ///   `hop_time` and returns `None` (duplicate).
 /// - Otherwise creates a new trace entry and returns it.
 ///
-/// `ticket_type` is the `NetworkMessageType` of the wrapping ticket variant
-/// (`TicketRequest` or `TicketResponse`).
+/// `ticket_type` is the wire-format type string of the wrapping ticket variant
+/// (`"ticket_request"` or `"ticket_response"`).
 ///
 /// Mirrors `dedup_trace(network_ticket)`.
 pub fn dedup_trace(
     network_ticket: &NetworkTicket,
-    ticket_type: NetworkMessageType,
+    ticket_type: &str,
 ) -> Result<Option<TicketTraceResponse>> {
     if !network_ticket.tracing {
         return Ok(None);
@@ -103,16 +103,9 @@ pub fn dedup_trace(
 
     let traces = open_traces()?;
 
-    // Serde serialises `NetworkMessageType` variants as lowercase strings,
-    // which is also what the index stores.
-    let type_str = serde_json::to_value(&ticket_type)?
-        .as_str()
-        .unwrap_or("")
-        .to_string();
-
     let matches = traces.find(&[
         ("tckuuid",             network_ticket.tckuuid.as_str()),
-        ("network_ticket_type", type_str.as_str()),
+        ("network_ticket_type", ticket_type),
     ])?;
 
     if !matches.is_empty() {
@@ -124,7 +117,7 @@ pub fn dedup_trace(
         Ok(None)
     } else {
         // First time — create and return a new trace
-        let dest = if ticket_type == NetworkMessageType::TicketRequest {
+        let dest = if ticket_type == "ticket_request" {
             Some(network_ticket.src.clone())
         } else {
             network_ticket.dest.clone()
@@ -133,7 +126,7 @@ pub fn dedup_trace(
             src:                 config().agtuuid.clone(),
             dest,
             tckuuid:             network_ticket.tckuuid.clone(),
-            network_ticket_type: ticket_type,
+            network_ticket_type: ticket_type.to_string(),
             hop_time:            unix_now(),
             ..TicketTraceResponse::default()
         };

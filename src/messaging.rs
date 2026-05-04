@@ -13,7 +13,7 @@ use anyhow::Result;
 
 use crate::collections::{open_messages, open_peers, open_routes};
 use crate::executor::agent::AgentClient;
-use crate::models::network::{NetworkMessageVariant, NetworkMessagesRequest};
+use crate::models::network::{NetworkMessage, NetworkMessagesRequest};
 use crate::config::config;
 
 fn unix_now() -> f64 {
@@ -28,7 +28,7 @@ fn unix_now() -> f64 {
 /// Add a message to the in-memory message queue.
 ///
 /// Mirrors `push_network_message(message)`.
-pub fn push_network_message(message: NetworkMessageVariant) -> Result<()> {
+pub fn push_network_message(message: NetworkMessage) -> Result<()> {
     open_messages()?.upsert_object(message)?;
     Ok(())
 }
@@ -41,7 +41,7 @@ pub fn push_network_message(message: NetworkMessageVariant) -> Result<()> {
 /// Mirrors `pull_network_messages(message)`.
 pub fn pull_network_messages(
     request: &NetworkMessagesRequest,
-) -> Result<Vec<NetworkMessageVariant>> {
+) -> Result<Vec<NetworkMessage>> {
     let isrc = request.isrc.as_deref().unwrap_or("");
 
     // Build best-gateway map: agtuuid -> (weight, gtwuuid)
@@ -79,7 +79,7 @@ pub fn pull_network_messages(
 /// Remove and return messages matching the specified criteria.
 ///
 /// Mirrors `pop_network_messages(**kwargs)`.
-pub fn pop_network_messages(queries: &[(&str, &str)]) -> Result<Vec<NetworkMessageVariant>> {
+pub fn pop_network_messages(queries: &[(&str, &str)]) -> Result<Vec<NetworkMessage>> {
     Ok(open_messages()?
         .pop(queries)?
         .into_iter()
@@ -95,7 +95,7 @@ pub fn pop_network_messages(queries: &[(&str, &str)]) -> Result<Vec<NetworkMessa
 /// if delivery fails or no route is available.
 ///
 /// Mirrors `forward_network_message(message)`.
-pub async fn forward_network_message(message: NetworkMessageVariant) -> Result<()> {
+pub async fn forward_network_message(message: NetworkMessage) -> Result<()> {
     let dest = dest_of(&message);
     let peers  = open_peers()?;
     let routes = open_routes()?;
@@ -169,22 +169,22 @@ pub fn expire_network_messages() -> Result<()> {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /// Extract the `dest` field from any `NetworkMessageVariant`.
-fn dest_of(msg: &NetworkMessageVariant) -> String {
+fn dest_of(msg: &NetworkMessage) -> String {
     match msg {
-        NetworkMessageVariant::Ping(m)                => m.dest.clone().unwrap_or_default(),
-        NetworkMessageVariant::MessagesRequest(m)     => m.dest.clone().unwrap_or_default(),
-        NetworkMessageVariant::MessagesResponse(m)    => m.dest.clone().unwrap_or_default(),
-        NetworkMessageVariant::Acknowledgement(m)     => m.dest.clone().unwrap_or_default(),
-        NetworkMessageVariant::Advertisement(m)       => m.dest.clone().unwrap_or_default(),
-        NetworkMessageVariant::TicketTraceResponse(m) => m.dest.clone().unwrap_or_default(),
-        NetworkMessageVariant::TicketRequest(m)       => m.dest.clone().unwrap_or_default(),
-        NetworkMessageVariant::TicketResponse(m)      => m.dest.clone().unwrap_or_default(),
+        NetworkMessage::Ping(m)                => m.dest.clone().unwrap_or_default(),
+        NetworkMessage::MessagesRequest(m)     => m.dest.clone().unwrap_or_default(),
+        NetworkMessage::MessagesResponse(m)    => m.dest.clone().unwrap_or_default(),
+        NetworkMessage::Acknowledgement(m)     => m.dest.clone().unwrap_or_default(),
+        NetworkMessage::Advertisement(m)       => m.dest.clone().unwrap_or_default(),
+        NetworkMessage::TicketTraceResponse(m) => m.dest.clone().unwrap_or_default(),
+        NetworkMessage::TicketRequest(m)       => m.dest.clone().unwrap_or_default(),
+        NetworkMessage::TicketResponse(m)      => m.dest.clone().unwrap_or_default(),
     }
 }
 
 /// Log the error field if the response is an Acknowledgement with an error.
-fn log_ack_error(resp: &NetworkMessageVariant) {
-    if let NetworkMessageVariant::Acknowledgement(ack) = resp {
+fn log_ack_error(resp: &NetworkMessage) {
+    if let NetworkMessage::Acknowledgement(ack) = resp {
         if let Some(ref err) = ack.error {
             log::error!("acknowledgement error: {}", err);
         }

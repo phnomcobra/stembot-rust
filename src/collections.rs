@@ -17,7 +17,7 @@ use anyhow::Result;
 use crate::dao::collection::Collection;
 use crate::dao::kvstore::KeyValuePair;
 use crate::models::control::ControlFormTicket;
-use crate::models::network::{NetworkMessageVariant, TicketTraceResponse};
+use crate::models::network::{NetworkMessage, TicketTraceResponse};
 use crate::models::routing::{Peer, Route};
 
 // ── In-memory connection URIs ─────────────────────────────────────────────────
@@ -29,7 +29,7 @@ const CONN_ROUTES:   &str = "file:stembot_routes?mode=memory";
 
 // ── Singletons ────────────────────────────────────────────────────────────────
 
-static MESSAGES: OnceLock<Collection<NetworkMessageVariant>> = OnceLock::new();
+static MESSAGES: OnceLock<Collection<NetworkMessage>> = OnceLock::new();
 static TICKETS:  OnceLock<Collection<ControlFormTicket>>     = OnceLock::new();
 static TRACES:   OnceLock<Collection<TicketTraceResponse>>   = OnceLock::new();
 static PEERS:    OnceLock<Collection<Peer>>                  = OnceLock::new();
@@ -39,7 +39,7 @@ static KVSTORE:  OnceLock<Collection<KeyValuePair>>          = OnceLock::new();
 // ── Collection openers ────────────────────────────────────────────────────────
 
 /// Open (or return the cached singleton for) the in-memory `messages` collection.
-pub fn open_messages() -> Result<Collection<NetworkMessageVariant>> {
+pub fn open_messages() -> Result<Collection<NetworkMessage>> {
     Ok(MESSAGES.get_or_init(|| {
         let c = Collection::new("messages", Some(CONN_MESSAGES))
             .expect("failed to open messages collection");

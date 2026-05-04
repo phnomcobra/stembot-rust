@@ -12,7 +12,6 @@ use serde_json::{json, Value};
 
 use crate::collections::{open_peers, open_tickets};
 use crate::config::config;
-use crate::enums::NetworkMessageType;
 use crate::executor::agent::{decrypt, encrypt, AgentClient};
 use crate::executor::file::{load_file_to_form, write_file_from_form};
 use crate::executor::process::sync_process;
@@ -22,7 +21,7 @@ use crate::models::control::{
     CommandArg, ControlFormTicket, ControlFormVariant, SyncProcess as SyncProcessForm,
 };
 use crate::models::network::{
-    Acknowledgement, NetworkMessageVariant, NetworkMessagesRequest, NetworkMessagesResponse,
+    Acknowledgement, NetworkMessage, NetworkMessagesRequest, NetworkMessagesResponse,
     NetworkTicket,
 };
 use crate::peering::{
@@ -102,7 +101,7 @@ pub async fn mpi_handler(
     let plaintext = decrypt(&key, &nonce, &tag, &ct)
         .map_err(actix_web::error::ErrorBadRequest)?;
 
-    let mut message: NetworkMessageVariant = serde_json::from_slice(&plaintext)
+    let mut message: NetworkMessage = serde_json::from_slice(&plaintext)
         .map_err(actix_web::error::ErrorBadRequest)?;
 
     if let Some(isrc) = isrc_of(&message) {
@@ -141,12 +140,12 @@ pub async fn process_control_form(form: ControlFormVariant) -> ControlFormVarian
                 config().agtuuid.clone(),
             );
             match client
-                .send_network_message(NetworkMessageVariant::Ping(
+                .send_network_message(NetworkMessage::Ping(
                     crate::models::network::Ping::default(),
                 ))
                 .await
             {
-                Ok(NetworkMessageVariant::Acknowledgement(ack)) => {
+                Ok(NetworkMessage::Acknowledgement(ack)) => {
                     if let Some(ref dest) = ack.dest {
                         f.agtuuid = Some(dest.clone());
                         if let Err(e) = create_peer(
@@ -287,7 +286,7 @@ pub async fn create_form_ticket(control_form_ticket: ControlFormTicket) -> Contr
         .and_then(|tickets| tickets.upsert_object(control_form_ticket.clone()))
         .map(|obj| obj.object);
 
-    route_network_message(NetworkMessageVariant::TicketRequest(network_ticket)).await;
+    route_network_message(NetworkMessage::TicketRequest(network_ticket)).await;
 
     match stored {
         Ok(ticket) => ticket,
@@ -304,26 +303,26 @@ pub async fn create_form_ticket(control_form_ticket: ControlFormTicket) -> Contr
 ///
 /// Mirrors Python's `route_network_message(message)`.
 pub fn route_network_message(
-    message_in: NetworkMessageVariant,
-) -> std::pin::Pin<Box<dyn std::future::Future<Output = NetworkMessageVariant> + Send>> {
+    message_in: NetworkMessage,
+) -> std::pin::Pin<Box<dyn std::future::Future<Output = NetworkMessage> + Send>> {
     Box::pin(async move {
     // Handle dedup tracing for ticket messages
     let ticket_type = match &message_in {
-        NetworkMessageVariant::TicketRequest(_)  => Some(NetworkMessageType::TicketRequest),
-        NetworkMessageVariant::TicketResponse(_) => Some(NetworkMessageType::TicketResponse),
+        NetworkMessage::TicketRequest(_)  => Some("ticket_request"),
+        NetworkMessage::TicketResponse(_) => Some("ticket_response"),
         _ => None,
     };
 
     if let Some(ttype) = ticket_type {
         let ticket = match &message_in {
-            NetworkMessageVariant::TicketRequest(t)  => t.clone(),
-            NetworkMessageVariant::TicketResponse(t) => t.clone(),
+            NetworkMessage::TicketRequest(t)  => t.clone(),
+            NetworkMessage::TicketResponse(t) => t.clone(),
             _ => unreachable!(),
         };
         match dedup_trace(&ticket, ttype) {
             Ok(Some(trace)) => {
                 let dest = trace.dest.clone().unwrap_or_default();
-                let trace_msg = NetworkMessageVariant::TicketTraceResponse(trace);
+                let trace_msg = NetworkMessage::TicketTraceResponse(trace);
                 if dest == config().agtuuid {
                     process_network_message(trace_msg).await;
                 } else {
@@ -344,8 +343,8 @@ pub fn route_network_message(
     if dest == config().agtuuid {
         return match process_network_message(message_in.clone()).await {
             Some(response) => response,
-            None => NetworkMessageVariant::Acknowledgement(Acknowledgement {
-                ack_type: msg_type_of(&message_in),
+            None => NetworkMessage::Acknowledgement(Acknowledgement {
+                ack_type: msg_type_of(&message_in).to_string(),
                 src:      src_of(&message_in),
                 dest:     Some(dest),
                 ..Default::default()
@@ -360,8 +359,8 @@ pub fn route_network_message(
         }
     });
 
-    NetworkMessageVariant::Acknowledgement(Acknowledgement {
-        ack_type: msg_type_of(&message_in),
+    NetworkMessage::Acknowledgement(Acknowledgement {
+        ack_type: msg_type_of(&message_in).to_string(),
         src:      src_of(&message_in),
         dest:     Some(dest),
         ..Default::default()
@@ -373,49 +372,49 @@ pub fn route_network_message(
 ///
 /// Mirrors Python's `process_network_message(message)`.
 fn process_network_message(
-    message: NetworkMessageVariant,
-) -> std::pin::Pin<Box<dyn std::future::Future<Output = Option<NetworkMessageVariant>> + Send>> {
+    message: NetworkMessage,
+) -> std::pin::Pin<Box<dyn std::future::Future<Output = Option<NetworkMessage>> + Send>> {
     Box::pin(async move {
     match message {
-        NetworkMessageVariant::Ping(_) => None,
+        NetworkMessage::Ping(_) => None,
 
-        NetworkMessageVariant::Advertisement(adv) => {
+        NetworkMessage::Advertisement(adv) => {
             if let Err(e) = process_route_advertisement(&adv) {
                 log::error!("process_route_advertisement error: {e}");
             }
             None
         }
 
-        NetworkMessageVariant::TicketRequest(mut ticket) => {
+        NetworkMessage::TicketRequest(mut ticket) => {
             ticket.form = process_control_form(ticket.form).await;
             let src  = ticket.src.clone();
             let dest = ticket.dest.clone().unwrap_or_default();
             ticket.src  = dest;
             ticket.dest = Some(src);
-            route_network_message(NetworkMessageVariant::TicketResponse(ticket)).await;
+            route_network_message(NetworkMessage::TicketResponse(ticket)).await;
             None
         }
 
-        NetworkMessageVariant::TicketResponse(ticket) => {
+        NetworkMessage::TicketResponse(ticket) => {
             if let Err(e) = service_ticket(&ticket) {
                 log::error!("service_ticket error: {e}");
             }
             None
         }
 
-        NetworkMessageVariant::TicketTraceResponse(trace) => {
+        NetworkMessage::TicketTraceResponse(trace) => {
             if let Err(e) = service_trace(trace) {
                 log::error!("service_trace error: {e}");
             }
             None
         }
 
-        NetworkMessageVariant::MessagesRequest(req) => {
+        NetworkMessage::MessagesRequest(req) => {
             let messages = pull_network_messages(&req).unwrap_or_else(|e| {
                 log::error!("pull_network_messages error: {e}");
                 Vec::new()
             });
-            Some(NetworkMessageVariant::MessagesResponse(NetworkMessagesResponse {
+            Some(NetworkMessage::MessagesResponse(NetworkMessagesResponse {
                 messages,
                 dest: req.isrc.clone(),
                 ..Default::default()
@@ -474,19 +473,19 @@ pub async fn polling() {
                 config().agtuuid.clone(),
             );
             match client
-                .send_network_message(NetworkMessageVariant::MessagesRequest(
+                .send_network_message(NetworkMessage::MessagesRequest(
                     NetworkMessagesRequest::default(),
                 ))
                 .await
             {
-                Ok(NetworkMessageVariant::MessagesResponse(resp)) => {
+                Ok(NetworkMessage::MessagesResponse(resp)) => {
                     for msg in resp.messages {
                         tokio::spawn(async move {
                             route_network_message(msg).await;
                         });
                     }
                 }
-                Ok(NetworkMessageVariant::Acknowledgement(ack)) => {
+                Ok(NetworkMessage::Acknowledgement(ack)) => {
                     if let Some(ref err) = ack.error {
                         log::error!("poll acknowledgement error: {err}");
                     }
@@ -524,7 +523,7 @@ pub async fn advertizing() {
             match create_route_advertisement() {
                 Ok(mut adv) => {
                     adv.dest = Some(agtuuid);
-                    route_network_message(NetworkMessageVariant::Advertisement(adv)).await;
+                    route_network_message(NetworkMessage::Advertisement(adv)).await;
                 }
                 Err(e) => log::error!("create_route_advertisement error: {e}"),
             }
@@ -565,68 +564,59 @@ fn config_to_json() -> Value {
     })
 }
 
-fn dest_of(msg: &NetworkMessageVariant) -> String {
+fn dest_of(msg: &NetworkMessage) -> String {
     match msg {
-        NetworkMessageVariant::Ping(m)                => m.dest.clone().unwrap_or_default(),
-        NetworkMessageVariant::MessagesRequest(m)     => m.dest.clone().unwrap_or_default(),
-        NetworkMessageVariant::MessagesResponse(m)    => m.dest.clone().unwrap_or_default(),
-        NetworkMessageVariant::Acknowledgement(m)     => m.dest.clone().unwrap_or_default(),
-        NetworkMessageVariant::Advertisement(m)       => m.dest.clone().unwrap_or_default(),
-        NetworkMessageVariant::TicketTraceResponse(m) => m.dest.clone().unwrap_or_default(),
-        NetworkMessageVariant::TicketRequest(m)       => m.dest.clone().unwrap_or_default(),
-        NetworkMessageVariant::TicketResponse(m)      => m.dest.clone().unwrap_or_default(),
+        NetworkMessage::Ping(m)                => m.dest.clone().unwrap_or_default(),
+        NetworkMessage::MessagesRequest(m)     => m.dest.clone().unwrap_or_default(),
+        NetworkMessage::MessagesResponse(m)    => m.dest.clone().unwrap_or_default(),
+        NetworkMessage::Acknowledgement(m)     => m.dest.clone().unwrap_or_default(),
+        NetworkMessage::Advertisement(m)       => m.dest.clone().unwrap_or_default(),
+        NetworkMessage::TicketTraceResponse(m) => m.dest.clone().unwrap_or_default(),
+        NetworkMessage::TicketRequest(m)       => m.dest.clone().unwrap_or_default(),
+        NetworkMessage::TicketResponse(m)      => m.dest.clone().unwrap_or_default(),
     }
 }
 
-fn src_of(msg: &NetworkMessageVariant) -> String {
+fn src_of(msg: &NetworkMessage) -> String {
     match msg {
-        NetworkMessageVariant::Ping(m)                => m.src.clone(),
-        NetworkMessageVariant::MessagesRequest(m)     => m.src.clone(),
-        NetworkMessageVariant::MessagesResponse(m)    => m.src.clone(),
-        NetworkMessageVariant::Acknowledgement(m)     => m.src.clone(),
-        NetworkMessageVariant::Advertisement(m)       => m.src.clone(),
-        NetworkMessageVariant::TicketTraceResponse(m) => m.src.clone(),
-        NetworkMessageVariant::TicketRequest(m)       => m.src.clone(),
-        NetworkMessageVariant::TicketResponse(m)      => m.src.clone(),
+        NetworkMessage::Ping(m)                => m.src.clone(),
+        NetworkMessage::MessagesRequest(m)     => m.src.clone(),
+        NetworkMessage::MessagesResponse(m)    => m.src.clone(),
+        NetworkMessage::Acknowledgement(m)     => m.src.clone(),
+        NetworkMessage::Advertisement(m)       => m.src.clone(),
+        NetworkMessage::TicketTraceResponse(m) => m.src.clone(),
+        NetworkMessage::TicketRequest(m)       => m.src.clone(),
+        NetworkMessage::TicketResponse(m)      => m.src.clone(),
     }
 }
 
-fn isrc_of(msg: &NetworkMessageVariant) -> Option<String> {
+fn isrc_of(msg: &NetworkMessage) -> Option<String> {
     match msg {
-        NetworkMessageVariant::Ping(m)                => m.isrc.clone(),
-        NetworkMessageVariant::MessagesRequest(m)     => m.isrc.clone(),
-        NetworkMessageVariant::MessagesResponse(m)    => m.isrc.clone(),
-        NetworkMessageVariant::Acknowledgement(m)     => m.isrc.clone(),
-        NetworkMessageVariant::Advertisement(m)       => m.isrc.clone(),
-        NetworkMessageVariant::TicketTraceResponse(m) => m.isrc.clone(),
-        NetworkMessageVariant::TicketRequest(m)       => m.isrc.clone(),
-        NetworkMessageVariant::TicketResponse(m)      => m.isrc.clone(),
+        NetworkMessage::Ping(m)                => m.isrc.clone(),
+        NetworkMessage::MessagesRequest(m)     => m.isrc.clone(),
+        NetworkMessage::MessagesResponse(m)    => m.isrc.clone(),
+        NetworkMessage::Acknowledgement(m)     => m.isrc.clone(),
+        NetworkMessage::Advertisement(m)       => m.isrc.clone(),
+        NetworkMessage::TicketTraceResponse(m) => m.isrc.clone(),
+        NetworkMessage::TicketRequest(m)       => m.isrc.clone(),
+        NetworkMessage::TicketResponse(m)      => m.isrc.clone(),
     }
 }
 
-fn set_dest(msg: &mut NetworkMessageVariant, dest: String) {
+fn set_dest(msg: &mut NetworkMessage, dest: String) {
     let d = Some(dest);
     match msg {
-        NetworkMessageVariant::Ping(m)                => m.dest = d,
-        NetworkMessageVariant::MessagesRequest(m)     => m.dest = d,
-        NetworkMessageVariant::MessagesResponse(m)    => m.dest = d,
-        NetworkMessageVariant::Acknowledgement(m)     => m.dest = d,
-        NetworkMessageVariant::Advertisement(m)       => m.dest = d,
-        NetworkMessageVariant::TicketTraceResponse(m) => m.dest = d,
-        NetworkMessageVariant::TicketRequest(m)       => m.dest = d,
-        NetworkMessageVariant::TicketResponse(m)      => m.dest = d,
+        NetworkMessage::Ping(m)                => m.dest = d,
+        NetworkMessage::MessagesRequest(m)     => m.dest = d,
+        NetworkMessage::MessagesResponse(m)    => m.dest = d,
+        NetworkMessage::Acknowledgement(m)     => m.dest = d,
+        NetworkMessage::Advertisement(m)       => m.dest = d,
+        NetworkMessage::TicketTraceResponse(m) => m.dest = d,
+        NetworkMessage::TicketRequest(m)       => m.dest = d,
+        NetworkMessage::TicketResponse(m)      => m.dest = d,
     }
 }
 
-fn msg_type_of(msg: &NetworkMessageVariant) -> NetworkMessageType {
-    match msg {
-        NetworkMessageVariant::Ping(_)                => NetworkMessageType::Ping,
-        NetworkMessageVariant::MessagesRequest(_)     => NetworkMessageType::MessagesRequest,
-        NetworkMessageVariant::MessagesResponse(_)    => NetworkMessageType::MessagesResponse,
-        NetworkMessageVariant::Acknowledgement(_)     => NetworkMessageType::Acknowledgement,
-        NetworkMessageVariant::Advertisement(_)       => NetworkMessageType::Advertisement,
-        NetworkMessageVariant::TicketTraceResponse(_) => NetworkMessageType::TicketTraceResponse,
-        NetworkMessageVariant::TicketRequest(_)       => NetworkMessageType::TicketRequest,
-        NetworkMessageVariant::TicketResponse(_)      => NetworkMessageType::TicketResponse,
-    }
+fn msg_type_of(msg: &NetworkMessage) -> &'static str {
+    msg.message_type()
 }

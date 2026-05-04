@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-use crate::enums::NetworkMessageType;
 use crate::models::control::{ControlFormVariant, Hop};
 use crate::models::routing::Route;
 
@@ -64,7 +63,7 @@ pub struct NetworkMessagesRequest {
 /// Maps to Python's `Acknowledgement(NetworkMessage)`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Acknowledgement {
-    pub ack_type:  NetworkMessageType,
+    pub ack_type:  String,
     #[serde(default)]
     pub src:       String,
     pub dest:      Option<String>,
@@ -80,7 +79,7 @@ pub struct Acknowledgement {
 impl Default for Acknowledgement {
     fn default() -> Self {
         Self {
-            ack_type:  NetworkMessageType::default(),
+            ack_type:  "ping".to_string(),
             src:       String::new(),
             dest:      None,
             isrc:      None,
@@ -115,7 +114,7 @@ pub struct Advertisement {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct NetworkMessagesResponse {
     #[serde(default)]
-    pub messages:  Vec<NetworkMessageVariant>,
+    pub messages:  Vec<NetworkMessage>,
     #[serde(default)]
     pub src:       String,
     pub dest:      Option<String>,
@@ -131,7 +130,7 @@ pub struct NetworkMessagesResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TicketTraceResponse {
     pub tckuuid:             String,
-    pub network_ticket_type: NetworkMessageType,
+    pub network_ticket_type: String,
     #[serde(default = "unix_now_f64")]
     pub hop_time:            f64,
     #[serde(default)]
@@ -151,7 +150,7 @@ impl TicketTraceResponse {
         Hop {
             agtuuid:  self.src.clone(),
             hop_time: self.hop_time,
-            type_str: self.network_ticket_type.to_string(),
+            type_str: self.network_ticket_type.clone(),
         }
     }
 }
@@ -160,7 +159,7 @@ impl Default for TicketTraceResponse {
     fn default() -> Self {
         Self {
             tckuuid:             String::new(),
-            network_ticket_type: NetworkMessageType::default(),
+            network_ticket_type: String::new(),
             hop_time:            0.0,
             src:                 String::new(),
             dest:                None,
@@ -206,7 +205,7 @@ pub struct NetworkTicket {
 /// Used as the element type of `NetworkMessagesResponse::messages`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
-pub enum NetworkMessageVariant {
+pub enum NetworkMessage {
     #[serde(rename = "ping")]                  Ping(Ping),
     #[serde(rename = "messages_request")]      MessagesRequest(NetworkMessagesRequest),
     #[serde(rename = "messages_response")]     MessagesResponse(NetworkMessagesResponse),
@@ -217,9 +216,25 @@ pub enum NetworkMessageVariant {
     #[serde(rename = "ticket_response")]       TicketResponse(NetworkTicket),
 }
 
-impl Default for NetworkMessageVariant {
+impl Default for NetworkMessage {
     fn default() -> Self {
         Self::Ping(Ping::default())
+    }
+}
+
+impl NetworkMessage {
+    /// Return the wire-format type string for this variant.
+    pub fn message_type(&self) -> &'static str {
+        match self {
+            Self::Ping(_)                => "ping",
+            Self::MessagesRequest(_)     => "messages_request",
+            Self::MessagesResponse(_)    => "messages_response",
+            Self::Acknowledgement(_)     => "acknowledgement",
+            Self::Advertisement(_)       => "advertisement",
+            Self::TicketTraceResponse(_) => "ticket_trace_response",
+            Self::TicketRequest(_)       => "ticket_request",
+            Self::TicketResponse(_)      => "ticket_response",
+        }
     }
 }
 
@@ -255,7 +270,7 @@ mod tests {
 
     #[test]
     fn test_ser_ping() {
-        let msg = NetworkMessageVariant::Ping(Ping {
+        let msg = NetworkMessage::Ping(Ping {
             src: "a1".into(),
             timestamp: Some(1000.0),
             dest: None, isrc: None, objuuid: None, coluuid: None,
@@ -265,7 +280,7 @@ mod tests {
 
     #[test]
     fn test_deser_ping() {
-        assert_deser_roundtrip::<NetworkMessageVariant>(PING_JSON);
+        assert_deser_roundtrip::<NetworkMessage>(PING_JSON);
     }
 
     // ── NetworkMessagesRequest ────────────────────────────────────────────────
@@ -277,7 +292,7 @@ mod tests {
 
     #[test]
     fn test_ser_network_messages_request() {
-        let msg = NetworkMessageVariant::MessagesRequest(NetworkMessagesRequest {
+        let msg = NetworkMessage::MessagesRequest(NetworkMessagesRequest {
             src: "a1".into(),
             timestamp: Some(1000.0),
             dest: None, isrc: None, objuuid: None, coluuid: None,
@@ -287,7 +302,7 @@ mod tests {
 
     #[test]
     fn test_deser_network_messages_request() {
-        assert_deser_roundtrip::<NetworkMessageVariant>(MSGS_REQUEST_JSON);
+        assert_deser_roundtrip::<NetworkMessage>(MSGS_REQUEST_JSON);
     }
 
     // ── Acknowledgement ───────────────────────────────────────────────────────
@@ -307,8 +322,8 @@ mod tests {
 
     #[test]
     fn test_ser_acknowledgement_ping() {
-        let msg = NetworkMessageVariant::Acknowledgement(Acknowledgement {
-            ack_type: NetworkMessageType::Ping,
+        let msg = NetworkMessage::Acknowledgement(Acknowledgement {
+            ack_type: "ping".to_string(),
             src: "a1".into(),
             timestamp: Some(1000.0),
             dest: None, isrc: None, forwarded: None, error: None, objuuid: None, coluuid: None,
@@ -318,8 +333,8 @@ mod tests {
 
     #[test]
     fn test_ser_acknowledgement_with_error() {
-        let msg = NetworkMessageVariant::Acknowledgement(Acknowledgement {
-            ack_type: NetworkMessageType::TicketRequest,
+        let msg = NetworkMessage::Acknowledgement(Acknowledgement {
+            ack_type: "ticket_request".to_string(),
             src: "a1".into(),
             timestamp: Some(1000.0),
             error: Some("timeout".into()),
@@ -330,8 +345,8 @@ mod tests {
 
     #[test]
     fn test_ser_acknowledgement_forwarded() {
-        let msg = NetworkMessageVariant::Acknowledgement(Acknowledgement {
-            ack_type: NetworkMessageType::Ping,
+        let msg = NetworkMessage::Acknowledgement(Acknowledgement {
+            ack_type: "ping".to_string(),
             src: "a1".into(),
             timestamp: Some(1000.0),
             forwarded: Some("a2".into()),
@@ -342,17 +357,17 @@ mod tests {
 
     #[test]
     fn test_deser_acknowledgement_ping() {
-        assert_deser_roundtrip::<NetworkMessageVariant>(ACK_PING_JSON);
+        assert_deser_roundtrip::<NetworkMessage>(ACK_PING_JSON);
     }
 
     #[test]
     fn test_deser_acknowledgement_with_error() {
-        assert_deser_roundtrip::<NetworkMessageVariant>(ACK_ERROR_JSON);
+        assert_deser_roundtrip::<NetworkMessage>(ACK_ERROR_JSON);
     }
 
     #[test]
     fn test_deser_acknowledgement_forwarded() {
-        assert_deser_roundtrip::<NetworkMessageVariant>(ACK_FORWARDED_JSON);
+        assert_deser_roundtrip::<NetworkMessage>(ACK_FORWARDED_JSON);
     }
 
     // ── Advertisement ─────────────────────────────────────────────────────────
@@ -370,7 +385,7 @@ mod tests {
 
     #[test]
     fn test_ser_advertisement_empty_routes() {
-        let msg = NetworkMessageVariant::Advertisement(Advertisement {
+        let msg = NetworkMessage::Advertisement(Advertisement {
             agtuuid: "a1".into(),
             src: "a1".into(),
             timestamp: Some(1000.0),
@@ -383,7 +398,7 @@ mod tests {
     #[test]
     fn test_ser_advertisement_with_routes() {
         use crate::models::routing::Route;
-        let msg = NetworkMessageVariant::Advertisement(Advertisement {
+        let msg = NetworkMessage::Advertisement(Advertisement {
             agtuuid: "a1".into(),
             src: "a1".into(),
             timestamp: Some(1000.0),
@@ -395,12 +410,12 @@ mod tests {
 
     #[test]
     fn test_deser_advertisement_empty_routes() {
-        assert_deser_roundtrip::<NetworkMessageVariant>(ADV_EMPTY_JSON);
+        assert_deser_roundtrip::<NetworkMessage>(ADV_EMPTY_JSON);
     }
 
     #[test]
     fn test_deser_advertisement_with_routes() {
-        assert_deser_roundtrip::<NetworkMessageVariant>(ADV_ROUTES_JSON);
+        assert_deser_roundtrip::<NetworkMessage>(ADV_ROUTES_JSON);
     }
 
     // ── NetworkMessagesResponse ───────────────────────────────────────────────
@@ -418,7 +433,7 @@ mod tests {
 
     #[test]
     fn test_ser_network_messages_response_empty() {
-        let msg = NetworkMessageVariant::MessagesResponse(NetworkMessagesResponse {
+        let msg = NetworkMessage::MessagesResponse(NetworkMessagesResponse {
             src: "a1".into(),
             timestamp: Some(1000.0),
             messages: vec![],
@@ -429,10 +444,10 @@ mod tests {
 
     #[test]
     fn test_ser_network_messages_response_with_ping() {
-        let msg = NetworkMessageVariant::MessagesResponse(NetworkMessagesResponse {
+        let msg = NetworkMessage::MessagesResponse(NetworkMessagesResponse {
             src: "a1".into(),
             timestamp: Some(1000.0),
-            messages: vec![NetworkMessageVariant::Ping(Ping {
+            messages: vec![NetworkMessage::Ping(Ping {
                 src: "b1".into(),
                 timestamp: Some(2000.0),
                 dest: None, isrc: None, objuuid: None, coluuid: None,
@@ -444,12 +459,12 @@ mod tests {
 
     #[test]
     fn test_deser_network_messages_response_empty() {
-        assert_deser_roundtrip::<NetworkMessageVariant>(MSGS_RESP_EMPTY_JSON);
+        assert_deser_roundtrip::<NetworkMessage>(MSGS_RESP_EMPTY_JSON);
     }
 
     #[test]
     fn test_deser_network_messages_response_with_ping() {
-        assert_deser_roundtrip::<NetworkMessageVariant>(MSGS_RESP_WITH_PING_JSON);
+        assert_deser_roundtrip::<NetworkMessage>(MSGS_RESP_WITH_PING_JSON);
     }
 
     // ── TicketTraceResponse ───────────────────────────────────────────────────
@@ -462,9 +477,9 @@ mod tests {
 
     #[test]
     fn test_ser_ticket_trace_response() {
-        let msg = NetworkMessageVariant::TicketTraceResponse(TicketTraceResponse {
+        let msg = NetworkMessage::TicketTraceResponse(TicketTraceResponse {
             tckuuid: "t1".into(),
-            network_ticket_type: NetworkMessageType::TicketRequest,
+            network_ticket_type: "ticket_request".to_string(),
             hop_time: 1000.0,
             src: "a1".into(),
             timestamp: Some(1000.0),
@@ -475,7 +490,7 @@ mod tests {
 
     #[test]
     fn test_deser_ticket_trace_response() {
-        assert_deser_roundtrip::<NetworkMessageVariant>(TTR_JSON);
+        assert_deser_roundtrip::<NetworkMessage>(TTR_JSON);
     }
 
     // ── NetworkTicket ─────────────────────────────────────────────────────────
@@ -509,7 +524,7 @@ mod tests {
 
     #[test]
     fn test_ser_network_ticket_request() {
-        let msg = NetworkMessageVariant::TicketRequest(NetworkTicket {
+        let msg = NetworkMessage::TicketRequest(NetworkTicket {
             tckuuid: "t1".into(),
             src: "a1".into(),
             timestamp: Some(1000.0),
@@ -524,7 +539,7 @@ mod tests {
 
     #[test]
     fn test_ser_network_ticket_response() {
-        let msg = NetworkMessageVariant::TicketResponse(NetworkTicket {
+        let msg = NetworkMessage::TicketResponse(NetworkTicket {
             tckuuid: "t1".into(),
             src: "a1".into(),
             timestamp: Some(1000.0),
@@ -549,12 +564,12 @@ mod tests {
 
     #[test]
     fn test_deser_network_ticket_request() {
-        assert_deser_roundtrip::<NetworkMessageVariant>(NT_REQUEST_JSON);
+        assert_deser_roundtrip::<NetworkMessage>(NT_REQUEST_JSON);
     }
 
     #[test]
     fn test_deser_network_ticket_response() {
-        assert_deser_roundtrip::<NetworkMessageVariant>(NT_RESPONSE_JSON);
+        assert_deser_roundtrip::<NetworkMessage>(NT_RESPONSE_JSON);
     }
 }
 

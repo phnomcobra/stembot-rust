@@ -23,7 +23,7 @@ use rand::rngs::OsRng;
 
 use crate::models::config::Config;
 use crate::models::control::ControlFormVariant;
-use crate::models::network::NetworkMessageVariant;
+use crate::models::network::NetworkMessage;
 
 type Aes256Eax = Eax<Aes256>;
 
@@ -135,8 +135,8 @@ impl AgentClient {
     /// Mirrors `send_network_message(message)`.
     pub async fn send_network_message(
         &self,
-        mut msg: NetworkMessageVariant,
-    ) -> Result<NetworkMessageVariant> {
+        mut msg: NetworkMessage,
+    ) -> Result<NetworkMessage> {
         set_isrc(&mut msg, self.agtuuid.clone());
 
         let plaintext = serde_json::to_vec(&msg)?;
@@ -182,8 +182,8 @@ impl AgentClient {
 }
 
 /// Set the `isrc` field on any [`NetworkMessageVariant`] that carries one.
-fn set_isrc(msg: &mut NetworkMessageVariant, isrc: String) {
-    use NetworkMessageVariant::*;
+fn set_isrc(msg: &mut NetworkMessage, isrc: String) {
+    use NetworkMessage::*;
     match msg {
         Ping(m)                => m.isrc = Some(isrc),
         MessagesRequest(m)     => m.isrc = Some(isrc),
@@ -276,9 +276,9 @@ mod tests {
 
     #[test]
     fn test_set_isrc_ping() {
-        let mut msg = NetworkMessageVariant::Ping(Ping::default());
+        let mut msg = NetworkMessage::Ping(Ping::default());
         set_isrc(&mut msg, TEST_AGTUUID.to_string());
-        if let NetworkMessageVariant::Ping(p) = msg {
+        if let NetworkMessage::Ping(p) = msg {
             assert_eq!(p.isrc.as_deref(), Some(TEST_AGTUUID));
         } else {
             panic!("wrong variant");
@@ -403,7 +403,7 @@ mod tests {
         );
 
         // Build Ping with known fixed values
-        let msg = NetworkMessageVariant::Ping(Ping {
+        let msg = NetworkMessage::Ping(Ping {
             src:       TEST_AGTUUID.to_string(),
             dest:      None,
             isrc:      None, // must be set by send_network_message
@@ -414,7 +414,7 @@ mod tests {
 
         let result = client.send_network_message(msg).await.unwrap();
 
-        if let NetworkMessageVariant::Ping(ping) = result {
+        if let NetworkMessage::Ping(ping) = result {
             assert_eq!(ping.isrc.as_deref(), Some(TEST_AGTUUID));
             assert_eq!(ping.src, TEST_AGTUUID);
             assert_eq!(ping.timestamp, Some(1000.0));
@@ -445,7 +445,7 @@ mod tests {
             TEST_AGTUUID.to_string(),
         );
 
-        let msg = NetworkMessageVariant::Ping(Ping {
+        let msg = NetworkMessage::Ping(Ping {
             src: TEST_AGTUUID.to_string(),
             ..Ping::default()
         });
@@ -468,7 +468,7 @@ mod tests {
 
     #[test]
     fn test_ping_canonical_json_with_isrc() {
-        let mut msg = NetworkMessageVariant::Ping(Ping {
+        let mut msg = NetworkMessage::Ping(Ping {
             src:       TEST_AGTUUID.to_string(),
             dest:      None,
             isrc:      None,

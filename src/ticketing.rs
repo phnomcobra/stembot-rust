@@ -130,9 +130,11 @@ pub fn dedup_trace(
             network_ticket.dest.clone()
         };
         let trace = TicketTraceResponse {
+            src:                 config().agtuuid.clone(),
             dest,
             tckuuid:             network_ticket.tckuuid.clone(),
             network_ticket_type: ticket_type,
+            hop_time:            unix_now(),
             ..TicketTraceResponse::default()
         };
         traces.upsert_object(trace.clone())?;

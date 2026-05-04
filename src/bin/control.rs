@@ -7,7 +7,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use anyhow::Result;
-use chrono::{TimeZone, Utc};
+use chrono::{SecondsFormat, TimeZone, Utc};
 use clap::{Parser, Subcommand};
 use rand::RngCore;
 use tokio::time::{sleep, Duration};
@@ -379,10 +379,12 @@ async fn cmd_stat(client: Arc<AgentClient>, agtuuid: String, timeout: u64) -> Re
     println!();
     println!("Network Hops");
     for (idx, hop) in hops.iter().enumerate() {
+        let secs  = hop.hop_time as i64;
+        let nanos = ((hop.hop_time - secs as f64) * 1_000_000_000.0) as u32;
         let time_str = Utc
-            .timestamp_opt(hop.hop_time as i64, 0)
+            .timestamp_opt(secs, nanos)
             .single()
-            .map(|dt| dt.to_rfc3339())
+            .map(|dt| dt.to_rfc3339_opts(SecondsFormat::Millis, true))
             .unwrap_or_else(|| hop.hop_time.to_string());
         println!(
             "   [{}] {:.<36} {:.<20} @ {}",

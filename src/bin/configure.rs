@@ -19,9 +19,6 @@ struct Args {
     #[clap(short = 's', long, help = "Encryption key (will be hashed with SHA-256)")]
     secret: Option<String>,
 
-    #[clap(short = 'l', long, help = "Log output path")]
-    log_path: Option<String>,
-
     #[clap(short = 'c', long = "client-url", help = "Set the agent client control URL")]
     client_url: Option<String>,
 
@@ -73,10 +70,6 @@ fn load_from_environment(store: &KVStore) -> Result<(), Box<dyn std::error::Erro
             store.commit("socket_port", port)?;
             println!("✓ Loaded AGT_PORT: {v}");
         }
-    }
-    if let Ok(v) = std::env::var("AGT_LOG_PATH") {
-        store.commit("log_path", v.as_str())?;
-        println!("✓ Loaded AGT_LOG_PATH: {v}");
     }
     if let Ok(v) = std::env::var("AGT_SECRET") {
         let digest = sha256::digest(v.as_str());
@@ -154,7 +147,6 @@ fn display_config(store: &KVStore) {
         ("Socket Host",          v("socket_host")),
         ("Socket Port",          v("socket_port")),
         ("Workers",              v("workers")),
-        ("Log Path",             v("log_path")),
         ("Log Level App",        v("log_level_app")),
         ("Log Level API",        v("log_level_api")),
         ("Peer Timeout Secs",    v("peer_timeout_secs")),
@@ -200,11 +192,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Some(v) = args.port {
         store.commit("socket_port", v)?;
         println!("✓ Set Port: {v}");
-        modified = true;
-    }
-    if let Some(v) = args.log_path {
-        store.commit("log_path", v.as_str())?;
-        println!("✓ Set Log Path: {v}");
         modified = true;
     }
     if let Some(v) = args.secret {

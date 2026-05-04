@@ -12,7 +12,6 @@ services:
       - AGT_PORT=8080
       - AGT_HOST=0.0.0.0
       - AGT_SECRET=password
-      - AGT_LOG_PATH=/log
       - AGT_LOG_LEVEL_API=error
       - AGT_LOG_LEVEL_APP=info
       - AGT_CLIENT_CONTROL_URL=http://127.0.0.1:8080/control

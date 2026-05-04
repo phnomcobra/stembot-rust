@@ -59,8 +59,6 @@ pub struct Config {
     pub secret_digest: String,
     /// URL where the control client can reach this agent.
     pub client_control_url: String,
-    /// File path for log output (default: ~/.stembot/logs).
-    pub log_path: String,
     /// Log level for the application logger (default: INFO).
     pub log_level_app: LogLevel,
     /// Log level for the API/web framework logger (default: WARNING).
@@ -134,7 +132,6 @@ impl Config {
             socket_port,
             secret_digest:        kv_str!("secret_digest",        sha256::digest("changeme").as_str()),
             client_control_url:   kv_str!("client_control_url",   "http://localhost:8080"),
-            log_path:             kv_str!("log_path",             "~/.stembot/logs"),
             log_level_app:        kv_level!("log_level_app",      "Info"),
             log_level_api:        kv_level!("log_level_api",      "Info"),
             peer_timeout_secs:    kv_u32!("peer_timeout_secs",    60u32),
@@ -158,9 +155,9 @@ impl Config {
     /// Log the current configuration values.
     pub fn log(&self) {
         log::info!(
-            "\n  agtuuid:              {}\n  workers:              {}\n  socket_host:          {}\n  socket_port:          {}\n  secret_digest:        {}\n  client_control_url:   {}\n  log_path:             {}\n  log_level_app:        {}\n  log_level_api:        {}\n  peer_timeout_secs:    {}\n  peer_refresh_secs:    {}\n  max_weight:           {}\n  ticket_timeout_secs:  {}\n  message_timeout_secs: {}",
+            "\n  agtuuid:              {}\n  workers:              {}\n  socket_host:          {}\n  socket_port:          {}\n  secret_digest:        {}\n  client_control_url:   {}\n  log_level_app:        {}\n  log_level_api:        {}\n  peer_timeout_secs:    {}\n  peer_refresh_secs:    {}\n  max_weight:           {}\n  ticket_timeout_secs:  {}\n  message_timeout_secs: {}",
             self.agtuuid, self.workers, self.socket_host, self.socket_port,
-            self.secret_digest, self.client_control_url, self.log_path,
+            self.secret_digest, self.client_control_url,
             self.log_level_app, self.log_level_api,
             self.peer_timeout_secs, self.peer_refresh_secs, self.max_weight,
             self.ticket_timeout_secs, self.message_timeout_secs,

@@ -10,6 +10,12 @@ use crate::dao::{document::Document, object::Object};
 ///
 /// `T` must implement `Serialize + DeserializeOwned + Default`.  Use
 /// `serde_json::Value` as `T` for schema-free ("raw") storage.
+///
+/// Cloning a `Collection` is cheap: the underlying `Document` wraps an
+/// `Arc<Mutex<Connection>>`, so all clones share the same SQLite connection
+/// and see the same data.  This is the mechanism used by the singleton openers
+/// in `collections.rs` to guarantee a single in-memory database per store.
+#[derive(Clone)]
 pub struct Collection<T: Serialize + DeserializeOwned + Default> {
     pub collection_name: String,
     pub coluuid: String,

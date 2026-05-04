@@ -6,8 +6,6 @@
 //! processes control forms and network messages, and provides scheduled
 //! background functions for message replay, peer polling, and route advertisement.
 
-use std::any::Any;
-
 use actix_web::{web, HttpRequest, HttpResponse, Result as ActixResult};
 use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
 use serde_json::{json, Value};

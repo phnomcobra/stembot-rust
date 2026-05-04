@@ -60,6 +60,7 @@ async fn main() -> Result<(), std::io::Error> {
         move || {
             App::new()
                 .wrap(TracingLogger::default())
+                .app_data(web::PayloadConfig::new(usize::MAX))
                 .app_data(web::Data::new(config.clone()))
                 .route("/control", web::post().to(control_handler))
                 .route("/mpi",     web::post().to(mpi_handler))

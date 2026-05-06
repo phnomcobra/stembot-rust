@@ -26,22 +26,22 @@ use stembot_rust::{
     },
 };
 
-const KB: f64 = 1_024.0;
-const MB: f64 = 1_024.0 * 1_024.0;
-const GB: f64 = 1_024.0 * 1_024.0 * 1_024.0;
+const KB: usize = 1_024;
+const MB: usize = 1_024 * 1_024;
+const GB: usize = 1_024 * 1_024 * 1_024;
 
 fn format_bytes(n: f64) -> String {
-    if n < KB       { format!("{n:.0} B")          }
-    else if n < MB  { format!("{:.1} KB", n / KB)  }
-    else if n < GB  { format!("{:.1} MB", n / MB)  }
-    else            { format!("{:.1} GB", n / GB)  }
+    if n < KB as f64       { format!("{n:.0} B") }
+    else if n < MB as f64  { format!("{:.1} KB", n / KB as f64) }
+    else if n < GB as f64  { format!("{:.1} MB", n / MB as f64) }
+    else                   { format!("{:.1} GB", n / GB as f64) }
 }
 
 fn format_bandwidth(bps: f64) -> String {
-    if bps < KB       { format!("{bps:.0} B/s")          }
-    else if bps < MB  { format!("{:.1} KB/s", bps / KB)  }
-    else if bps < GB  { format!("{:.1} MB/s", bps / MB)  }
-    else              { format!("{:.1} GB/s", bps / GB)  }
+    if bps < KB as f64      { format!("{bps:.0} B/s") }
+    else if bps < MB as f64 { format!("{:.1} KB/s", bps / KB as f64) }
+    else if bps < GB as f64 { format!("{:.1} MB/s", bps / MB as f64) }
+    else                    { format!("{:.1} GB/s", bps / GB as f64) }
 }
 
 // ── CLI definition ────────────────────────────────────────────────────────────
@@ -535,12 +535,12 @@ async fn cmd_bench(
     );
     println!("{}", "-".repeat(70));
 
-    let sizes:         Vec<usize> = (0..17).map(|x| (1024 * 16usize) << x).collect();
-    let concurrencies: Vec<usize> = (0..7).map(|x| 1usize << x).collect();
+    let sizes:         Vec<usize> = (0..17).map(|x| (16 * KB) << x).collect();
+    let concurrencies: Vec<usize> = (0..7).map(|x| 1 << x).collect();
 
     for size in &sizes {
         for concurrency in &concurrencies {
-            if size * concurrency > 1024 * 1024 * 1024 {
+            if size * concurrency > 256 * MB {
                 continue;
             }
             bench_run(Arc::clone(&client), agtuuid.clone(), *size, *concurrency, timeout, zeros).await;

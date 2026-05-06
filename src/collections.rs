@@ -106,3 +106,13 @@ pub fn open_kvstore() -> Result<Collection<KeyValuePair>> {
     }).clone())
 }
 
+/// Vacuum all collections to reclaim space from deleted records.
+pub fn vacuum_collections() -> Result<()> {
+    open_messages()?.document.vacuum()?;
+    open_tickets()?.document.vacuum()?;
+    open_traces()?.document.vacuum()?;
+    open_peers()?.document.vacuum()?;
+    open_routes()?.document.vacuum()?;
+    open_kvstore()?.document.vacuum()?;
+    Ok(())
+}

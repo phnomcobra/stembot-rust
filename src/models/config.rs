@@ -5,17 +5,16 @@ use crate::dao::kvstore::KVStore;
 
 /// Log level, mirroring Python's `LogLevel` IntEnum.
 #[derive(Clone, Debug, PartialEq)]
+#[derive(Default)]
 pub enum LogLevel {
     Debug,
+    #[default]
     Info,
     Warning,
     Error,
     Critical,
 }
 
-impl Default for LogLevel {
-    fn default() -> Self { LogLevel::Info }
-}
 
 impl std::fmt::Display for LogLevel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

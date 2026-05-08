@@ -303,7 +303,7 @@ impl Document {
                                 ),
                                 Operator::Inside => subject.contains(value.as_str()),
                                 Operator::Regex => Regex::new(&subject)
-                                    .map_or(false, |re| re.is_match(value)),
+                                    .is_ok_and(|re| re.is_match(value)),
                                 _ => false,
                             };
                             if negation { !append } else { append }

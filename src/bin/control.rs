@@ -387,7 +387,7 @@ async fn cmd_stat(client: Arc<AgentClient>, agtuuid: String, timeout: u64) -> Re
             .map(|dt| dt.to_rfc3339_opts(SecondsFormat::Millis, true))
             .unwrap_or_else(|| hop.hop_time.to_string());
         println!(
-            "   [{}] {:.<36} {:.<20} @ {}",
+            "   [{: <2}] {:.<36} {:.<20} @ {}",
             idx + 1,
             hop.agtuuid,
             hop.type_str,
@@ -530,8 +530,8 @@ async fn cmd_bench(
     println!();
 
     println!(
-        "   {:.<11} {:.<12} {:.<8} {:.<10} {}",
-        "Elapsed (s)", "Total Bytes", "Success", "Bytes/Op", "Bandwidth"
+        "   {:.<11} {:.<12} {:.<8} {:.<10} Bandwidth",
+        "Elapsed (s)", "Total Bytes", "Success", "Bytes/Op"
     );
     println!("{}", "-".repeat(70));
 

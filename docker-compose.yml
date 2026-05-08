@@ -81,7 +81,7 @@ services:
         agt-configure --client-local
         agt-configure --log-level-api error
         agt-configure --log-level-app info
-        agt-control discover http://r2:8080/mpi --polling --delay 10 &
+        agt-control discover http://r3:8080/mpi --polling --delay 10 &
         agt-control discover http://r5:8080/mpi --delay 10 &
         while true; do sleep 3600; logrotate --force /etc/logrotate.d/agt-server; done &
         agt-server 2>&1 | tee -a /log/agt-server.log

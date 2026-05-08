@@ -46,9 +46,9 @@ pub fn read_ticket(control_form_ticket: &ControlFormTicket) -> Result<Option<Con
                 .map(|t| t.object.hop())
                 .collect();
         }
+        ticket.object.form_type = "read_ticket".to_string();
         return Ok(Some(ticket.object.clone()));
     }
-
     Ok(None)
 }
 

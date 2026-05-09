@@ -35,7 +35,7 @@ regex = "1.12.3"
 uuid = { version = "1.23.1", default-features = false, features = ["v4", "fast-rng", "std"] }
 base64 = "0.22"
 flate2 = "1.1.9"
-md5 = "0.7"
+md5 = "0.8.0"
 aes = "0.8"
 eax = "0.5"
 hex = "0.4"

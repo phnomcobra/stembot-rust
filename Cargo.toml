@@ -17,24 +17,24 @@ path = "src/bin/control.rs"
 
 [dependencies]
 actix-web = "4.13.0"
-chrono = "0.4.23"
-clap = { version = "4.0.29", features = ["derive"] }
+chrono = { version = "0.4.44", default-features = false, features = ["clock", "std"] }
+clap = { version = "4.6.1", features = ["derive"] }
 clokwerk = "0.4.0"
-env_logger = "0.10.0"
-log = "0.4.17"
-reqwest = "0.11.13"
-serde = { version = "1.0.150", features = ["derive"] }
-tokio = { version = "1.23.0", features = ["full"] }
-rand = "0.8.5"
-sha256 = "1.1.4"
+env_logger = "0.10.2"
+log = "0.4.29"
+reqwest = { version = "0.11.27", default-features = false, features = ["rustls-tls"] }
+serde = { version = "1.0.228", features = ["derive"] }
+tokio = { version = "1.52.3", features = ["macros", "rt-multi-thread", "time"] }
+rand = "0.8.6"
+sha256 = "1.6.0"
 tracing-actix-web = "0.7.21"
-serde_json = "1.0.104"
-anyhow = "1.0.75"
+serde_json = "1.0.149"
+anyhow = "1.0.102"
 rusqlite = "0.32"
-regex = "1"
-uuid = { version = "1", features = ["v4"] }
+regex = "1.12.3"
+uuid = { version = "1.23.1", default-features = false, features = ["v4", "fast-rng", "std"] }
 base64 = "0.22"
-flate2 = "1"
+flate2 = "1.1.9"
 md5 = "0.7"
 aes = "0.8"
 eax = "0.5"
@@ -44,5 +44,5 @@ hex = "0.4"
 debian = []
 
 [dev-dependencies]
-tempfile = "3"
-mockito = "1"
+tempfile = "3.27.0"
+mockito = "1.7.2"

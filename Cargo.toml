@@ -16,9 +16,9 @@ name = "agt-control"
 path = "src/bin/control.rs"
 
 [dependencies]
-actix-web = "4.13.0"
+actix-web = { version = "4.13.0", default-features = false, features = ["macros"] }
 chrono = { version = "0.4.44", default-features = false, features = ["clock", "std"] }
-clap = { version = "4.6.1", features = ["derive"] }
+clap = { version = "4.6.1", default-features = false, features = ["derive", "std"] }
 clokwerk = "0.4.0"
 env_logger = "0.10.2"
 log = "0.4.29"

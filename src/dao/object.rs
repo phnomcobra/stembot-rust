@@ -21,7 +21,7 @@ impl<T: Serialize + DeserializeOwned + Default> Object<T> {
         let value = match document.get_object_value(objuuid) {
             Ok(v) => v,
             Err(_) => {
-                let default_val = serde_json::to_value(&T::default())?;
+                let default_val = serde_json::to_value(T::default())?;
                 document.create_object_with_value(coluuid, objuuid, &default_val)?;
                 document.get_object_value(objuuid)?
             }

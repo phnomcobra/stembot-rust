@@ -40,7 +40,7 @@ pub fn touch_peer(agtuuid: &str) -> Result<()> {
     } else {
         let peer = &peers[0];
         if peer.object.url.is_none()
-            && peer.object.refresh_time.map_or(false, |rt| rt < unix_now())
+            && peer.object.refresh_time.is_some_and(|rt| rt < unix_now())
         {
             create_peer(agtuuid, None, Some(config().peer_timeout_secs), false)?
         }
@@ -287,7 +287,7 @@ pub fn prune() -> Result<()> {
     let mut peer_agtuuids: Vec<String> = Vec::new();
 
     for peer in peers.find(&[])? {
-        if peer.object.destroy_time.map_or(false, |dt| dt < now) {
+        if peer.object.destroy_time.is_some_and(|dt| dt < now) {
             peer.destroy()?;
             continue;
         }

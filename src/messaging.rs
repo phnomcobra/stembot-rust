@@ -124,7 +124,7 @@ pub async fn forward_network_message(message: NetworkMessage) -> Result<()> {
     let mut best_gtwuuid: Option<String> = None;
     for obj in routes.find(&[("agtuuid", dest.as_str())])? {
         let w = obj.object.weight;
-        if best_weight.map_or(true, |bw| w < bw) {
+        if best_weight.is_none_or(|bw| w < bw) {
             best_weight  = Some(w);
             best_gtwuuid = Some(obj.object.gtwuuid.clone());
         }

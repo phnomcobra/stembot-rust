@@ -93,7 +93,9 @@ impl Document {
     // ── Maintenance ───────────────────────────────────────────────────────────
 
     pub fn vacuum(&self) -> Result<()> {
-        self.connection.lock().unwrap().execute_batch("VACUUM;")?;
+        self.connection.lock().unwrap().execute_batch(
+            "VACUUM; PRAGMA shrink_memory;"
+        )?;
         Ok(())
     }
 
@@ -303,7 +305,7 @@ impl Document {
                                 ),
                                 Operator::Inside => subject.contains(value.as_str()),
                                 Operator::Regex => Regex::new(&subject)
-                                    .map_or(false, |re| re.is_match(value)),
+                                    .is_ok_and(|re| re.is_match(value)),
                                 _ => false,
                             };
                             if negation { !append } else { append }

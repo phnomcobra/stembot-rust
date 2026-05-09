@@ -6,11 +6,7 @@ use std::time::Duration;
 use tokio::time::sleep;
 
 use stembot_rust::{
-    config::config,
-    logger::init_logger,
-    messaging::expire_network_messages,
-    processor::{advertizing, control_handler, mpi_handler, polling, replay},
-    ticketing::expire_tickets,
+    collections::vacuum_collections, config::config, logger::init_logger, messaging::expire_network_messages, processor::{advertizing, control_handler, mpi_handler, polling, replay}, ticketing::expire_tickets
 };
 
 #[actix_web::main]
@@ -41,9 +37,14 @@ async fn main() -> Result<(), std::io::Error> {
         }
     });
 
+    scheduler.every(Seconds(60)).run(|| async {
+        vacuum_collections().unwrap_or_else(|e| log::error!("Error vacuuming collections: {e}"));
+    });
+
     scheduler.every(Seconds(1)).run(|| async { replay().await });
     scheduler.every(Seconds(1)).run(|| async { polling().await });
     scheduler.every(Seconds(10)).run(|| async { advertizing().await });
+
 
     log::info!("Starting scheduler");
 

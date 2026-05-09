@@ -38,7 +38,7 @@ pub fn read_ticket(control_form_ticket: &ControlFormTicket) -> Result<Option<Con
     let tickets = open_tickets()?;
     let traces  = open_traces()?;
 
-    for mut ticket in tickets.find(&[("tckuuid", control_form_ticket.tckuuid.as_str())])? {
+    if let Some(ticket) = tickets.find(&[("tckuuid", control_form_ticket.tckuuid.as_str())])?.first_mut() {
         if ticket.object.tracing {
             ticket.object.hops = traces
                 .find(&[("tckuuid", ticket.object.tckuuid.as_str())])?
@@ -47,7 +47,7 @@ pub fn read_ticket(control_form_ticket: &ControlFormTicket) -> Result<Option<Con
                 .collect();
         }
         ticket.object.form_type = "read_ticket".to_string();
-        return Ok(Some(ticket.object));
+        return Ok(Some(ticket.object.clone()));
     }
     Ok(None)
 }

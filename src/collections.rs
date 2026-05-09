@@ -15,6 +15,7 @@ use std::sync::OnceLock;
 use anyhow::Result;
 
 use crate::dao::collection::Collection;
+use crate::dao::db_path;
 use crate::dao::kvstore::KeyValuePair;
 use crate::models::control::ControlFormTicket;
 use crate::models::network::{NetworkMessage, TicketTraceResponse};
@@ -75,7 +76,7 @@ pub fn open_traces() -> Result<Collection<TicketTraceResponse>> {
 /// Open (or return the cached singleton for) the `peers` collection.
 pub fn open_peers() -> Result<Collection<Peer>> {
     Ok(PEERS.get_or_init(|| {
-        let c = Collection::new("peers", None)
+        let c = Collection::new("peers", Some(db_path("peers").as_ref()))
             .expect("failed to open peers collection");
         c.create_attribute("agtuuid", "/agtuuid").ok();
         c.create_attribute("polling", "/polling").ok();
@@ -99,10 +100,20 @@ pub fn open_routes() -> Result<Collection<Route>> {
 /// Open (or return the cached singleton for) the `kvstore` collection.
 pub fn open_kvstore() -> Result<Collection<KeyValuePair>> {
     Ok(KVSTORE.get_or_init(|| {
-        let c = Collection::new("kvstore", None)
+        let c = Collection::new("kvstore", Some(db_path("kvstore").as_ref()))
             .expect("failed to open kvstore collection");
         c.create_attribute("name", "/name").ok();
         c
     }).clone())
 }
 
+/// Vacuum all collections to reclaim space from deleted records.
+pub fn vacuum_collections() -> Result<()> {
+    open_messages()?.document.vacuum()?;
+    open_tickets()?.document.vacuum()?;
+    open_traces()?.document.vacuum()?;
+    open_peers()?.document.vacuum()?;
+    open_routes()?.document.vacuum()?;
+    open_kvstore()?.document.vacuum()?;
+    Ok(())
+}

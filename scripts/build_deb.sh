@@ -14,8 +14,8 @@ mkdir -p "$DIST_DIR"
 # Remove any existing deb file
 rm -f "$DIST_DIR"/*.deb
 
-# Build release binaries
-cargo build --release
+# Build release binaries with the debian data directory baked in
+STEMBOT_DATA_DIR=/var/agt cargo build --release
 
 # Set up deb package directory structure
 mkdir -p "$BUILD_DIR/DEBIAN"

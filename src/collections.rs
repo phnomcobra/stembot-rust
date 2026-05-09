@@ -27,6 +27,22 @@ const CONN_TICKETS:  &str = "file:stembot_tickets?mode=memory";
 const CONN_TRACES:   &str = "file:stembot_traces?mode=memory";
 const CONN_ROUTES:   &str = "file:stembot_routes?mode=memory";
 
+// ── File-backed path helper ───────────────────────────────────────────────────
+
+/// Returns the path for a file-backed SQLite database.
+///
+/// When built with the `STEMBOT_DATA_DIR` environment variable set, that
+/// directory is used as the prefix (e.g. `/var/agt/peers.sqlite`).  Otherwise
+/// the file is created in the current working directory.
+fn db_path(name: &str) -> String {
+    const DATA_DIR: &str = env!("STEMBOT_DATA_DIR");
+    if DATA_DIR.is_empty() {
+        format!("{}.sqlite", name)
+    } else {
+        format!("{}/{}.sqlite", DATA_DIR, name)
+    }
+}
+
 // ── Singletons ────────────────────────────────────────────────────────────────
 
 static MESSAGES: OnceLock<Collection<NetworkMessage>>      = OnceLock::new();
@@ -75,7 +91,7 @@ pub fn open_traces() -> Result<Collection<TicketTraceResponse>> {
 /// Open (or return the cached singleton for) the `peers` collection.
 pub fn open_peers() -> Result<Collection<Peer>> {
     Ok(PEERS.get_or_init(|| {
-        let c = Collection::new("peers", None)
+        let c = Collection::new("peers", Some(db_path("peers").as_ref()))
             .expect("failed to open peers collection");
         c.create_attribute("agtuuid", "/agtuuid").ok();
         c.create_attribute("polling", "/polling").ok();
@@ -99,7 +115,7 @@ pub fn open_routes() -> Result<Collection<Route>> {
 /// Open (or return the cached singleton for) the `kvstore` collection.
 pub fn open_kvstore() -> Result<Collection<KeyValuePair>> {
     Ok(KVSTORE.get_or_init(|| {
-        let c = Collection::new("kvstore", None)
+        let c = Collection::new("kvstore", Some(db_path("kvstore").as_ref()))
             .expect("failed to open kvstore collection");
         c.create_attribute("name", "/name").ok();
         c

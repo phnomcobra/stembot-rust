@@ -93,7 +93,9 @@ impl Document {
     // ── Maintenance ───────────────────────────────────────────────────────────
 
     pub fn vacuum(&self) -> Result<()> {
-        self.connection.lock().unwrap().execute_batch("VACUUM;")?;
+        self.connection.lock().unwrap().execute_batch(
+            "VACUUM; PRAGMA shrink_memory;"
+        )?;
         Ok(())
     }
 

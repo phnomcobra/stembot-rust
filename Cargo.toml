@@ -40,6 +40,9 @@ aes = "0.8"
 eax = "0.5"
 hex = "0.4"
 
+[features]
+debian = []
+
 [dev-dependencies]
 tempfile = "3"
 mockito = "1"

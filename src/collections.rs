@@ -15,6 +15,7 @@ use std::sync::OnceLock;
 use anyhow::Result;
 
 use crate::dao::collection::Collection;
+use crate::dao::db_path;
 use crate::dao::kvstore::KeyValuePair;
 use crate::models::control::ControlFormTicket;
 use crate::models::network::{NetworkMessage, TicketTraceResponse};
@@ -26,22 +27,6 @@ const CONN_MESSAGES: &str = "file:stembot_messages?mode=memory";
 const CONN_TICKETS:  &str = "file:stembot_tickets?mode=memory";
 const CONN_TRACES:   &str = "file:stembot_traces?mode=memory";
 const CONN_ROUTES:   &str = "file:stembot_routes?mode=memory";
-
-// ── File-backed path helper ───────────────────────────────────────────────────
-
-/// Returns the path for a file-backed SQLite database.
-///
-/// When built with the `STEMBOT_DATA_DIR` environment variable set, that
-/// directory is used as the prefix (e.g. `/var/agt/peers.sqlite`).  Otherwise
-/// the file is created in the current working directory.
-fn db_path(name: &str) -> String {
-    const DATA_DIR: &str = env!("STEMBOT_DATA_DIR");
-    if DATA_DIR.is_empty() {
-        format!("{}.sqlite", name)
-    } else {
-        format!("{}/{}.sqlite", DATA_DIR, name)
-    }
-}
 
 // ── Singletons ────────────────────────────────────────────────────────────────
 

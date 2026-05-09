@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::dao::collection::Collection;
+use crate::dao::db_path;
 
 /// Mirrors Python's `KeyValuePair` Pydantic model.
 #[derive(Debug, Serialize, Deserialize, Default, Clone)]
@@ -31,7 +32,8 @@ pub struct KVStore {
 
 impl KVStore {
     pub fn new(connection_str: Option<&str>) -> Result<Self> {
-        let col = Collection::<KeyValuePair>::new("kvstore", connection_str)?;
+        let default = db_path("kvstore");
+        let col = Collection::<KeyValuePair>::new("kvstore", Some(connection_str.unwrap_or(&default)))?;
         col.create_attribute("name", "/name")?;
         Ok(Self { collection: col })
     }

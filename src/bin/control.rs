@@ -138,6 +138,10 @@ async fn poll_ticket(
     ticket.form_type = "read_ticket".to_string();
     let start = Instant::now();
 
+    if let ControlForm::WriteFile(ref mut wf) = ticket.form {
+        wf.b64zlib = String::new();
+    }
+
     while start.elapsed().as_secs() < timeout_secs && ticket.service_time.is_none() {
         match client.send_ticket(ticket.clone()).await {
             Ok(t) => ticket = t,
@@ -151,8 +155,16 @@ async fn poll_ticket(
         }
     }
 
-    ticket.form_type = "close_ticket".to_string();
-    match client.send_ticket(ticket.clone()).await {
+    let mut closing_ticket = ticket.clone();
+    closing_ticket.form_type = "close_ticket".to_string();
+    if let ControlForm::WriteFile(ref mut wf) = closing_ticket.form {
+        wf.b64zlib = String::new();
+    }
+    if let ControlForm::LoadFile(ref mut lf) = closing_ticket.form {
+        lf.b64zlib = None;
+    }
+
+    match client.send_ticket(closing_ticket).await {
         Ok(t)  => t,
         Err(e) => { eprintln!("close ticket error: {e}"); ticket }
     }

@@ -18,7 +18,7 @@ use crate::executor::process::sync_process;
 use crate::messaging::{forward_network_message, pop_network_messages, pull_network_messages};
 use crate::models::config::Config;
 use crate::models::control::{
-    CommandArg, ControlFormTicket, ControlForm, SyncProcess as SyncProcessForm,
+    CheckTicket, CommandArg, ControlFormTicket, ControlForm, SyncProcess as SyncProcessForm,
 };
 use crate::models::network::{
     Acknowledgement, NetworkMessage, NetworkMessagesRequest, NetworkMessagesResponse,
@@ -28,7 +28,7 @@ use crate::peering::{
     age_routes, create_peer, create_route_advertisement, delete_peer, delete_peers, get_peers,
     get_routes, process_route_advertisement, touch_peer,
 };
-use crate::ticketing::{close_ticket, dedup_trace, read_ticket, service_ticket, service_trace};
+use crate::ticketing::{check_ticket, close_ticket, dedup_trace, read_ticket, service_ticket, service_trace};
 
 // ── HTTP Handlers ─────────────────────────────────────────────────────────────
 
@@ -56,7 +56,7 @@ pub async fn control_handler(
         .map_err(actix_web::error::ErrorBadRequest)?;
 
     let raw_response = match raw.get("type").and_then(Value::as_str) {
-        Some("create_ticket") | Some("read_ticket") | Some("close_ticket") => {
+        Some("create_ticket") | Some("read_ticket") => {
             let ticket: ControlFormTicket = serde_json::from_value(raw)
                 .map_err(actix_web::error::ErrorBadRequest)?;
             log::debug!("{}", ticket.form_type);
@@ -239,12 +239,24 @@ pub async fn process_control_form(form: ControlForm) -> ControlForm {
             f.config = Some(config_to_json());
             ControlForm::GetConfig(f)
         }
+
+        ControlForm::CheckTicket(f) => {
+            match check_ticket(f) {
+                Ok(updated) => ControlForm::CheckTicket(updated),
+                Err(e) => ControlForm::CheckTicket(CheckTicket { error: Some(e.to_string()), ..Default::default() }),
+            }
+        }
+
+        ControlForm::CloseTicket(f) => {
+            close_ticket(&f).unwrap_or_else(|e| log::error!("close_ticket error: {e}"));
+            ControlForm::CloseTicket(f)
+        }
     }
 }
 
 /// Handle ticket-type control forms received at the `/control` endpoint.
 ///
-/// Dispatches `create_ticket`, `read_ticket`, and `close_ticket` operations.
+/// Dispatches `create_ticket` and `read_ticket` operations.
 async fn process_ticket_form(mut ticket: ControlFormTicket) -> ControlFormTicket {
     log::debug!("{}", ticket.form_type);
     match ticket.form_type.as_str() {
@@ -257,10 +269,6 @@ async fn process_ticket_form(mut ticket: ControlFormTicket) -> ControlFormTicket
                 ticket
             }
         },
-        "close_ticket" => {
-            close_ticket(&ticket).unwrap_or_else(|e| log::error!("close_ticket error: {e}"));
-            ticket
-        }
         _ => ticket,
     }
 }

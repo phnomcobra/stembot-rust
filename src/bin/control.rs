@@ -20,8 +20,8 @@ use stembot_rust::{
     models::{
         config::Config,
         control::{
-            CommandArg, ControlForm, ControlFormTicket, DeletePeers, DiscoverPeer, GetConfig,
-            GetPeers, GetRoutes, LoadFile, SyncProcess, WriteFile,
+            CheckTicket, CloseTicket, CommandArg, ControlForm, ControlFormTicket, DeletePeers,
+            DiscoverPeer, GetConfig, GetPeers, GetRoutes, LoadFile, SyncProcess, WriteFile,
         },
     },
 };
@@ -127,47 +127,60 @@ enum Commands {
 
 // ── Ticket polling ────────────────────────────────────────────────────────────
 
-/// Poll a ticket until serviced or timeout, then close it.
+/// Poll a ticket until serviced or timeout, then read and close it.
 ///
-/// Uses 1-second intervals, mirroring the Python stat/run/put polling pattern.
+/// 1. Uses `CheckTicket` (lightweight) to poll for service completion.
+/// 2. Once serviced, reads the full ticket via `read_ticket`.
+/// 3. Closes the ticket via `CloseTicket`.
+/// 4. Mirrors the Python polling pattern in `stembot/control.py`.
 async fn poll_ticket(
     client: Arc<AgentClient>,
-    mut ticket: ControlFormTicket,
+    ticket: ControlFormTicket,
     timeout_secs: u64,
 ) -> ControlFormTicket {
-    ticket.form_type = "read_ticket".to_string();
     let start = Instant::now();
 
-    if let ControlForm::WriteFile(ref mut wf) = ticket.form {
-        wf.b64zlib = String::new();
-    }
-
-    while start.elapsed().as_secs() < timeout_secs && ticket.service_time.is_none() {
-        match client.send_ticket(ticket.clone()).await {
-            Ok(t) => ticket = t,
-            Err(e) => {
-                eprintln!("poll error: {e}");
-                break;
-            }
+    // Poll with CheckTicket until the ticket is serviced
+    let mut check = CheckTicket {
+        tckuuid:     ticket.tckuuid.clone(),
+        create_time: Some(ticket.create_time),
+        ..Default::default()
+    };
+    while start.elapsed().as_secs() < timeout_secs && check.service_time.is_none() {
+        match client.send_control_form(ControlForm::CheckTicket(check.clone())).await {
+            Ok(ControlForm::CheckTicket(c)) => check = c,
+            Ok(_) => break,
+            Err(e) => { eprintln!("poll error: {e}"); break; }
         }
-        if ticket.service_time.is_none() {
+        if check.service_time.is_none() {
             sleep(Duration::from_secs(1)).await;
         }
     }
 
-    let mut closing_ticket = ticket.clone();
-    closing_ticket.form_type = "close_ticket".to_string();
-    if let ControlForm::WriteFile(ref mut wf) = closing_ticket.form {
+    // Read the full ticket result
+    let mut read = ticket.clone();
+    read.form_type = "read_ticket".to_string();
+    if let ControlForm::WriteFile(ref mut wf) = read.form {
         wf.b64zlib = String::new();
     }
-    if let ControlForm::LoadFile(ref mut lf) = closing_ticket.form {
+    if let ControlForm::LoadFile(ref mut lf) = read.form {
         lf.b64zlib = None;
     }
-
-    match client.send_ticket(closing_ticket).await {
+    let result = match client.send_ticket(read.clone()).await {
         Ok(t)  => t,
-        Err(e) => { eprintln!("close ticket error: {e}"); ticket }
+        Err(e) => { eprintln!("read ticket error: {e}"); read }
+    };
+
+    // Close the ticket
+    let close = ControlForm::CloseTicket(CloseTicket {
+        tckuuid: ticket.tckuuid.clone(),
+        ..Default::default()
+    });
+    if let Err(e) = client.send_control_form(close).await {
+        eprintln!("close ticket error: {e}");
     }
+
+    result
 }
 
 // ── Commands ──────────────────────────────────────────────────────────────────

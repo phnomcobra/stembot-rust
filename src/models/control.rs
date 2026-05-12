@@ -157,6 +157,28 @@ pub struct GetConfig {
     pub coluuid: Option<String>,
 }
 
+/// Lightweight ticket status check; replaces polling via `ControlFormTicket`.
+/// Maps to Python's `CheckTicket(ControlForm)`.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct CheckTicket {
+    pub tckuuid:      String,
+    pub create_time:  Option<f64>,
+    pub service_time: Option<f64>,
+    pub error:        Option<String>,
+    pub objuuid:      Option<String>,
+    pub coluuid:      Option<String>,
+}
+
+/// Request to close an existing ticket.
+/// Maps to Python's `CloseTicket(ControlForm)`.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct CloseTicket {
+    pub tckuuid: String,
+    pub error:   Option<String>,
+    pub objuuid: Option<String>,
+    pub coluuid: Option<String>,
+}
+
 // ── Tagged union of all control form variants ─────────────────────────────────
 
 /// Internally-tagged union of all control forms.
@@ -176,6 +198,8 @@ pub enum ControlForm {
     #[serde(rename = "write_file")]    WriteFile(WriteFile),
     #[serde(rename = "load_file")]     LoadFile(LoadFile),
     #[serde(rename = "get_config")]    GetConfig(GetConfig),
+    #[serde(rename = "check_ticket")]  CheckTicket(CheckTicket),
+    #[serde(rename = "close_ticket")]  CloseTicket(CloseTicket),
 }
 
 impl Default for ControlForm {
@@ -197,6 +221,8 @@ impl ControlForm {
             Self::WriteFile(_)    => "write_file",
             Self::LoadFile(_)     => "load_file",
             Self::GetConfig(_)    => "get_config",
+            Self::CheckTicket(_)  => "check_ticket",
+            Self::CloseTicket(_)  => "close_ticket",
         }
     }
 }
@@ -668,8 +694,8 @@ mod tests {
         r#""timeout":15,"command":"ls /","stdout":null,"stderr":null,"#,
         r#""status":null,"start_time":null,"elapsed_time":null}}"#
     );
-    const CFT_CLOSE_WITH_HOPS_JSON: &str = concat!(
-        r#"{"type":"close_ticket","error":null,"objuuid":null,"coluuid":null,"#,
+    const CFT_READ_WITH_HOPS_JSON: &str = concat!(
+        r#"{"type":"read_ticket","error":null,"objuuid":null,"coluuid":null,"#,
         r#""tckuuid":"t1","src":"a1","dst":"a2","create_time":1000.0,"#,
         r#""service_time":0.5,"tracing":true,"#,
         r#""hops":[{"agtuuid":"a1","hop_time":1001.0,"type_str":"ticket_request"}],"#,
@@ -706,9 +732,9 @@ mod tests {
     }
 
     #[test]
-    fn test_ser_control_form_ticket_close_with_hops() {
+    fn test_ser_control_form_ticket_read_with_hops() {
         let ticket = ControlFormTicket {
-            form_type: "close_ticket".to_string(),
+            form_type: "read_ticket".to_string(),
             tckuuid: "t1".into(),
             src: "a1".into(),
             dst: "a2".into(),
@@ -719,7 +745,7 @@ mod tests {
             form: sync_process_ls(),
             error: None, objuuid: None, coluuid: None,
         };
-        assert_ser_eq(&ticket, CFT_CLOSE_WITH_HOPS_JSON);
+        assert_ser_eq(&ticket, CFT_READ_WITH_HOPS_JSON);
     }
 
     #[test]
@@ -728,8 +754,71 @@ mod tests {
     }
 
     #[test]
-    fn test_deser_control_form_ticket_close_with_hops() {
-        assert_deser_roundtrip::<ControlFormTicket>(CFT_CLOSE_WITH_HOPS_JSON);
+    fn test_deser_control_form_ticket_read_with_hops() {
+        assert_deser_roundtrip::<ControlFormTicket>(CFT_READ_WITH_HOPS_JSON);
+    }
+
+    // ── CheckTicket ───────────────────────────────────────────────────────────
+
+    const CHECK_TICKET_PENDING_JSON: &str = concat!(
+        r#"{"type":"check_ticket","error":null,"objuuid":null,"coluuid":null,"#,
+        r#""tckuuid":"t1","create_time":1000.0,"service_time":null}"#
+    );
+    const CHECK_TICKET_SERVICED_JSON: &str = concat!(
+        r#"{"type":"check_ticket","error":null,"objuuid":null,"coluuid":null,"#,
+        r#""tckuuid":"t1","create_time":1000.0,"service_time":0.5}"#
+    );
+
+    #[test]
+    fn test_ser_check_ticket_pending() {
+        let form = ControlForm::CheckTicket(CheckTicket {
+            tckuuid: "t1".into(),
+            create_time: Some(1000.0),
+            ..Default::default()
+        });
+        assert_ser_eq(&form, CHECK_TICKET_PENDING_JSON);
+    }
+
+    #[test]
+    fn test_ser_check_ticket_serviced() {
+        let form = ControlForm::CheckTicket(CheckTicket {
+            tckuuid: "t1".into(),
+            create_time: Some(1000.0),
+            service_time: Some(0.5),
+            ..Default::default()
+        });
+        assert_ser_eq(&form, CHECK_TICKET_SERVICED_JSON);
+    }
+
+    #[test]
+    fn test_deser_check_ticket_pending() {
+        assert_deser_roundtrip::<ControlForm>(CHECK_TICKET_PENDING_JSON);
+    }
+
+    #[test]
+    fn test_deser_check_ticket_serviced() {
+        assert_deser_roundtrip::<ControlForm>(CHECK_TICKET_SERVICED_JSON);
+    }
+
+    // ── CloseTicket ───────────────────────────────────────────────────────────
+
+    const CLOSE_TICKET_JSON: &str = concat!(
+        r#"{"type":"close_ticket","error":null,"objuuid":null,"coluuid":null,"#,
+        r#""tckuuid":"t1"}"#
+    );
+
+    #[test]
+    fn test_ser_close_ticket() {
+        let form = ControlForm::CloseTicket(CloseTicket {
+            tckuuid: "t1".into(),
+            ..Default::default()
+        });
+        assert_ser_eq(&form, CLOSE_TICKET_JSON);
+    }
+
+    #[test]
+    fn test_deser_close_ticket() {
+        assert_deser_roundtrip::<ControlForm>(CLOSE_TICKET_JSON);
     }
 }
 

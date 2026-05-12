@@ -15,7 +15,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use anyhow::Result;
 
 use crate::collections::{open_tickets, open_traces};
-use crate::models::control::ControlFormTicket;
+use crate::models::control::{CheckTicket, CloseTicket, ControlFormTicket};
 use crate::models::network::{NetworkTicket, TicketTraceResponse};
 use crate::config::config;
 
@@ -54,10 +54,24 @@ pub fn read_ticket(control_form_ticket: &ControlFormTicket) -> Result<Option<Con
 
 /// Delete a ticket by UUID from the in-memory ticket collection.
 ///
-/// Mirrors `close_ticket(control_form_ticket)`.
-pub fn close_ticket(control_form_ticket: &ControlFormTicket) -> Result<()> {
-    open_tickets()?.pop(&[("tckuuid", control_form_ticket.tckuuid.as_str())])?;
+/// Mirrors `close_ticket(form)` in Python.
+pub fn close_ticket(form: &CloseTicket) -> Result<()> {
+    open_tickets()?.pop(&[("tckuuid", form.tckuuid.as_str())])?;
     Ok(())
+}
+
+/// Check the status of a ticket by UUID.
+///
+/// Populates `create_time` and `service_time` from the stored ticket.
+/// Mirrors `check_ticket(form)` in Python.
+pub fn check_ticket(form: CheckTicket) -> Result<CheckTicket> {
+    let mut form = form;
+    let tickets = open_tickets()?;
+    if let Some(ticket) = tickets.find(&[("tckuuid", form.tckuuid.as_str())])?.first() {
+        form.create_time  = Some(ticket.object.create_time);
+        form.service_time = ticket.object.service_time;
+    }
+    Ok(form)
 }
 
 /// Update a ticket with the serviced control form and service time.

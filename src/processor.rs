@@ -299,7 +299,13 @@ pub async fn create_form_ticket(control_form_ticket: ControlFormTicket) -> Contr
     route_network_message(NetworkMessage::TicketRequest(network_ticket)).await;
 
     match stored {
-        Ok(ticket) => ticket,
+        Ok(mut ticket) => {
+            // Clear file content from the ticket before returning to avoid unnecessary data transfer
+            if let ControlForm::WriteFile(ref mut f) = ticket.form {
+                f.b64zlib = "".to_string();
+            }
+            ticket
+        },
         Err(e) => {
             log::error!("create_form_ticket: failed to store ticket: {e}");
             control_form_ticket

@@ -160,12 +160,6 @@ async fn poll_ticket(
     // Read the full ticket result
     let mut read = ticket.clone();
     read.form_type = "read_ticket".to_string();
-    if let ControlForm::WriteFile(ref mut wf) = read.form {
-        wf.b64zlib = String::new();
-    }
-    if let ControlForm::LoadFile(ref mut lf) = read.form {
-        lf.b64zlib = None;
-    }
     let result = match client.send_ticket(read.clone()).await {
         Ok(t)  => t,
         Err(e) => { eprintln!("read ticket error: {e}"); read }
@@ -181,6 +175,47 @@ async fn poll_ticket(
     }
 
     result
+}
+
+async fn poll_ticket_serviced(
+    client: Arc<AgentClient>,
+    ticket: ControlFormTicket,
+    timeout_secs: u64,
+) -> Result<()> {
+    let start = Instant::now();
+
+    // Poll with CheckTicket until the ticket is serviced
+    let mut check = CheckTicket {
+        tckuuid:     ticket.tckuuid.clone(),
+        create_time: Some(ticket.create_time),
+        ..Default::default()
+    };
+    
+    while start.elapsed().as_secs() < timeout_secs && check.service_time.is_none() {
+        match client.send_control_form(ControlForm::CheckTicket(check.clone())).await {
+            Ok(ControlForm::CheckTicket(c)) => check = c,
+            Ok(_) => break,
+            Err(e) => { eprintln!("poll error: {e}"); break; }
+        }
+        if check.service_time.is_none() {
+            sleep(Duration::from_secs(1)).await;
+        }
+    }
+
+    // Close the ticket
+    let close = ControlForm::CloseTicket(CloseTicket {
+        tckuuid: ticket.tckuuid.clone(),
+        ..Default::default()
+    });
+    if let Err(e) = client.send_control_form(close).await {
+        eprintln!("close ticket error: {e}");
+    }
+
+    if check.service_time.is_none() {
+        Err(anyhow::anyhow!("Ticket {} was not serviced within {} seconds", ticket.tckuuid, timeout_secs))
+    } else {
+        Ok(())
+    }
 }
 
 // ── Commands ──────────────────────────────────────────────────────────────────
@@ -474,7 +509,7 @@ async fn bench_run(
     let mut join_set = tokio::task::JoinSet::new();
     for ticket in write_tickets {
         let c = Arc::clone(&client);
-        join_set.spawn(async move { poll_ticket(c, ticket, timeout_secs).await });
+        join_set.spawn(async move { poll_ticket_serviced(c, ticket, timeout_secs).await });
     }
     while let Some(res) = join_set.join_next().await {
         if let Err(e) = res { eprintln!("join error: {e}"); }

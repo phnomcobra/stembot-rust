@@ -5,9 +5,14 @@
 //! Implements actix-web handlers for the `/control` and `/mpi` endpoints,
 //! processes control forms and network messages, and provides scheduled
 //! background functions for message replay, peer polling, and route advertisement.
+//!
+//! Encryption protocol:
+//! - Request and response bodies are raw binary AES-256 EAX ciphertext
+//!   (Content-Type: application/binary).
+//! - The AES nonce and MAC tag are transmitted as hex strings in the
+//!   Nonce and Tag HTTP headers respectively.
 
 use actix_web::{web, HttpRequest, HttpResponse, Result as ActixResult};
-use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
 use serde_json::{json, Value};
 
 use crate::collections::{open_peers, open_tickets};
@@ -34,8 +39,9 @@ use crate::ticketing::{check_ticket, close_ticket, dedup_trace, read_ticket, ser
 
 /// Handler for the `/control` endpoint.
 ///
-/// Receives encrypted control forms, decrypts, processes, and returns
-/// encrypted responses. Handles both direct control forms and ticket operations.
+/// Receives raw binary AES-256 EAX ciphertext bodies, decrypts using the
+/// hex-encoded Nonce and Tag headers, processes, and returns an encrypted
+/// response in the same format.
 ///
 /// Mirrors Python's `/control` endpoint.
 pub async fn control_handler(
@@ -45,9 +51,9 @@ pub async fn control_handler(
 ) -> ActixResult<HttpResponse> {
     let key = config_data.key();
 
-    let nonce = extract_header_b64(&request, "Nonce")?;
-    let tag   = extract_header_b64(&request, "Tag")?;
-    let ct    = B64.decode(&body[..]).map_err(actix_web::error::ErrorBadRequest)?;
+    let nonce = extract_header_hex(&request, "Nonce")?;
+    let tag   = extract_header_hex(&request, "Tag")?;
+    let ct    = body.to_vec();
 
     let plaintext = decrypt(&key, &nonce, &tag, &ct)
         .map_err(actix_web::error::ErrorBadRequest)?;
@@ -78,15 +84,16 @@ pub async fn control_handler(
         .map_err(actix_web::error::ErrorInternalServerError)?;
 
     Ok(HttpResponse::Ok()
-        .append_header(("Nonce", B64.encode(nonce_out)))
-        .append_header(("Tag", B64.encode(tag_out)))
-        .body(B64.encode(ct_out)))
+        .append_header(("Nonce", hex::encode(nonce_out)))
+        .append_header(("Tag", hex::encode(tag_out)))
+        .body(ct_out))
 }
 
 /// Handler for the `/mpi` endpoint.
 ///
-/// Receives encrypted network messages, decrypts, routes, and returns
-/// encrypted responses.
+/// Receives raw binary AES-256 EAX ciphertext bodies, decrypts using the
+/// hex-encoded Nonce and Tag headers, routes, and returns an encrypted
+/// response in the same format.
 ///
 /// Mirrors Python's `/mpi` endpoint.
 pub async fn mpi_handler(
@@ -96,9 +103,9 @@ pub async fn mpi_handler(
 ) -> ActixResult<HttpResponse> {
     let key = config_data.key();
 
-    let nonce = extract_header_b64(&request, "Nonce")?;
-    let tag   = extract_header_b64(&request, "Tag")?;
-    let ct    = B64.decode(&body[..]).map_err(actix_web::error::ErrorBadRequest)?;
+    let nonce = extract_header_hex(&request, "Nonce")?;
+    let tag   = extract_header_hex(&request, "Tag")?;
+    let ct    = body.to_vec();
 
     let plaintext = decrypt(&key, &nonce, &tag, &ct)
         .map_err(actix_web::error::ErrorBadRequest)?;
@@ -123,9 +130,9 @@ pub async fn mpi_handler(
         .map_err(actix_web::error::ErrorInternalServerError)?;
 
     Ok(HttpResponse::Ok()
-        .append_header(("Nonce", B64.encode(nonce_out)))
-        .append_header(("Tag", B64.encode(tag_out)))
-        .body(B64.encode(ct_out)))
+        .append_header(("Nonce", hex::encode(nonce_out)))
+        .append_header(("Tag", hex::encode(tag_out)))
+        .body(ct_out))
 }
 
 // ── Control form processing ───────────────────────────────────────────────────
@@ -550,7 +557,7 @@ pub async fn advertizing() {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-fn extract_header_b64(req: &HttpRequest, name: &str) -> ActixResult<Vec<u8>> {
+fn extract_header_hex(req: &HttpRequest, name: &str) -> ActixResult<Vec<u8>> {
     let value = req
         .headers()
         .get(name)
@@ -558,7 +565,7 @@ fn extract_header_b64(req: &HttpRequest, name: &str) -> ActixResult<Vec<u8>> {
         .to_str()
         .map_err(|e| actix_web::error::ErrorBadRequest(e.to_string()))?
         .to_string();
-    B64.decode(value).map_err(|e| actix_web::error::ErrorBadRequest(e.to_string()))
+    hex::decode(value).map_err(|e| actix_web::error::ErrorBadRequest(e.to_string()))
 }
 
 fn config_to_json() -> Value {

@@ -259,14 +259,15 @@ Each request/response pair is encrypted end-to-end using AES-256 in EAX mode:
 
 **Request Headers:**
 ```
-Nonce:        base64(random_nonce)
-Tag:          base64(aes_authentication_tag)
-Content-Type: application/octet-stream
+Nonce:          hex(random_nonce)
+Tag:            hex(aes_authentication_tag)
+Content-Type:   application/binary
+Content-Length: <ciphertext byte length>
 ```
 
 **Payload:**
 ```
-base64(AES.encrypt(binary_data))
+AES.encrypt(json_data)   [raw binary ciphertext]
 ```
 
 The encryption key is derived from `SHA-256(secret)` and must be 32 bytes. Defaults to `SHA-256("changeme")`. **Change this in production.**

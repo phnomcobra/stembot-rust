@@ -5,10 +5,11 @@
 //! ## Wire format
 //! ```text
 //! POST {url}
-//! Content-Type: application/octet-stream
-//! Nonce: base64(16-byte AES-EAX nonce)
-//! Tag:   base64(16-byte AES-EAX MAC tag)
-//! Body:  base64(ciphertext)
+//! Content-Type:   application/binary
+//! Content-Length: <ciphertext byte length>
+//! Nonce:          hex(16-byte AES-EAX nonce)
+//! Tag:            hex(16-byte AES-EAX MAC tag)
+//! Body:           AES.encrypt(json_data)   [raw binary ciphertext]
 //! ```
 //! All messages are AES-256-EAX encrypted using the 32-byte key derived from
 //! `Config::secret_digest`.  `send_network_message` sets `isrc` to the local
@@ -16,7 +17,6 @@
 
 use anyhow::{anyhow, Result};
 use aes::Aes256;
-use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
 use eax::Eax;
 use eax::aead::{Aead, AeadCore, KeyInit};
 use rand::rngs::OsRng;
@@ -107,6 +107,9 @@ impl AgentClient {
 
     /// Send a control form and receive a typed response.
     ///
+    /// Request and response bodies are raw binary AES-256 EAX ciphertext
+    /// (Content-Type: application/binary). The nonce and MAC tag are
+    /// transmitted as hex strings in the Nonce and Tag headers.
     /// Mirrors `send_control_form(form)`.
     pub async fn send_control_form(
         &self,
@@ -120,10 +123,11 @@ impl AgentClient {
         let response = self
             .client
             .post(&self.url)
-            .header("Nonce", B64.encode(nonce))
-            .header("Tag", B64.encode(&tag))
-            .header("Content-Type", "application/octet-stream")
-            .body(B64.encode(&ct))
+            .header("Nonce", hex::encode(nonce))
+            .header("Tag", hex::encode(&tag))
+            .header("Content-Type", "application/binary")
+            .header("Content-Length", ct.len().to_string())
+            .body(ct)
             .send()
             .await?;
 
@@ -134,7 +138,10 @@ impl AgentClient {
 
     /// Send a control form ticket and receive a typed response.
     ///
-    /// Used for ticket lifecycle: create_ticket, read_ticket, close_ticket.
+    /// Request and response bodies are raw binary AES-256 EAX ciphertext
+    /// (Content-Type: application/binary). The nonce and MAC tag are
+    /// transmitted as hex strings in the Nonce and Tag headers.
+    /// Used for ticket lifecycle: create_ticket, read_ticket.
     /// Mirrors `send_control_form(ControlFormTicket(...))`.
     pub async fn send_ticket(&self, ticket: ControlFormTicket) -> Result<ControlFormTicket> {
         log::debug!("{} -> {}", ticket.form_type, ticket.dst);
@@ -145,10 +152,11 @@ impl AgentClient {
         let response = self
             .client
             .post(&self.url)
-            .header("Nonce", B64.encode(nonce))
-            .header("Tag", B64.encode(&tag))
-            .header("Content-Type", "application/octet-stream")
-            .body(B64.encode(&ct))
+            .header("Nonce", hex::encode(nonce))
+            .header("Tag", hex::encode(&tag))
+            .header("Content-Type", "application/binary")
+            .header("Content-Length", ct.len().to_string())
+            .body(ct)
             .send()
             .await?;
 
@@ -159,6 +167,9 @@ impl AgentClient {
 
     /// Send a network message and receive a response.
     ///
+    /// Request and response bodies are raw binary AES-256 EAX ciphertext
+    /// (Content-Type: application/binary). The nonce and MAC tag are
+    /// transmitted as hex strings in the Nonce and Tag headers.
     /// Sets `isrc` to this agent's UUID before encrypting.
     /// Mirrors `send_network_message(message)`.
     pub async fn send_network_message(
@@ -173,10 +184,11 @@ impl AgentClient {
         let response = self
             .client
             .post(&self.url)
-            .header("Nonce", B64.encode(nonce))
-            .header("Tag", B64.encode(&tag))
-            .header("Content-Type", "application/octet-stream")
-            .body(B64.encode(&ct))
+            .header("Nonce", hex::encode(nonce))
+            .header("Tag", hex::encode(&tag))
+            .header("Content-Type", "application/binary")
+            .header("Content-Length", ct.len().to_string())
+            .body(ct)
             .send()
             .await?;
 
@@ -188,22 +200,22 @@ impl AgentClient {
     // ── Private helpers ───────────────────────────────────────────────────────
 
     async fn decrypt_response(&self, resp: reqwest::Response) -> Result<Vec<u8>> {
-        let nonce_b64 = resp
+        let nonce_hex = resp
             .headers()
             .get("Nonce")
             .ok_or_else(|| anyhow!("response missing Nonce header"))?
             .to_str()?
             .to_string();
-        let tag_b64 = resp
+        let tag_hex = resp
             .headers()
             .get("Tag")
             .ok_or_else(|| anyhow!("response missing Tag header"))?
             .to_str()?
             .to_string();
 
-        let nonce = B64.decode(&nonce_b64)?;
-        let tag = B64.decode(&tag_b64)?;
-        let body = B64.decode(resp.bytes().await?)?;
+        let nonce = hex::decode(&nonce_hex)?;
+        let tag   = hex::decode(&tag_hex)?;
+        let body  = resp.bytes().await?.to_vec();
 
         decrypt(&self.key, &nonce, &tag, &body)
     }
@@ -238,8 +250,8 @@ mod tests {
 
     /// SHA-256 of b"stembot-test-key" as a 32-byte AES-256 key.
     fn test_key() -> [u8; 32] {
-        let hex = sha256::digest("stembot-test-key");
-        let bytes = hex::decode(hex).expect("valid hex");
+        let hex_str = sha256::digest("stembot-test-key");
+        let bytes = hex::decode(hex_str).expect("valid hex");
         let mut key = [0u8; 32];
         key.copy_from_slice(&bytes[..32]);
         key
@@ -332,9 +344,9 @@ mod tests {
         let _mock = server
             .mock("POST", "/control")
             .with_status(200)
-            .with_header("Nonce", &B64.encode(r_nonce))
-            .with_header("Tag", &B64.encode(&r_tag))
-            .with_body(B64.encode(&r_ct))
+            .with_header("Nonce", &hex::encode(r_nonce))
+            .with_header("Tag", &hex::encode(&r_tag))
+            .with_body(&r_ct)
             .create_async()
             .await;
 
@@ -361,9 +373,9 @@ mod tests {
         let _mock = server
             .mock("POST", "/control")
             .with_status(200)
-            .with_header("Nonce", &B64.encode(r_nonce))
-            .with_header("Tag", &B64.encode(&r_tag))
-            .with_body(B64.encode(&r_ct))
+            .with_header("Nonce", &hex::encode(r_nonce))
+            .with_header("Tag", &hex::encode(&r_tag))
+            .with_body(&r_ct)
             .create_async()
             .await;
 
@@ -389,9 +401,9 @@ mod tests {
         let _mock = server
             .mock("POST", "/control")
             .with_status(200)
-            .with_header("Nonce", &B64.encode(r_nonce))
-            .with_header("Tag", &B64.encode(&r_tag))
-            .with_body(B64.encode(&r_ct))
+            .with_header("Nonce", &hex::encode(r_nonce))
+            .with_header("Tag", &hex::encode(&r_tag))
+            .with_body(&r_ct)
             .create_async()
             .await;
 
@@ -418,9 +430,9 @@ mod tests {
         let _mock = server
             .mock("POST", "/mpi")
             .with_status(200)
-            .with_header("Nonce", &B64.encode(r_nonce))
-            .with_header("Tag", &B64.encode(&r_tag))
-            .with_body(B64.encode(&r_ct))
+            .with_header("Nonce", &hex::encode(r_nonce))
+            .with_header("Tag", &hex::encode(&r_tag))
+            .with_body(&r_ct)
             .create_async()
             .await;
 
@@ -461,9 +473,9 @@ mod tests {
         let _mock = server
             .mock("POST", "/mpi")
             .with_status(200)
-            .with_header("Nonce", &B64.encode(r_nonce))
-            .with_header("Tag", &B64.encode(&r_tag))
-            .with_body(B64.encode(&r_ct))
+            .with_header("Nonce", &hex::encode(r_nonce))
+            .with_header("Tag", &hex::encode(&r_tag))
+            .with_body(&r_ct)
             .create_async()
             .await;
 

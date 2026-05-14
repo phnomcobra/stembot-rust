@@ -242,6 +242,11 @@ pub async fn process_control_form(form: ControlForm) -> ControlForm {
 
         ControlForm::WriteFile(f) => ControlForm::WriteFile(write_file_from_form(f)),
 
+        ControlForm::Benchmark(mut f) => {
+            f.payload = f.inbound_size.map(|size| "0".repeat(size as usize));
+            ControlForm::Benchmark(f)
+        }
+
         ControlForm::GetConfig(mut f) => {
             f.config = Some(config_to_json());
             ControlForm::GetConfig(f)
@@ -283,7 +288,12 @@ async fn process_ticket_form(mut ticket: ControlFormTicket) -> ControlFormTicket
 /// Create a network ticket from a control form ticket and route it to the destination.
 ///
 /// Mirrors Python's `create_form_ticket(control_form_ticket)`.
-pub async fn create_form_ticket(control_form_ticket: ControlFormTicket) -> ControlFormTicket {
+pub async fn create_form_ticket(mut control_form_ticket: ControlFormTicket) -> ControlFormTicket {
+    // Fill benchmark outbound payload before routing
+    if let ControlForm::Benchmark(ref mut f) = control_form_ticket.form {
+        f.payload = f.outbound_size.map(|size| "0".repeat(size as usize));
+    }
+
     let network_ticket = NetworkTicket {
         tckuuid:      control_form_ticket.tckuuid.clone(),
         form:         control_form_ticket.form.clone(),
@@ -310,6 +320,10 @@ pub async fn create_form_ticket(control_form_ticket: ControlFormTicket) -> Contr
             // Clear file content from the ticket before returning to avoid unnecessary data transfer
             if let ControlForm::WriteFile(ref mut f) = ticket.form {
                 f.b64zlib = "".to_string();
+            }
+            // Clear benchmark payload from the ticket before returning
+            if let ControlForm::Benchmark(ref mut f) = ticket.form {
+                f.payload = None;
             }
             ticket
         },

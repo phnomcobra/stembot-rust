@@ -9,19 +9,19 @@ use std::time::Instant;
 use anyhow::Result;
 use chrono::{SecondsFormat, TimeZone, Utc};
 use clap::{Parser, Subcommand};
-use rand::RngCore;
 use tokio::time::{sleep, Duration};
 
 use stembot_rust::{
     executor::{
         agent::AgentClient,
-        file::{load_file_to_form, load_form_from_bytes, write_file_from_form},
+        file::{load_file_to_form, write_file_from_form},
     },
     models::{
         config::Config,
         control::{
-            CheckTicket, CloseTicket, CommandArg, ControlForm, ControlFormTicket, DeletePeers,
-            DiscoverPeer, GetConfig, GetPeers, GetRoutes, LoadFile, SyncProcess, WriteFile,
+            Benchmark, CheckTicket, CloseTicket, CommandArg, ControlForm, ControlFormTicket,
+            DeletePeers, DiscoverPeer, GetConfig, GetPeers, GetRoutes, LoadFile, SyncProcess,
+            WriteFile,
         },
     },
 };
@@ -93,9 +93,6 @@ enum Commands {
         /// Timeout in seconds per operation (default: 15)
         #[clap(short = 't', long, default_value = "15")]
         timeout: u64,
-        /// Use zero bytes instead of random data
-        #[clap(short = 'z', long)]
-        zeros: bool,
     },
     /// Transfer a file from source to destination
     Put {
@@ -175,47 +172,6 @@ async fn poll_ticket(
     }
 
     result
-}
-
-async fn poll_ticket_serviced(
-    client: Arc<AgentClient>,
-    ticket: ControlFormTicket,
-    timeout_secs: u64,
-) -> Result<()> {
-    let start = Instant::now();
-
-    // Poll with CheckTicket until the ticket is serviced
-    let mut check = CheckTicket {
-        tckuuid:     ticket.tckuuid.clone(),
-        create_time: Some(ticket.create_time),
-        ..Default::default()
-    };
-    
-    while start.elapsed().as_secs() < timeout_secs && check.service_time.is_none() {
-        match client.send_control_form(ControlForm::CheckTicket(check.clone())).await {
-            Ok(ControlForm::CheckTicket(c)) => check = c,
-            Ok(_) => break,
-            Err(e) => { eprintln!("poll error: {e}"); break; }
-        }
-        if check.service_time.is_none() {
-            sleep(Duration::from_secs(1)).await;
-        }
-    }
-
-    // Close the ticket
-    let close = ControlForm::CloseTicket(CloseTicket {
-        tckuuid: ticket.tckuuid.clone(),
-        ..Default::default()
-    });
-    if let Err(e) = client.send_control_form(close).await {
-        eprintln!("close ticket error: {e}");
-    }
-
-    if check.service_time.is_none() {
-        Err(anyhow::anyhow!("Ticket {} was not serviced within {} seconds", ticket.tckuuid, timeout_secs))
-    } else {
-        Ok(())
-    }
 }
 
 // ── Commands ──────────────────────────────────────────────────────────────────
@@ -461,127 +417,136 @@ async fn cmd_stat(client: Arc<AgentClient>, agtuuid: String, timeout: u64) -> Re
     Ok(())
 }
 
+/// Poll a `Benchmark` ticket for timing data only (no content read).
+///
+/// Returns the `CheckTicket` with `create_time` and `service_time` populated.
+async fn bench_poll_timing(
+    client: Arc<AgentClient>,
+    ticket: ControlFormTicket,
+    timeout_secs: u64,
+) -> CheckTicket {
+    let start = std::time::Instant::now();
+    let mut check = CheckTicket {
+        tckuuid:     ticket.tckuuid.clone(),
+        create_time: Some(ticket.create_time),
+        ..Default::default()
+    };
+    while start.elapsed().as_secs() < timeout_secs && check.service_time.is_none() {
+        match client.send_control_form(ControlForm::CheckTicket(check.clone())).await {
+            Ok(ControlForm::CheckTicket(c)) => check = c,
+            Ok(_) => break,
+            Err(e) => { eprintln!("poll error: {e}"); break; }
+        }
+        if check.service_time.is_none() {
+            sleep(Duration::from_secs(1)).await;
+        }
+    }
+    let close = ControlForm::CloseTicket(CloseTicket {
+        tckuuid: ticket.tckuuid.clone(),
+        ..Default::default()
+    });
+    if let Err(e) = client.send_control_form(close).await {
+        eprintln!("close ticket error: {e}");
+    }
+    check
+}
+
+/// Send and poll a batch of Benchmark tickets for one direction.
+///
+/// `outbound = true`  → measures OUT throughput (client → agent, `outbound_size` set).
+/// `outbound = false` → measures IN  throughput (agent → client, `inbound_size` set).
+async fn bench_run_direction(
+    client: Arc<AgentClient>,
+    agtuuid: String,
+    size: usize,
+    concurrency: usize,
+    timeout_secs: u64,
+    outbound: bool,
+) -> Vec<CheckTicket> {
+    let tickets: Vec<ControlFormTicket> = (0..concurrency)
+        .map(|_| {
+            let form = if outbound {
+                ControlForm::Benchmark(Benchmark {
+                    outbound_size: Some(size as i64),
+                    inbound_size:  None,
+                    ..Default::default()
+                })
+            } else {
+                ControlForm::Benchmark(Benchmark {
+                    outbound_size: None,
+                    inbound_size:  Some(size as i64),
+                    ..Default::default()
+                })
+            };
+            ControlFormTicket { dst: agtuuid.clone(), form, ..ControlFormTicket::default() }
+        })
+        .collect();
+
+    // Send tickets concurrently
+    let mut join_set = tokio::task::JoinSet::new();
+    for ticket in tickets {
+        let c = Arc::clone(&client);
+        join_set.spawn(async move { c.send_ticket(ticket).await });
+    }
+    let mut sent: Vec<ControlFormTicket> = Vec::new();
+    while let Some(res) = join_set.join_next().await {
+        match res {
+            Ok(Ok(t))  => sent.push(t),
+            Ok(Err(e)) => eprintln!("bench send error: {e}"),
+            Err(e)     => eprintln!("join error: {e}"),
+        }
+    }
+
+    // Poll tickets concurrently for timing
+    let mut join_set = tokio::task::JoinSet::new();
+    for ticket in sent {
+        let c = Arc::clone(&client);
+        join_set.spawn(async move { bench_poll_timing(c, ticket, timeout_secs).await });
+    }
+    let mut checks: Vec<CheckTicket> = Vec::new();
+    while let Some(res) = join_set.join_next().await {
+        match res {
+            Ok(c)  => checks.push(c),
+            Err(e) => eprintln!("join error: {e}"),
+        }
+    }
+    checks
+}
+
 async fn bench_run(
     client: Arc<AgentClient>,
     agtuuid: String,
     size: usize,
     concurrency: usize,
     timeout_secs: u64,
-    zeros: bool,
 ) {
-    // Build write tickets with random or zero-filled data
-    let mut paths = Vec::with_capacity(concurrency);
-    let mut write_tickets = Vec::with_capacity(concurrency);
-    for i in 0..concurrency {
-        let mut data = vec![0u8; size];
-        if !zeros {
-            rand::thread_rng().fill_bytes(&mut data);
-        }
-        let mut wf = load_form_from_bytes(&data);
-        let path = format!("/tmp/test.{i}.{size}.dat");
-        wf.path = path.clone();
-        paths.push(path);
-        write_tickets.push(ControlFormTicket {
-            dst: agtuuid.clone(),
-            form: ControlForm::WriteFile(wf),
-            ..ControlFormTicket::default()
-        });
-    }
+    let out_checks = bench_run_direction(Arc::clone(&client), agtuuid.clone(), size, concurrency, timeout_secs, true).await;
+    let in_checks  = bench_run_direction(Arc::clone(&client), agtuuid,         size, concurrency, timeout_secs, false).await;
 
-    let outer_start = Instant::now();
-
-    // Send write tickets concurrently
-    let mut join_set = tokio::task::JoinSet::new();
-    for ticket in write_tickets {
-        let c = Arc::clone(&client);
-        join_set.spawn(async move { c.send_ticket(ticket).await });
-    }
-    let mut write_tickets: Vec<ControlFormTicket> = Vec::new();
-    while let Some(res) = join_set.join_next().await {
-        match res {
-            Ok(Ok(t)) => write_tickets.push(t),
-            Ok(Err(e)) => eprintln!("write send error: {e}"),
-            Err(e)     => eprintln!("join error: {e}"),
-        }
-    }
-
-    // Poll write tickets concurrently
-    let mut join_set = tokio::task::JoinSet::new();
-    for ticket in write_tickets {
-        let c = Arc::clone(&client);
-        join_set.spawn(async move { poll_ticket_serviced(c, ticket, timeout_secs).await });
-    }
-    while let Some(res) = join_set.join_next().await {
-        if let Err(e) = res { eprintln!("join error: {e}"); }
-    }
-
-    // Build load tickets
-    let load_tickets: Vec<ControlFormTicket> = paths
-        .iter()
-        .map(|path| ControlFormTicket {
-            dst: agtuuid.clone(),
-            form: ControlForm::LoadFile(LoadFile { path: path.clone(), ..Default::default() }),
-            ..ControlFormTicket::default()
-        })
-        .collect();
-
-    // Send load tickets concurrently
-    let mut join_set = tokio::task::JoinSet::new();
-    for ticket in load_tickets {
-        let c = Arc::clone(&client);
-        join_set.spawn(async move { c.send_ticket(ticket).await });
-    }
-    let mut load_tickets: Vec<ControlFormTicket> = Vec::new();
-    while let Some(res) = join_set.join_next().await {
-        match res {
-            Ok(Ok(t)) => load_tickets.push(t),
-            Ok(Err(e)) => eprintln!("load send error: {e}"),
-            Err(e)     => eprintln!("join error: {e}"),
-        }
-    }
-
-    // Poll load tickets concurrently
-    let mut join_set = tokio::task::JoinSet::new();
-    for ticket in load_tickets {
-        let c = Arc::clone(&client);
-        join_set.spawn(async move { poll_ticket(c, ticket, timeout_secs).await });
-    }
-    let mut final_loads: Vec<ControlFormTicket> = Vec::new();
-    while let Some(res) = join_set.join_next().await {
-        match res {
-            Ok(t)  => final_loads.push(t),
-            Err(e) => eprintln!("join error: {e}"),
-        }
-    }
-
-    let outer_et   = outer_start.elapsed().as_secs_f64();
-    let total_size = (concurrency * size) as f64;
-    let bandwidth  = 2.0 * total_size / outer_et;
-
-    let completed = final_loads
-        .iter()
-        .filter(|t| {
-            t.service_time.is_some()
-                && t.error.is_none()
-                && matches!(&t.form, ControlForm::LoadFile(f) if f.error.is_none())
-        })
-        .count();
-
-    println!(
-        "   {:.<11} {:.<12} {:.<8} {:.<10} {}",
-        format!("{:.3}s", outer_et),
-        format_bytes(total_size),
-        format!("{completed}:{concurrency}"),
-        format_bytes(size as f64),
-        format_bandwidth(bandwidth),
-    );
+    let print_row = |dir: &str, checks: &[CheckTicket]| {
+        let completed: Vec<&CheckTicket> = checks.iter().filter(|c| c.service_time.is_some()).collect();
+        let elapsed = completed.iter()
+            .filter_map(|c| c.service_time.zip(c.create_time).map(|(s, ct)| s - ct))
+            .fold(0.0f64, f64::max);
+        let ok = completed.len();
+        let bw = if elapsed > 0.0 { (ok * size) as f64 / elapsed } else { 0.0 };
+        println!(
+            "   {dir:.<6} {:<11} {:<12} {:<8} {:<10} {}",
+            format!("{:.3}s", elapsed),
+            format_bytes((ok * size) as f64),
+            format!("{ok}:{concurrency}"),
+            format_bytes(size as f64),
+            format_bandwidth(bw),
+        );
+    };
+    print_row("OUT", &out_checks);
+    print_row("IN",  &in_checks);
 }
 
 async fn cmd_bench(
     client: Arc<AgentClient>,
     agtuuid: String,
     timeout: u64,
-    zeros: bool,
 ) -> Result<()> {
     println!();
     println!("{}", "=".repeat(70));
@@ -590,8 +555,8 @@ async fn cmd_bench(
     println!();
 
     println!(
-        "   {:.<11} {:.<12} {:.<8} {:.<10} Bandwidth",
-        "Elapsed (s)", "Total Bytes", "Success", "Bytes/Op"
+        "   {:.<6} {:.<11} {:.<12} {:.<8} {:.<10} Bandwidth",
+        "Dir", "Elapsed (s)", "Total Bytes", "Success", "Bytes/Op"
     );
     println!("{}", "-".repeat(70));
 
@@ -603,7 +568,7 @@ async fn cmd_bench(
             if size * concurrency > 256 * MB {
                 continue;
             }
-            bench_run(Arc::clone(&client), agtuuid.clone(), *size, *concurrency, timeout, zeros).await;
+            bench_run(Arc::clone(&client), agtuuid.clone(), *size, *concurrency, timeout).await;
         }
     }
 
@@ -820,8 +785,8 @@ async fn main() -> Result<()> {
         Commands::Stat { agtuuid, timeout } =>
             cmd_stat(client, agtuuid, timeout).await?,
 
-        Commands::Bench { agtuuid, timeout, zeros } =>
-            cmd_bench(client, agtuuid, timeout, zeros).await?,
+        Commands::Bench { agtuuid, timeout } =>
+            cmd_bench(client, agtuuid, timeout).await?,
 
         Commands::Put { src_path, dst_path, timeout, src_agtuuid, dst_agtuuid } =>
             cmd_put(client, src_path, dst_path, timeout, src_agtuuid, dst_agtuuid).await?,

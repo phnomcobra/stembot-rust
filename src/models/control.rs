@@ -147,6 +147,18 @@ pub struct GetRoutes {
     pub coluuid: Option<String>,
 }
 
+/// Request to benchmark the remote agent's network throughput.
+/// Maps to Python's `Benchmark(ControlForm)`.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct Benchmark {
+    pub outbound_size: Option<i64>,
+    pub inbound_size:  Option<i64>,
+    pub payload:       Option<String>,
+    pub error:         Option<String>,
+    pub objuuid:       Option<String>,
+    pub coluuid:       Option<String>,
+}
+
 /// Request to retrieve the agent configuration.
 /// Maps to Python's `GetConfig(ControlForm)`.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -197,6 +209,7 @@ pub enum ControlForm {
     #[serde(rename = "sync_process")]  SyncProcess(SyncProcess),
     #[serde(rename = "write_file")]    WriteFile(WriteFile),
     #[serde(rename = "load_file")]     LoadFile(LoadFile),
+    #[serde(rename = "benchmark")]     Benchmark(Benchmark),
     #[serde(rename = "get_config")]    GetConfig(GetConfig),
     #[serde(rename = "check_ticket")]  CheckTicket(CheckTicket),
     #[serde(rename = "close_ticket")]  CloseTicket(CloseTicket),
@@ -220,6 +233,7 @@ impl ControlForm {
             Self::SyncProcess(_)  => "sync_process",
             Self::WriteFile(_)    => "write_file",
             Self::LoadFile(_)     => "load_file",
+            Self::Benchmark(_)    => "benchmark",
             Self::GetConfig(_)    => "get_config",
             Self::CheckTicket(_)  => "check_ticket",
             Self::CloseTicket(_)  => "close_ticket",

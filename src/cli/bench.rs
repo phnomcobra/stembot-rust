@@ -203,8 +203,8 @@ pub async fn cmd_bench(
     println!();
 
     println!(
-        "   {:.<10} {:.<15} {:.<14} {:.<14} {}",
-        "Bytes/Op", "Success", "IN BW", "OUT BW", "Overall BW"
+        "   {:.<10} {:.<15} {:.<14} {:.<14} Overall BW",
+        "Bytes/Op", "Success", "IN BW", "OUT BW"
     );
     println!("{}", "-".repeat(76));
 

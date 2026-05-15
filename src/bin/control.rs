@@ -595,9 +595,8 @@ async fn bench_run(
     let comb_bw = if comb_elapsed > 0.0 { (comb_ok * size * 2) as f64 / comb_elapsed } else { 0.0 };
 
     println!(
-        "   {:<10} {:<4} {:<15} {:<14} {:<14} {}",
+        "   {:<10} {:<15} {:<14} {:<14} {}",
         format_bytes(size as f64),
-        concurrency,
         format!("{in_ok}:{out_ok}:{comb_ok}:{concurrency}"),
         format_bandwidth(in_bw),
         format_bandwidth(out_bw),
@@ -617,8 +616,8 @@ async fn cmd_bench(
     println!();
 
     println!(
-        "   {:.<10} {:.<4} {:.<15} {:.<14} {:.<14} {}",
-        "Bytes/Op", "Conc", "Success", "IN BW", "OUT BW", "Overall BW"
+        "   {:.<10} {:.<15} {:.<14} {:.<14} {}",
+        "Bytes/Op", "Success", "IN BW", "OUT BW", "Overall BW"
     );
     println!("{}", "-".repeat(76));
 

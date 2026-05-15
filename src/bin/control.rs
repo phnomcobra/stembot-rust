@@ -513,6 +513,56 @@ async fn bench_run_direction(
     checks
 }
 
+/// Send and poll a batch of Benchmark tickets with both directions active simultaneously.
+async fn bench_run_combined(
+    client: Arc<AgentClient>,
+    agtuuid: String,
+    size: usize,
+    concurrency: usize,
+    timeout_secs: u64,
+) -> Vec<CheckTicket> {
+    let tickets: Vec<ControlFormTicket> = (0..concurrency)
+        .map(|_| {
+            let form = ControlForm::Benchmark(Benchmark {
+                outbound_size: Some(size as i64),
+                inbound_size:  Some(size as i64),
+                ..Default::default()
+            });
+            ControlFormTicket { dst: agtuuid.clone(), form, ..ControlFormTicket::default() }
+        })
+        .collect();
+
+    // Send tickets concurrently
+    let mut join_set = tokio::task::JoinSet::new();
+    for ticket in tickets {
+        let c = Arc::clone(&client);
+        join_set.spawn(async move { c.send_ticket(ticket).await });
+    }
+    let mut sent: Vec<ControlFormTicket> = Vec::new();
+    while let Some(res) = join_set.join_next().await {
+        match res {
+            Ok(Ok(t))  => sent.push(t),
+            Ok(Err(e)) => eprintln!("bench send error: {e}"),
+            Err(e)     => eprintln!("join error: {e}"),
+        }
+    }
+
+    // Poll tickets concurrently for timing
+    let mut join_set = tokio::task::JoinSet::new();
+    for ticket in sent {
+        let c = Arc::clone(&client);
+        join_set.spawn(async move { bench_poll_timing(c, ticket, timeout_secs).await });
+    }
+    let mut checks: Vec<CheckTicket> = Vec::new();
+    while let Some(res) = join_set.join_next().await {
+        match res {
+            Ok(c)  => checks.push(c),
+            Err(e) => eprintln!("join error: {e}"),
+        }
+    }
+    checks
+}
+
 async fn bench_run(
     client: Arc<AgentClient>,
     agtuuid: String,
@@ -520,27 +570,39 @@ async fn bench_run(
     concurrency: usize,
     timeout_secs: u64,
 ) {
-    let out_checks = bench_run_direction(Arc::clone(&client), agtuuid.clone(), size, concurrency, timeout_secs, true).await;
-    let in_checks  = bench_run_direction(Arc::clone(&client), agtuuid,         size, concurrency, timeout_secs, false).await;
+    let out_checks  = bench_run_direction(Arc::clone(&client), agtuuid.clone(), size, concurrency, timeout_secs, true).await;
+    let in_checks   = bench_run_direction(Arc::clone(&client), agtuuid.clone(), size, concurrency, timeout_secs, false).await;
+    let comb_checks = bench_run_combined(Arc::clone(&client),  agtuuid,         size, concurrency, timeout_secs).await;
 
-    let print_row = |dir: &str, checks: &[CheckTicket]| {
-        let completed: Vec<&CheckTicket> = checks.iter().filter(|c| c.service_time.is_some()).collect();
-        let elapsed = completed.iter()
+    let count_ok    = |checks: &[CheckTicket]| checks.iter().filter(|c| c.service_time.is_some()).count();
+    let max_elapsed = |checks: &[CheckTicket]| {
+        checks.iter()
             .filter_map(|c| c.service_time.zip(c.create_time).map(|(s, ct)| s - ct))
-            .fold(0.0f64, f64::max);
-        let ok = completed.len();
-        let bw = if elapsed > 0.0 { (ok * size) as f64 / elapsed } else { 0.0 };
-        println!(
-            "   {dir:.<6} {:<11} {:<12} {:<8} {:<10} {}",
-            format!("{:.3}s", elapsed),
-            format_bytes((ok * size) as f64),
-            format!("{ok}:{concurrency}"),
-            format_bytes(size as f64),
-            format_bandwidth(bw),
-        );
+            .fold(0.0f64, f64::max)
     };
-    print_row("OUT", &out_checks);
-    print_row("IN",  &in_checks);
+
+    let out_ok   = count_ok(&out_checks);
+    let in_ok    = count_ok(&in_checks);
+    let comb_ok  = count_ok(&comb_checks);
+
+    let out_elapsed  = max_elapsed(&out_checks);
+    let in_elapsed   = max_elapsed(&in_checks);
+    let comb_elapsed = max_elapsed(&comb_checks);
+
+    let out_bw  = if out_elapsed  > 0.0 { (out_ok  * size) as f64 / out_elapsed  } else { 0.0 };
+    let in_bw   = if in_elapsed   > 0.0 { (in_ok   * size) as f64 / in_elapsed   } else { 0.0 };
+    // combined transfers size bytes each direction per ticket
+    let comb_bw = if comb_elapsed > 0.0 { (comb_ok * size * 2) as f64 / comb_elapsed } else { 0.0 };
+
+    println!(
+        "   {:<10} {:<4} {:<15} {:<14} {:<14} {}",
+        format_bytes(size as f64),
+        concurrency,
+        format!("{in_ok}:{out_ok}:{comb_ok}:{concurrency}"),
+        format_bandwidth(in_bw),
+        format_bandwidth(out_bw),
+        format_bandwidth(comb_bw),
+    );
 }
 
 async fn cmd_bench(
@@ -549,16 +611,16 @@ async fn cmd_bench(
     timeout: u64,
 ) -> Result<()> {
     println!();
-    println!("{}", "=".repeat(70));
+    println!("{}", "=".repeat(76));
     println!("Benchmark Results for {agtuuid}");
-    println!("{}", "=".repeat(70));
+    println!("{}", "=".repeat(76));
     println!();
 
     println!(
-        "   {:.<6} {:.<11} {:.<12} {:.<8} {:.<10} Bandwidth",
-        "Dir", "Elapsed (s)", "Total Bytes", "Success", "Bytes/Op"
+        "   {:.<10} {:.<4} {:.<15} {:.<14} {:.<14} {}",
+        "Bytes/Op", "Conc", "Success", "IN BW", "OUT BW", "Overall BW"
     );
-    println!("{}", "-".repeat(70));
+    println!("{}", "-".repeat(76));
 
     let sizes:         Vec<usize> = (0..17).map(|x| (16 * KB) << x).collect();
     let concurrencies: Vec<usize> = (0..7).map(|x| 1 << x).collect();
@@ -572,9 +634,9 @@ async fn cmd_bench(
         }
     }
 
-    println!("{}", "-".repeat(70));
+    println!("{}", "-".repeat(76));
     println!();
-    println!("{}", "=".repeat(70));
+    println!("{}", "=".repeat(76));
     println!();
     Ok(())
 }

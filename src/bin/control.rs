@@ -95,7 +95,10 @@ enum Commands {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let cli    = Cli::parse();
+    let args: Vec<String> = std::env::args()
+        .map(|a| if a == "-?" { "--help".to_string() } else { a })
+        .collect();
+    let cli = Cli::parse_from(args);
     let config = Config::load();
     let client = Arc::new(AgentClient::new(config.client_control_url.clone()));
 

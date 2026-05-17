@@ -165,7 +165,10 @@ fn display_config(store: &KVStore) {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let args = Args::parse();
+    let raw: Vec<String> = std::env::args()
+        .map(|a| if a == "-?" { "--help".to_string() } else { a })
+        .collect();
+    let args = Args::parse_from(raw);
     let store = KVStore::new(None).expect("failed to open kvstore");
     let mut modified = false;
 

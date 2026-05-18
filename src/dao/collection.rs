@@ -141,6 +141,38 @@ impl<T: Serialize + DeserializeOwned + Default> Collection<T> {
         Ok(objects)
     }
 
+    /// Like `find`, but returns at most `limit` objects.
+    /// Returns an error if `limit < 1`.
+    pub fn find_limited(&self, queries: &[(&str, &str)], limit: usize) -> Result<Vec<Object<T>>> {
+        let objuuids = self.document.find_objuuids_limited(&self.coluuid, queries, Some(limit))?;
+        let mut objects = Vec::new();
+        for objuuid in objuuids {
+            match Object::new(&self.coluuid, &objuuid, self.document.clone()) {
+                Ok(obj) => objects.push(obj),
+                Err(e) => {
+                    log::warn!("discarding invalid object {}: {}", objuuid, e);
+                    let _ = self.document.delete_object(&objuuid);
+                }
+            }
+        }
+        Ok(objects)
+    }
+
+    /// Like `pop`, but deletes and returns at most `limit` objects.
+    /// Returns an error if `limit < 1`.
+    pub fn pop_limited(&self, queries: &[(&str, &str)], limit: usize) -> Result<Vec<Object<T>>> {
+        let objuuids = self.document.find_objuuids_limited(&self.coluuid, queries, Some(limit))?;
+        let mut objects = Vec::new();
+        for objuuid in &objuuids {
+            match Object::new(&self.coluuid, objuuid, self.document.clone()) {
+                Ok(obj) => objects.push(obj),
+                Err(e) => log::warn!("discarding invalid object {}: {}", objuuid, e),
+            }
+            let _ = self.document.delete_object(objuuid);
+        }
+        Ok(objects)
+    }
+
     pub fn find_objuuids(&self, queries: &[(&str, &str)]) -> Result<Vec<String>> {
         self.document.find_objuuids(&self.coluuid, queries)
     }
@@ -311,6 +343,73 @@ mod tests {
         let items = col
             .find(&[("size", "$gt:1"), ("size", "$lt:4")])
             .unwrap();
+        assert_eq!(items.len(), 2);
+    }
+
+    // ── Reserved attributes ───────────────────────────────────────────────────
+
+    #[test]
+    fn test_create_attribute_reserved_name_limit_raises() {
+        let col = make_collection();
+        let err = col.create_attribute("limit", "/limit").unwrap_err();
+        assert!(err.to_string().contains("reserved"), "{err}");
+    }
+
+    #[test]
+    fn test_delete_attribute_reserved_name_limit_raises() {
+        let col = make_collection();
+        let err = col.delete_attribute("limit").unwrap_err();
+        assert!(err.to_string().contains("reserved"), "{err}");
+    }
+
+    // ── Limit parameter ───────────────────────────────────────────────────────
+
+    #[test]
+    fn test_find_limit_equal_to_total() {
+        let col = make_collection();
+        assert_eq!(col.find_limited(&[("size", "$gte:1")], 4).unwrap().len(), 4);
+    }
+
+    #[test]
+    fn test_find_limit_subset() {
+        let col = make_collection();
+        assert_eq!(col.find_limited(&[("size", "$gte:1")], 2).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn test_find_limit_one() {
+        let col = make_collection();
+        assert_eq!(col.find_limited(&[("size", "$gte:1")], 1).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_find_limit_with_filter() {
+        let col = make_collection();
+        assert_eq!(col.find_limited(&[("color", "green")], 1).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_find_limit_exceeds_filter_total() {
+        let col = make_collection();
+        // Only 2 green items; limit=100 returns all 2
+        assert_eq!(col.find_limited(&[("color", "green")], 100).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn test_find_limit_zero_raises() {
+        let col = make_collection();
+        assert!(col.find_limited(&[("size", "$gte:1")], 0).is_err());
+    }
+
+    #[test]
+    fn test_find_reserved_attribute_in_queries_skipped() {
+        // "limit" as a query attribute is silently skipped; filter on color still applies
+        let col = make_collection();
+        let items = col.document.find_objuuids_limited(
+            &col.coluuid,
+            &[("limit", "1"), ("color", "green")],
+            None,
+        ).unwrap();
         assert_eq!(items.len(), 2);
     }
 }

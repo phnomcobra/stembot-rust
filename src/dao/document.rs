@@ -9,6 +9,10 @@ use uuid::Uuid;
 
 pub const DEFAULT_CONNECTION_STR: &str = "default.sqlite";
 
+/// Attribute names that are reserved and cannot be used as index attributes.
+/// Mirrors Python's `RESERVED_ATTRIBUTES_NAMES` in `stembot/dao/document.py`.
+pub const RESERVED_ATTRIBUTES: &[&str] = &["limit"];
+
 /// Core SQLite-backed storage layer.  Every Collection and Object obtains a
 /// clone of a Document so they all share the same `Arc<Mutex<Connection>>`.
 #[derive(Clone)]
@@ -199,14 +203,43 @@ impl Document {
     /// Find object UUIDs matching ALL supplied `(attribute, expression)` pairs
     /// (intersection).  Empty `queries` returns every UUID in the collection.
     pub fn find_objuuids(&self, coluuid: &str, queries: &[(&str, &str)]) -> Result<Vec<String>> {
-        if queries.is_empty() {
-            return self.list_collection_objects(coluuid);
+        self.find_objuuids_limited(coluuid, queries, None)
+    }
+
+    /// Like `find_objuuids`, but truncates the result to at most `limit` entries.
+    /// `limit` must be `>= 1` if `Some`; passing `Some(0)` returns an error.
+    /// Reserved attribute names in `queries` are silently skipped.
+    pub fn find_objuuids_limited(
+        &self,
+        coluuid: &str,
+        queries: &[(&str, &str)],
+        limit: Option<usize>,
+    ) -> Result<Vec<String>> {
+        if let Some(n) = limit {
+            if n < 1 {
+                return Err(anyhow!("limit must be >= 1, got {}", n));
+            }
+        }
+
+        // Filter out reserved attribute names from queries
+        let effective_queries: Vec<(&str, &str)> = queries
+            .iter()
+            .copied()
+            .filter(|(attr, _)| !RESERVED_ATTRIBUTES.contains(attr))
+            .collect();
+
+        if effective_queries.is_empty() {
+            let all = self.list_collection_objects(coluuid)?;
+            return Ok(match limit {
+                Some(n) => all.into_iter().take(n).collect(),
+                None => all,
+            });
         }
 
         let conn = self.connection.lock().unwrap();
         let mut objuuid_lists: Vec<Vec<String>> = Vec::new();
 
-        for &(attribute, expression) in queries {
+        for &(attribute, expression) in &effective_queries {
             let (operator, negation, subject) = parse_expression(expression);
 
             let ids: Vec<String> = match operator {
@@ -329,7 +362,11 @@ impl Document {
             let set: std::collections::HashSet<String> = list.iter().cloned().collect();
             result = result.intersection(&set).cloned().collect();
         }
-        Ok(result.into_iter().collect())
+        let ids: Vec<String> = result.into_iter().collect();
+        Ok(match limit {
+            Some(n) => ids.into_iter().take(n).collect(),
+            None => ids,
+        })
     }
 
     // ── Attributes ────────────────────────────────────────────────────────────
@@ -346,6 +383,12 @@ impl Document {
     }
 
     pub fn create_attribute(&self, coluuid: &str, attribute: &str, path: &str) -> Result<()> {
+        if RESERVED_ATTRIBUTES.contains(&attribute) {
+            return Err(anyhow!(
+                "\"{}\" is a reserved attribute name and cannot be used as a collection attribute",
+                attribute
+            ));
+        }
         let conn = self.connection.lock().unwrap();
         conn.execute(
             "INSERT INTO TBL_ATTRIBUTES (COLUUID, ATTRIBUTE, PATH) VALUES (?1, ?2, ?3);",
@@ -382,6 +425,12 @@ impl Document {
     }
 
     pub fn delete_attribute(&self, coluuid: &str, attribute: &str) -> Result<()> {
+        if RESERVED_ATTRIBUTES.contains(&attribute) {
+            return Err(anyhow!(
+                "\"{}\" is a reserved attribute name and cannot be deleted",
+                attribute
+            ));
+        }
         let conn = self.connection.lock().unwrap();
         conn.execute(
             "DELETE FROM TBL_ATTRIBUTES WHERE COLUUID = ?1 AND ATTRIBUTE = ?2;",

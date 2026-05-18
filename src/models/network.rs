@@ -55,6 +55,7 @@ pub struct NetworkMessagesRequest {
     pub isrc:      Option<String>,
     #[serde(default = "unix_now_opt")]
     pub timestamp: Option<f64>,
+    pub limit:     Option<u64>,
     pub objuuid:   Option<String>,
     pub coluuid:   Option<String>,
 }
@@ -287,7 +288,7 @@ mod tests {
 
     const MSGS_REQUEST_JSON: &str = concat!(
         r#"{"type":"messages_request","dest":null,"src":"a1","isrc":null,"timestamp":1000.0,"#,
-        r#""objuuid":null,"coluuid":null}"#
+        r#""limit":null,"objuuid":null,"coluuid":null}"#
     );
 
     #[test]
@@ -295,6 +296,7 @@ mod tests {
         let msg = NetworkMessage::MessagesRequest(NetworkMessagesRequest {
             src: "a1".into(),
             timestamp: Some(1000.0),
+            limit: None,
             dest: None, isrc: None, objuuid: None, coluuid: None,
         });
         assert_ser_eq(&msg, MSGS_REQUEST_JSON);
@@ -303,6 +305,34 @@ mod tests {
     #[test]
     fn test_deser_network_messages_request() {
         assert_deser_roundtrip::<NetworkMessage>(MSGS_REQUEST_JSON);
+    }
+
+    #[test]
+    fn test_deser_network_messages_request_no_limit_field() {
+        // Wire messages from older peers may omit "limit" — must still parse.
+        let json = concat!(
+            r#"{"type":"messages_request","dest":null,"src":"a1","isrc":null,"timestamp":1000.0,"#,
+            r#""objuuid":null,"coluuid":null}"#
+        );
+        let parsed: NetworkMessage = serde_json::from_str(json).unwrap();
+        if let NetworkMessage::MessagesRequest(req) = parsed {
+            assert!(req.limit.is_none());
+        } else {
+            panic!("wrong variant");
+        }
+    }
+
+    #[test]
+    fn test_ser_network_messages_request_with_limit() {
+        let msg = NetworkMessage::MessagesRequest(NetworkMessagesRequest {
+            src: "a1".into(),
+            timestamp: Some(1000.0),
+            limit: Some(10),
+            dest: None, isrc: None, objuuid: None, coluuid: None,
+        });
+        let json = serde_json::to_string(&msg).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(v["limit"], 10);
     }
 
     // ── Acknowledgement ───────────────────────────────────────────────────────

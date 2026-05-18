@@ -6,7 +6,7 @@ pub mod object;
 
 pub use collection::Collection;
 pub use datastore::File;
-pub use document::{Document, read_key_at_path};
+pub use document::{Document, RESERVED_ATTRIBUTES, read_key_at_path};
 pub use kvstore::KVStore;
 pub use object::Object;
 

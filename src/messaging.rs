@@ -66,11 +66,19 @@ pub fn pull_network_messages(
         }
     }
 
-    // Pop all matching messages
+    // Pop all matching messages, respecting optional limit
     let messages = open_messages()?;
     let mut result = Vec::new();
     for agtuuid in &agtuuids {
-        for obj in messages.pop(&[("dest", agtuuid.as_str())])? {
+        let popped = match request.limit {
+            Some(lim) => {
+                let remaining = lim as usize - result.len();
+                if remaining == 0 { break; }
+                messages.pop_limited(&[("dest", agtuuid.as_str())], remaining)?
+            }
+            None => messages.pop(&[("dest", agtuuid.as_str())])?,
+        };
+        for obj in popped {
             result.push(obj.object);
         }
     }

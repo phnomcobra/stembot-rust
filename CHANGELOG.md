@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.1.0] - 2026-07-26
+
+### Added
+- `network_whitelist` and `control_whitelist` fields on `NetworkMessagesRequest`.
+  - `network_whitelist`: optional list of network message type strings (e.g. `["ping", "ticket_request"]`); messages whose type is not in the list are dropped. Dropped `ticket_request` messages are automatically serviced with a `ticket_response` error reply (src/dest swapped, `error` set to `"… is not allowed by whitelist."`).
+  - `control_whitelist`: optional list of control form type strings (e.g. `["sync_process"]`); `ticket_request` messages whose form type is not in the list are dropped and an error `ticket_response` is generated. All other message types pass through unchanged.
+  - Both fields are backward-compatible: peers that omit them are handled identically to previous behaviour.
+- Unit tests in `messaging` and `models::network` covering whitelist serialization, deserialization (including missing-field backward compat), and end-to-end filtering behaviour.
+
 ## [2.0.0] - 2026-05-18
 
 ### Added

@@ -82,6 +82,27 @@ pub fn pull_network_messages(
             result.push(obj.object);
         }
     }
+
+    // Apply network message whitelist if provided in the request.
+    if let Some(ref whitelist) = request.network_whitelist {
+        log::debug!("Applying network message whitelist: {:?}", whitelist);
+        let (allowed, error_tickets) = apply_network_whitelist(result, whitelist);
+        result = allowed;
+        for ticket in error_tickets {
+            push_network_message(ticket)?;
+        }
+    }
+
+    // Apply control form whitelist if provided in the request.
+    if let Some(ref whitelist) = request.control_whitelist {
+        log::debug!("Applying control form whitelist: {:?}", whitelist);
+        let (allowed, error_tickets) = apply_control_whitelist(result, whitelist);
+        result = allowed;
+        for ticket in error_tickets {
+            push_network_message(ticket)?;
+        }
+    }
+
     Ok(result)
 }
 
@@ -94,6 +115,79 @@ pub fn pop_network_messages(queries: &[(&str, &str)]) -> Result<Vec<NetworkMessa
         .into_iter()
         .map(|o| o.object)
         .collect())
+}
+
+// ── Whitelist filtering ───────────────────────────────────────────────────────
+
+/// Filter messages by network message type whitelist.
+///
+/// Messages whose type is not in `whitelist` are dropped; any dropped
+/// `TicketRequest` generates a `TicketResponse` error that must be re-queued.
+///
+/// Returns `(allowed, error_responses)`.
+fn apply_network_whitelist(
+    messages: Vec<NetworkMessage>,
+    whitelist: &[String],
+) -> (Vec<NetworkMessage>, Vec<NetworkMessage>) {
+    let mut allowed = Vec::new();
+    let mut errors  = Vec::new();
+    for msg in messages {
+        if whitelist.iter().any(|w| w == msg.message_type()) {
+            allowed.push(msg);
+        } else {
+            if let NetworkMessage::TicketRequest(ref ticket) = msg {
+                let mut err  = ticket.clone();
+                let old_src  = err.src.clone();
+                let old_dest = err.dest.clone().unwrap_or_default();
+                err.src  = old_dest;
+                err.dest = Some(old_src);
+                err.error = Some(format!(
+                    "Network message type '{}' is not allowed by whitelist.",
+                    msg.message_type()
+                ));
+                errors.push(NetworkMessage::TicketResponse(err));
+            }
+        }
+    }
+    (allowed, errors)
+}
+
+/// Filter messages by control form type whitelist.
+///
+/// For `TicketRequest` messages whose form type is not in `whitelist`, the
+/// message is dropped and a `TicketResponse` error is generated for re-queuing.
+/// All other message types pass through unchanged.
+///
+/// Returns `(allowed, error_responses)`.
+fn apply_control_whitelist(
+    messages: Vec<NetworkMessage>,
+    whitelist: &[String],
+) -> (Vec<NetworkMessage>, Vec<NetworkMessage>) {
+    let mut allowed = Vec::new();
+    let mut errors  = Vec::new();
+    for msg in messages {
+        match &msg {
+            NetworkMessage::TicketRequest(ticket) => {
+                let form_type = ticket.form.form_type();
+                if whitelist.iter().any(|w| w == form_type) {
+                    allowed.push(msg);
+                } else {
+                    let mut err  = ticket.clone();
+                    let old_src  = err.src.clone();
+                    let old_dest = err.dest.clone().unwrap_or_default();
+                    err.src  = old_dest;
+                    err.dest = Some(old_src);
+                    err.error = Some(format!(
+                        "Control form type '{}' is not allowed by whitelist.",
+                        form_type
+                    ));
+                    errors.push(NetworkMessage::TicketResponse(err));
+                }
+            }
+            _ => allowed.push(msg),
+        }
+    }
+    (allowed, errors)
 }
 
 // ── Forwarding ────────────────────────────────────────────────────────────────
@@ -198,5 +292,134 @@ fn log_ack_error(resp: &NetworkMessage) {
         if let Some(ref err) = ack.error {
             log::error!("acknowledgement error: {}", err);
         }
+    }
+}
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::control::{CommandArg, ControlForm, SyncProcess};
+    use crate::models::network::{NetworkTicket, Ping};
+
+    fn make_ping(src: &str, dest: &str) -> NetworkMessage {
+        NetworkMessage::Ping(Ping {
+            src: src.into(),
+            dest: Some(dest.into()),
+            isrc: Some(src.into()),
+            timestamp: Some(1000.0),
+            objuuid: None,
+            coluuid: None,
+        })
+    }
+
+    fn make_sync_process_ticket(src: &str, dest: &str) -> NetworkMessage {
+        NetworkMessage::TicketRequest(NetworkTicket {
+            tckuuid: "tck-1".into(),
+            form: ControlForm::SyncProcess(SyncProcess {
+                command: CommandArg::Single("echo hi".into()),
+                timeout: 15,
+                stdout: None, stderr: None, status: None,
+                start_time: None, elapsed_time: None, error: None,
+                objuuid: None, coluuid: None,
+            }),
+            tracing: false,
+            src: src.into(),
+            dest: Some(dest.into()),
+            isrc: Some(src.into()),
+            timestamp: Some(1000.0),
+            create_time: None, service_time: None, error: None,
+            objuuid: None, coluuid: None,
+        })
+    }
+
+    // ── apply_network_whitelist ───────────────────────────────────────────────
+
+    #[test]
+    fn test_network_whitelist_allows_matching_type() {
+        let ping   = make_ping("origin", "local");
+        let ticket = make_sync_process_ticket("origin", "local");
+        let whitelist = vec!["ping".to_string()];
+
+        let (allowed, errors) = apply_network_whitelist(vec![ping, ticket], &whitelist);
+
+        assert_eq!(allowed.len(), 1);
+        assert!(matches!(allowed[0], NetworkMessage::Ping(_)));
+        assert_eq!(errors.len(), 1);
+        assert!(matches!(errors[0], NetworkMessage::TicketResponse(_)));
+    }
+
+    #[test]
+    fn test_network_whitelist_error_ticket_has_swapped_src_dest() {
+        let ticket    = make_sync_process_ticket("origin", "local");
+        let whitelist = vec!["ping".to_string()];
+
+        let (allowed, errors) = apply_network_whitelist(vec![ticket], &whitelist);
+
+        assert_eq!(allowed.len(), 0);
+        assert_eq!(errors.len(), 1);
+
+        if let NetworkMessage::TicketResponse(err) = &errors[0] {
+            assert_eq!(err.src, "local");
+            assert_eq!(err.dest.as_deref(), Some("origin"));
+            assert!(err.error.as_deref().unwrap().contains("not allowed by whitelist"));
+        } else {
+            panic!("expected TicketResponse");
+        }
+    }
+
+    #[test]
+    fn test_network_whitelist_non_ticket_dropped_silently() {
+        let ping      = make_ping("origin", "local");
+        let whitelist = vec!["ticket_request".to_string()];
+
+        let (allowed, errors) = apply_network_whitelist(vec![ping], &whitelist);
+
+        assert_eq!(allowed.len(), 0);
+        assert_eq!(errors.len(), 0);
+    }
+
+    // ── apply_control_whitelist ───────────────────────────────────────────────
+
+    #[test]
+    fn test_control_whitelist_filters_disallowed_form_and_enqueues_error() {
+        let ticket    = make_sync_process_ticket("origin", "local");
+        let whitelist = vec!["get_peers".to_string()];
+
+        let (allowed, errors) = apply_control_whitelist(vec![ticket], &whitelist);
+
+        assert_eq!(allowed.len(), 0);
+        assert_eq!(errors.len(), 1);
+
+        if let NetworkMessage::TicketResponse(err) = &errors[0] {
+            assert_eq!(err.src, "local");
+            assert_eq!(err.dest.as_deref(), Some("origin"));
+            assert!(err.error.as_deref().unwrap().contains("not allowed by whitelist"));
+        } else {
+            panic!("expected TicketResponse");
+        }
+    }
+
+    #[test]
+    fn test_control_whitelist_allows_matching_form() {
+        let ticket    = make_sync_process_ticket("origin", "local");
+        let whitelist = vec!["sync_process".to_string()];
+
+        let (allowed, errors) = apply_control_whitelist(vec![ticket], &whitelist);
+
+        assert_eq!(allowed.len(), 1);
+        assert_eq!(errors.len(), 0);
+    }
+
+    #[test]
+    fn test_control_whitelist_passes_non_ticket_messages_through() {
+        let ping      = make_ping("origin", "local");
+        let whitelist = vec!["get_peers".to_string()];
+
+        let (allowed, errors) = apply_control_whitelist(vec![ping], &whitelist);
+
+        assert_eq!(allowed.len(), 1);
+        assert_eq!(errors.len(), 0);
     }
 }

@@ -149,8 +149,8 @@ pub async fn cmd_bench(
     );
     println!("{}", "-".repeat(76));
 
-    let sizes:         Vec<usize> = (0..17).map(|x| (16 * KB) << x).collect();
-    let concurrencies: Vec<usize> = (0..7).map(|x| 1 << x).collect();
+    let sizes:         Vec<usize> = (0..21).map(|x| (1 * KB) << x).collect();
+    let concurrencies: Vec<usize> = (0..5).map(|x| 1 << x).collect();
 
     for size in &sizes {
         for concurrency in &concurrencies {

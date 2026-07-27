@@ -81,6 +81,7 @@ pub fn service_ticket(network_ticket: &NetworkTicket) -> Result<()> {
     let tickets = open_tickets()?;
     for mut ticket in tickets.find(&[("tckuuid", network_ticket.tckuuid.as_str())])? {
         ticket.object.form         = network_ticket.form.clone();
+        ticket.object.error        = network_ticket.error.clone();
         ticket.object.service_time = Some(unix_now());
         ticket.commit()?;
     }

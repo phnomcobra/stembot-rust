@@ -50,14 +50,16 @@ pub struct Ping {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct NetworkMessagesRequest {
     #[serde(default)]
-    pub src:       String,
-    pub dest:      Option<String>,
-    pub isrc:      Option<String>,
+    pub src:               String,
+    pub dest:              Option<String>,
+    pub isrc:              Option<String>,
     #[serde(default = "unix_now_opt")]
-    pub timestamp: Option<f64>,
-    pub limit:     Option<u64>,
-    pub objuuid:   Option<String>,
-    pub coluuid:   Option<String>,
+    pub timestamp:         Option<f64>,
+    pub limit:             Option<u64>,
+    pub network_whitelist: Option<Vec<String>>,
+    pub control_whitelist: Option<Vec<String>>,
+    pub objuuid:           Option<String>,
+    pub coluuid:           Option<String>,
 }
 
 /// Acknowledgement of a received message.
@@ -288,7 +290,7 @@ mod tests {
 
     const MSGS_REQUEST_JSON: &str = concat!(
         r#"{"type":"messages_request","dest":null,"src":"a1","isrc":null,"timestamp":1000.0,"#,
-        r#""limit":null,"objuuid":null,"coluuid":null}"#
+        r#""limit":null,"network_whitelist":null,"control_whitelist":null,"objuuid":null,"coluuid":null}"#
     );
 
     #[test]
@@ -297,6 +299,8 @@ mod tests {
             src: "a1".into(),
             timestamp: Some(1000.0),
             limit: None,
+            network_whitelist: None,
+            control_whitelist: None,
             dest: None, isrc: None, objuuid: None, coluuid: None,
         });
         assert_ser_eq(&msg, MSGS_REQUEST_JSON);
@@ -317,6 +321,8 @@ mod tests {
         let parsed: NetworkMessage = serde_json::from_str(json).unwrap();
         if let NetworkMessage::MessagesRequest(req) = parsed {
             assert!(req.limit.is_none());
+            assert!(req.network_whitelist.is_none());
+            assert!(req.control_whitelist.is_none());
         } else {
             panic!("wrong variant");
         }
@@ -328,11 +334,61 @@ mod tests {
             src: "a1".into(),
             timestamp: Some(1000.0),
             limit: Some(10),
+            network_whitelist: None,
+            control_whitelist: None,
             dest: None, isrc: None, objuuid: None, coluuid: None,
         });
         let json = serde_json::to_string(&msg).unwrap();
         let v: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert_eq!(v["limit"], 10);
+    }
+
+    #[test]
+    fn test_ser_network_messages_request_with_network_whitelist() {
+        let msg = NetworkMessage::MessagesRequest(NetworkMessagesRequest {
+            src: "a1".into(),
+            timestamp: Some(1000.0),
+            limit: None,
+            network_whitelist: Some(vec!["ping".into(), "ticket_request".into()]),
+            control_whitelist: None,
+            dest: None, isrc: None, objuuid: None, coluuid: None,
+        });
+        let json = serde_json::to_string(&msg).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(v["network_whitelist"], serde_json::json!(["ping", "ticket_request"]));
+        assert_eq!(v["control_whitelist"], serde_json::Value::Null);
+    }
+
+    #[test]
+    fn test_ser_network_messages_request_with_control_whitelist() {
+        let msg = NetworkMessage::MessagesRequest(NetworkMessagesRequest {
+            src: "a1".into(),
+            timestamp: Some(1000.0),
+            limit: None,
+            network_whitelist: None,
+            control_whitelist: Some(vec!["sync_process".into(), "get_peers".into()]),
+            dest: None, isrc: None, objuuid: None, coluuid: None,
+        });
+        let json = serde_json::to_string(&msg).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(v["network_whitelist"], serde_json::Value::Null);
+        assert_eq!(v["control_whitelist"], serde_json::json!(["sync_process", "get_peers"]));
+    }
+
+    #[test]
+    fn test_deser_network_messages_request_with_whitelists() {
+        let json = concat!(
+            r#"{"type":"messages_request","dest":null,"src":"a1","isrc":null,"timestamp":1000.0,"#,
+            r#""limit":null,"network_whitelist":["ping"],"control_whitelist":["sync_process"],"#,
+            r#""objuuid":null,"coluuid":null}"#
+        );
+        let parsed: NetworkMessage = serde_json::from_str(json).unwrap();
+        if let NetworkMessage::MessagesRequest(req) = parsed {
+            assert_eq!(req.network_whitelist.as_deref(), Some(["ping".to_string()].as_slice()));
+            assert_eq!(req.control_whitelist.as_deref(), Some(["sync_process".to_string()].as_slice()));
+        } else {
+            panic!("wrong variant");
+        }
     }
 
     // ── Acknowledgement ───────────────────────────────────────────────────────

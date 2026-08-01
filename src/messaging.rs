@@ -83,11 +83,24 @@ pub fn pull_network_messages(
         }
     }
 
+    Ok(result)
+}
+
+/// Filter network messages based on the whitelists in `request`.
+///
+/// Messages dropped by either whitelist generate a `TicketResponse` error that
+/// is re-queued for the requester.
+///
+/// Mirrors `filter_network_messages(message, network_messages)`.
+pub fn filter_network_messages(
+    request: &NetworkMessagesRequest,
+    mut messages: Vec<NetworkMessage>,
+) -> Result<Vec<NetworkMessage>> {
     // Apply network message whitelist if provided in the request.
     if let Some(ref whitelist) = request.network_whitelist {
         log::debug!("Applying network message whitelist: {:?}", whitelist);
-        let (allowed, error_tickets) = apply_network_whitelist(result, whitelist);
-        result = allowed;
+        let (allowed, error_tickets) = apply_network_whitelist(messages, whitelist);
+        messages = allowed;
         for ticket in error_tickets {
             push_network_message(ticket)?;
         }
@@ -96,14 +109,40 @@ pub fn pull_network_messages(
     // Apply control form whitelist if provided in the request.
     if let Some(ref whitelist) = request.control_whitelist {
         log::debug!("Applying control form whitelist: {:?}", whitelist);
-        let (allowed, error_tickets) = apply_control_whitelist(result, whitelist);
-        result = allowed;
+        let (allowed, error_tickets) = apply_control_whitelist(messages, whitelist);
+        messages = allowed;
         for ticket in error_tickets {
             push_network_message(ticket)?;
         }
     }
 
-    Ok(result)
+    Ok(messages)
+}
+
+/// Retrieve and filter network messages based on the provided request.
+///
+/// Repeatedly pulls batches via [`pull_network_messages`] and filters each via
+/// [`filter_network_messages`] until the requested `limit` is met or the queue
+/// is drained, since whitelist-dropped messages don't count toward the limit.
+///
+/// Mirrors `pull_filtered_network_messages(message)`.
+pub fn pull_filtered_network_messages(
+    request: &NetworkMessagesRequest,
+) -> Result<Vec<NetworkMessage>> {
+    let mut filtered = Vec::new();
+    loop {
+        let messages = pull_network_messages(request)?;
+        if messages.is_empty() {
+            break;
+        }
+        filtered.extend(filter_network_messages(request, messages)?);
+        if let Some(limit) = request.limit {
+            if filtered.len() as u64 >= limit {
+                break;
+            }
+        }
+    }
+    Ok(filtered)
 }
 
 /// Remove and return messages matching the specified criteria.
@@ -421,5 +460,61 @@ mod tests {
 
         assert_eq!(allowed.len(), 1);
         assert_eq!(errors.len(), 0);
+    }
+
+    // ── pull_filtered_network_messages ────────────────────────────────────────
+
+    #[test]
+    fn test_pull_filtered_network_messages_network_whitelist_enqueues_error() {
+        let dest = "pfnm-network-whitelist-dest";
+        push_network_message(make_ping("origin", dest)).unwrap();
+        push_network_message(make_sync_process_ticket("origin", dest)).unwrap();
+
+        let request = NetworkMessagesRequest {
+            src: "origin".into(),
+            isrc: Some(dest.into()),
+            network_whitelist: Some(vec!["ping".to_string()]),
+            ..Default::default()
+        };
+
+        let messages = pull_filtered_network_messages(&request).unwrap();
+        assert_eq!(messages.len(), 1);
+        assert!(matches!(messages[0], NetworkMessage::Ping(_)));
+
+        let pending = open_messages().unwrap().pop(&[("dest", "origin")]).unwrap();
+        assert_eq!(pending.len(), 1);
+        if let NetworkMessage::TicketResponse(err) = &pending[0].object {
+            assert_eq!(err.src, dest);
+            assert_eq!(err.dest.as_deref(), Some("origin"));
+            assert!(err.error.as_deref().unwrap().contains("not allowed by whitelist"));
+        } else {
+            panic!("expected TicketResponse");
+        }
+    }
+
+    #[test]
+    fn test_pull_filtered_network_messages_control_whitelist_enqueues_error() {
+        let dest = "pfnm-control-whitelist-dest";
+        push_network_message(make_sync_process_ticket("origin", dest)).unwrap();
+
+        let request = NetworkMessagesRequest {
+            src: "origin".into(),
+            isrc: Some(dest.into()),
+            control_whitelist: Some(vec!["get_peers".to_string()]),
+            ..Default::default()
+        };
+
+        let messages = pull_filtered_network_messages(&request).unwrap();
+        assert!(messages.is_empty());
+
+        let pending = open_messages().unwrap().pop(&[("dest", "origin")]).unwrap();
+        assert_eq!(pending.len(), 1);
+        if let NetworkMessage::TicketResponse(err) = &pending[0].object {
+            assert_eq!(err.src, dest);
+            assert_eq!(err.dest.as_deref(), Some("origin"));
+            assert!(err.error.as_deref().unwrap().contains("not allowed by whitelist"));
+        } else {
+            panic!("expected TicketResponse");
+        }
     }
 }

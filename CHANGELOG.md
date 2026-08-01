@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.1.1] - 2026-08-01
+
+### Changed
+- Bumped project version from `2.1.0` to `2.1.1`.
+- Separated filtering functionality from `pull_network_messages`.
+- Added `pull_filtered_network_messages` and `filter_network_messages` to `messaging`.
+
 ## [2.1.0] - 2026-07-26
 
 ### Added

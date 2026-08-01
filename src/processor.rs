@@ -20,7 +20,7 @@ use crate::config::config;
 use crate::executor::agent::{decrypt, encrypt, AgentClient};
 use crate::executor::file::{load_file_to_form, write_file_from_form};
 use crate::executor::process::sync_process;
-use crate::messaging::{forward_network_message, pop_network_messages, pull_network_messages};
+use crate::messaging::{forward_network_message, pop_network_messages, pull_filtered_network_messages};
 use crate::models::config::Config;
 use crate::models::control::{
     CheckTicket, CommandArg, ControlFormTicket, ControlForm, SyncProcess as SyncProcessForm,
@@ -448,8 +448,8 @@ fn process_network_message(
         }
 
         NetworkMessage::MessagesRequest(req) => {
-            let messages = pull_network_messages(&req).unwrap_or_else(|e| {
-                log::error!("pull_network_messages error: {e}");
+            let messages = pull_filtered_network_messages(&req).unwrap_or_else(|e| {
+                log::error!("pull_filtered_network_messages error: {e}");
                 Vec::new()
             });
             Some(NetworkMessage::MessagesResponse(NetworkMessagesResponse {

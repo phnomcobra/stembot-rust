@@ -25,10 +25,38 @@ pub async fn cmd_test(client: Arc<AgentClient>, destinations: String, timeout: u
     let mut passed = 0;
     let mut failed = 0;
     for destination in destinations {
+        // LoadFile below relies on this write having completed.
         let mut write_form = load_form_from_bytes(b"ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890");
         write_form.path = "test.txt".to_string();
+        let form_name = ControlForm::WriteFile(write_form.clone()).form_type();
+        match client
+            .send_ticket(ControlFormTicket {
+                dst: destination.to_string(),
+                tracing: true,
+                form: ControlForm::WriteFile(write_form),
+                ..Default::default()
+            })
+            .await
+        {
+            Ok(sent) => {
+                let result = poll_ticket(Arc::clone(&client), sent, timeout).await;
+                record_test_result(
+                    &destination,
+                    0,
+                    form_name,
+                    false,
+                    result,
+                    &mut passed,
+                    &mut failed,
+                );
+            }
+            Err(error) => {
+                eprintln!("FAIL {destination} test 0 ({form_name}): {error}");
+                failed += 1;
+            }
+        }
+
         let forms = vec![
-            (ControlForm::WriteFile(write_form), false),
             (ControlForm::GetPeers(GetPeers::default()), false),
             (ControlForm::GetRoutes(GetRoutes::default()), false),
             (ControlForm::GetConfig(GetConfig::default()), false),
@@ -75,17 +103,22 @@ pub async fn cmd_test(client: Arc<AgentClient>, destinations: String, timeout: u
             ),
         ];
 
+        let mut sent_tickets = Vec::with_capacity(forms.len());
         for (index, (form, expect_failure)) in forms.into_iter().enumerate() {
             let form_name = form.form_type();
-            let sent = match client
+            let sent = client
                 .send_ticket(ControlFormTicket {
                     dst: destination.to_string(),
                     tracing: true,
                     form,
                     ..Default::default()
                 })
-                .await
-            {
+                .await;
+            sent_tickets.push((index + 1, form_name, expect_failure, sent));
+        }
+
+        for (index, form_name, expect_failure, sent) in sent_tickets {
+            let sent = match sent {
                 Ok(ticket) => ticket,
                 Err(error) => {
                     eprintln!("FAIL {destination} test {index} ({form_name}): {error}");
@@ -94,29 +127,15 @@ pub async fn cmd_test(client: Arc<AgentClient>, destinations: String, timeout: u
                 }
             };
             let result = poll_ticket(Arc::clone(&client), sent, timeout).await;
-            let form_error = match &result.form {
-                ControlForm::WriteFile(form) => form.error.as_deref(),
-                ControlForm::GetPeers(form) => form.error.as_deref(),
-                ControlForm::GetRoutes(form) => form.error.as_deref(),
-                ControlForm::GetConfig(form) => form.error.as_deref(),
-                ControlForm::GetKeyMetadata(form) => form.error.as_deref(),
-                ControlForm::CreateUserKey(form) => form.error.as_deref(),
-                ControlForm::SyncProcess(form) => form.error.as_deref(),
-                ControlForm::LoadFile(form) => form.error.as_deref(),
-                _ => None,
-            };
-            let success = result.service_time.is_some()
-                && (expect_failure || (result.error.is_none() && form_error.is_none()));
-            if success {
-                println!("ok {destination} test {index} ({form_name})");
-                passed += 1;
-            } else {
-                eprintln!(
-                    "FAIL {destination} test {index} ({form_name}): ticket_error={:?}, form_error={form_error:?}",
-                    result.error
-                );
-                failed += 1;
-            }
+            record_test_result(
+                &destination,
+                index,
+                form_name,
+                expect_failure,
+                result,
+                &mut passed,
+                &mut failed,
+            );
         }
     }
 
@@ -125,4 +144,38 @@ pub async fn cmd_test(client: Arc<AgentClient>, destinations: String, timeout: u
         return Err(anyhow!("{failed} integration test(s) failed"));
     }
     Ok(())
+}
+
+fn record_test_result(
+    destination: &str,
+    index: usize,
+    form_name: &str,
+    expect_failure: bool,
+    result: ControlFormTicket,
+    passed: &mut usize,
+    failed: &mut usize,
+) {
+    let form_error = match &result.form {
+        ControlForm::WriteFile(form) => form.error.as_deref(),
+        ControlForm::GetPeers(form) => form.error.as_deref(),
+        ControlForm::GetRoutes(form) => form.error.as_deref(),
+        ControlForm::GetConfig(form) => form.error.as_deref(),
+        ControlForm::GetKeyMetadata(form) => form.error.as_deref(),
+        ControlForm::CreateUserKey(form) => form.error.as_deref(),
+        ControlForm::SyncProcess(form) => form.error.as_deref(),
+        ControlForm::LoadFile(form) => form.error.as_deref(),
+        _ => None,
+    };
+    let success = result.service_time.is_some()
+        && (expect_failure || (result.error.is_none() && form_error.is_none()));
+    if success {
+        println!("ok {destination} test {index} ({form_name})");
+        *passed += 1;
+    } else {
+        eprintln!(
+            "FAIL {destination} test {index} ({form_name}): ticket_error={:?}, form_error={form_error:?}",
+            result.error
+        );
+        *failed += 1;
+    }
 }

@@ -13,7 +13,7 @@ Key features:
 - **Polling mode** — agents with one-way connectivity can poll their peers rather than relying on inbound connections
 - **CLI tools** — `agt-configure` for offline setup and `agt-control` for live agent management
 - **In-memory collections** — messages, tickets, traces, and routes are held in named in-memory SQLite databases (via `file:?mode=memory` URIs) for low-latency access; peers, keys, and the key-value store are file-backed
-- **Debian package** — `scripts/build_deb.sh` produces a `.deb` that installs binaries and a systemd service unit
+- **Debian package** — `scripts/build-deb.sh` produces a `.deb` that installs binaries and a systemd service unit
 - **Multi-stage Docker build** — the Dockerfile compiles with `rust:slim`, then copies the release binaries into a minimal `ubuntu:24.04` runtime image that includes logrotate for log management
 
 ## Installation
@@ -22,7 +22,7 @@ Key features:
 
 ```bash
 # Build the .deb (requires Rust toolchain on the build host)
-./scripts/build_deb.sh
+./scripts/build-deb.sh
 
 # Install
 sudo dpkg -i dist/stembot-rust_1.0.0_amd64.deb
@@ -301,15 +301,15 @@ The master key used to encrypt stored key material is saved in the operating sys
 
 Unlike stembot-python, the Rust implementation holds several hot collections in named in-memory SQLite databases (using `file:?mode=memory` URIs) rather than on-disk files. This eliminates disk I/O for the most frequently accessed data:
 
-| Collection | Storage   | Description                         |
-|------------|-----------|-------------------------------------|
-| messages   | in-memory | Pending network messages            |
-| tickets    | in-memory | Active control form tickets         |
-| traces     | in-memory | Ticket trace responses              |
-| routes     | in-memory | Routing table                       |
-| peers      | file      | Peer relationships (`peers.sqlite`) |
-| kvstore    | file      | Configuration (`kvstore.sqlite`)    |
-| keys    | file      | Encrypted key records (`keys.sqlite`) |
+| Collection | Storage   | Description                           |
+|------------|-----------|---------------------------------------|
+| messages   | in-memory | Pending network messages              |
+| tickets    | in-memory | Active control form tickets           |
+| traces     | in-memory | Ticket trace responses                |
+| routes     | in-memory | Routing table                         |
+| peers      | file      | Peer relationships (`peers.sqlite`)   |
+| kvstore    | file      | Configuration (`kvstore.sqlite`)      |
+| keys       | file      | Encrypted key records (`keys.sqlite`) |
 
 Each collection is a process-wide singleton (`OnceLock`) wrapped in `Arc<Mutex<Connection>>`, so all threads share a single connection with no connection overhead per request.
 

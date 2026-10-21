@@ -1,3 +1,11 @@
+//! Local key lifecycle and encrypted key storage.
+//!
+//! [`KeyManager`] derives user keys, creates random automatic keys, stores
+//! distributed peer keys, and encrypts key material before persisting it in
+//! the shared `keys` collection. A process-wide manager is available through
+//! [`key_manager`]. The master key is read from the platform credential store
+//! when available, with a private file fallback.
+
 use std::{
     fs::{File, OpenOptions},
     io::{Read, Write},
@@ -32,6 +40,12 @@ fn now() -> f64 {
         .as_secs_f64()
 }
 
+/// Derive the 32-byte user key shared by peers using the same passphrase and key UUID.
+///
+/// The versioned salt and PBKDF2-HMAC-SHA256 parameters are part of the
+/// cross-implementation protocol and must remain compatible with other agents.
+///
+/// The salt is `stembot:user-key:v1:{objuuid}` and the result is always 32 bytes.
 pub fn derive_user_key(passphrase: &str, objuuid: &str) -> [u8; 32] {
     let salt = format!("stembot:user-key:v1:{objuuid}");
     let mut key = [0u8; 32];
@@ -44,12 +58,19 @@ pub fn derive_user_key(passphrase: &str, objuuid: &str) -> [u8; 32] {
     key
 }
 
+/// Manages encrypted user, automatic, and distributed keys in the shared key collection.
 pub struct KeyManager {
     master_key: [u8; 32],
     keys: Collection<Key>,
 }
 
 impl KeyManager {
+    /// Load the master key, open the shared key collection, and seed an automatic key if empty.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the master key, collection, or initial automatic key
+    /// cannot be loaded or created.
     pub fn new() -> Result<Self> {
         let master_key = load_or_create_master_key()?;
 
@@ -62,6 +83,10 @@ impl KeyManager {
         Ok(manager)
     }
 
+    /// Derive and store a passphrase-based user key for `objuuid`.
+    ///
+    /// User keys are valid for ten minutes. `agtuuid`, when supplied, limits
+    /// the key to the associated peer.
     pub fn create_user_key(
         &self,
         objuuid: &str,
@@ -78,6 +103,9 @@ impl KeyManager {
         )
     }
 
+    /// Generate and store a random automatic key, returning its object UUID.
+    ///
+    /// Automatic keys are valid for 90 days.
     pub fn create_auto_key(&self) -> Result<String> {
         let mut raw_key = [0u8; 32];
         OsRng.fill_bytes(&mut raw_key);
@@ -87,6 +115,9 @@ impl KeyManager {
         Ok(id)
     }
 
+    /// Store a received key as a distributed key for the specified peer.
+    ///
+    /// The supplied TTL must be finite and greater than zero.
     pub fn create_dist_key(
         &self,
         objuuid: &str,
@@ -126,6 +157,10 @@ impl KeyManager {
         key.commit()
     }
 
+    /// Decrypt and return a stored key.
+    ///
+    /// Unknown and expired records are destroyed; records whose authentication
+    /// check fails are also destroyed before an error is returned.
     pub fn decrypt_key(&self, objuuid: &str) -> Result<[u8; 32]> {
         let key = self.keys.get_object(Some(objuuid))?;
         if key.object.r#type == KeyType::Unknown {
@@ -161,6 +196,12 @@ impl KeyManager {
         })
     }
 
+    /// Select the best key UUID for an optional peer UUID.
+    ///
+    /// Keys assigned to the peer and unassigned keys are candidates. Distributed
+    /// keys take precedence over user keys, which take precedence over automatic
+    /// keys; ties prefer the later expiration time.
+    /// Returns `None` if no candidate key exists.
     pub fn resolve_key_objuuid(&self, agtuuid: Option<&str>) -> Result<Option<String>> {
         let mut candidates = self
             .keys
@@ -180,6 +221,9 @@ impl KeyManager {
             .and_then(|key| key.object.objuuid.clone()))
     }
 
+    /// Build distributions for all unexpired automatic keys.
+    ///
+    /// Keys that cannot be decrypted are skipped and logged.
     pub fn create_key_distributions(&self) -> Result<Vec<KeyDistribution>> {
         let mut distributions = Vec::new();
         for key in self.keys.find(&[])? {
@@ -201,6 +245,7 @@ impl KeyManager {
         Ok(distributions)
     }
 
+    /// Store received distributions as keys associated with `agtuuid`.
     pub fn process_key_distributions(
         &self,
         distributions: &[KeyDistribution],
@@ -217,6 +262,9 @@ impl KeyManager {
         Ok(())
     }
 
+    /// Delete the key identified by `objuuid` if it is a distributed key.
+    ///
+    /// This is a no-op when the UUID is absent or identifies another key type.
     pub fn delete_dist_key(&self, objuuid: &str) -> Result<()> {
         if !self.keys.list_objuuids()?.iter().any(|id| id == objuuid) {
             return Ok(());
@@ -228,6 +276,7 @@ impl KeyManager {
         Ok(())
     }
 
+    /// Delete all key records whose expiration time has passed.
     pub fn delete_expired_keys(&self) -> Result<()> {
         for key in self.keys.find(&[])? {
             if now() >= key.object.expire_time {
@@ -237,6 +286,7 @@ impl KeyManager {
         Ok(())
     }
 
+    /// Return whether every automatic key is at least 30 days old.
     pub fn all_auto_keys_deprecated(&self) -> Result<bool> {
         let cutoff = now() - KEY_DEPRECATION_SECS;
         Ok(!self
@@ -246,6 +296,7 @@ impl KeyManager {
             .any(|key| key.object.r#type == KeyType::Auto && key.object.create_time >= cutoff))
     }
 
+    /// Return metadata for records that have an object UUID.
     pub fn describe(&self) -> Result<Vec<KeyMetadata>> {
         Ok(self
             .keys
@@ -262,6 +313,10 @@ impl KeyManager {
             .collect())
     }
 
+    /// Resolve and decrypt the preferred key for a peer URL.
+    ///
+    /// Loopback URLs use `local_agtuuid`; other URLs are matched to a configured
+    /// peer by hostname and effective port.
     pub fn resolve_for_url(&self, url: &str, local_agtuuid: &str) -> Result<(String, [u8; 32])> {
         let target = reqwest::Url::parse(url)?;
         let hostname = target.host_str().unwrap_or_default();
@@ -380,6 +435,11 @@ fn read_master_key(path: &Path) -> std::io::Result<[u8; 32]> {
 
 static KEY_MANAGER: OnceLock<KeyManager> = OnceLock::new();
 
+/// Return the process-wide key manager, initializing it on first use.
+///
+/// # Panics
+///
+/// Panics if initialization fails.
 pub fn key_manager() -> Result<&'static KeyManager> {
     Ok(KEY_MANAGER.get_or_init(|| KeyManager::new().expect("failed to initialize key manager")))
 }

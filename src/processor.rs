@@ -11,6 +11,7 @@
 //!   (Content-Type: application/binary).
 //! - The AES nonce and MAC tag are transmitted as hex strings in the
 //!   Nonce and Tag HTTP headers respectively.
+//! - The Key-UUID header specifies which key to use for decryption.
 
 use actix_web::{web, HttpRequest, HttpResponse, Result as ActixResult};
 use serde_json::{json, Value};

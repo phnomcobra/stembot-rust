@@ -295,7 +295,7 @@ AES.encrypt(json_data)   [raw binary ciphertext]
 
 User keys are derived deterministically with PBKDF2-HMAC-SHA256 from a passphrase and key UUID. Provision the same passphrase and UUID out-of-band on both peers, or use `agt-control set-user-key` to bootstrap the receiving peer. Agents then exchange random `AUTO` keys directly with peers; those distributed keys are preferred over user keys, expire, and are periodically rotated. Unknown or expired key UUIDs are rejected with HTTP 401.
 
-The local master key used to encrypt stored key material is generated once and saved in `stembot-master.key` with owner-only permissions on Unix systems. Protect this file and the agent's SQLite key database as sensitive state; losing the master key makes the stored keys unusable. This Rust storage is local to the Rust implementation and is not interchangeable with Python's OS-keyring-backed storage; agents interoperate over the encrypted network protocol.
+The master key used to encrypt stored key material is saved in the operating system credential store when available (Keychain on macOS, Secret Service on Linux, and Credential Manager on Windows). On headless or unsupported systems, it falls back to `stembot-master.key` with owner-only permissions on Unix. When the native store is available but has no master key yet, Rust initializes it from this file and retains the file as a recovery/fallback copy. Protect the file and the agent's SQLite key database as sensitive state; losing the master key makes the stored keys unusable. The Rust fallback file is separate from Python's `keyring.ron` fallback; agents interoperate over the encrypted network protocol.
 
 ### In-Memory Collections
 

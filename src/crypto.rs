@@ -5,7 +5,7 @@ use std::{
     sync::OnceLock,
 };
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use base64::Engine;
 use pbkdf2::pbkdf2_hmac;
 use rand::{rngs::OsRng, RngCore};
@@ -22,6 +22,8 @@ const KDF_ITERATIONS: u32 = 200_000;
 const USER_KEY_LIFETIME_SECS: f64 = 600.0;
 const AUTO_KEY_LIFETIME_SECS: f64 = 90.0 * 24.0 * 60.0 * 60.0;
 const KEY_DEPRECATION_SECS: f64 = 30.0 * 24.0 * 60.0 * 60.0;
+const KEYRING_SERVICE: &str = "stembot";
+const MASTER_KEY_NAME: &str = "master_key";
 
 fn now() -> f64 {
     std::time::SystemTime::now()
@@ -294,8 +296,49 @@ fn key_priority(key_type: KeyType) -> u8 {
 }
 
 fn load_or_create_master_key() -> Result<[u8; 32]> {
-    let path = PathBuf::from(db_path("kvstore")).with_file_name("stembot-master.key");
-    match read_master_key(&path) {
+    let entry = match keyring::Entry::new(KEYRING_SERVICE, MASTER_KEY_NAME) {
+        Ok(entry) => entry,
+        Err(keyring::Error::NoDefaultStore) => {
+            log::warn!(
+                "OS keyring unavailable ({}); using the owner-only master key file",
+                keyring::Entry::store_status()
+                    .as_ref()
+                    .err()
+                    .map(ToString::to_string)
+                    .unwrap_or_else(|| "no default store".to_string())
+            );
+            return load_or_create_file_master_key();
+        }
+        Err(error) => return Err(error).context("failed to initialize OS keyring"),
+    };
+
+    match entry.get_secret() {
+        Ok(bytes) => bytes.try_into().map_err(|bytes: Vec<u8>| {
+            anyhow!("master key contains {} bytes, expected 32", bytes.len())
+        }),
+        Err(keyring::Error::NoEntry) => {
+            let key = load_or_create_file_master_key()
+                .context("failed to load or create the fallback master key")?;
+
+            entry
+                .set_secret(&key)
+                .context("failed to store master key in OS keyring")?;
+            Ok(key)
+        }
+        Err(error) => Err(error).context("failed to read master key from OS keyring"),
+    }
+}
+
+fn master_key_path() -> PathBuf {
+    PathBuf::from(db_path("kvstore")).with_file_name("stembot-master.key")
+}
+
+fn load_or_create_file_master_key() -> Result<[u8; 32]> {
+    load_or_create_file_master_key_at(&master_key_path())
+}
+
+fn load_or_create_file_master_key_at(path: &Path) -> Result<[u8; 32]> {
+    match read_master_key(path) {
         Ok(key) => return Ok(key),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
         Err(error) => return Err(error.into()),
@@ -310,14 +353,14 @@ fn load_or_create_master_key() -> Result<[u8; 32]> {
         use std::os::unix::fs::OpenOptionsExt;
         options.mode(0o600);
     }
-    match options.open(&path) {
+    match options.open(path) {
         Ok(mut file) => {
             file.write_all(&key)?;
             file.sync_all()?;
             Ok(key)
         }
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-            read_master_key(&path).map_err(Into::into)
+            read_master_key(path).map_err(Into::into)
         }
         Err(error) => Err(error.into()),
     }
@@ -335,13 +378,10 @@ fn read_master_key(path: &Path) -> std::io::Result<[u8; 32]> {
     })
 }
 
-static KEY_MANAGER: OnceLock<std::result::Result<KeyManager, String>> = OnceLock::new();
+static KEY_MANAGER: OnceLock<KeyManager> = OnceLock::new();
 
 pub fn key_manager() -> Result<&'static KeyManager> {
-    KEY_MANAGER
-        .get_or_init(|| KeyManager::new().map_err(|error| error.to_string()))
-        .as_ref()
-        .map_err(|error| anyhow!("{error}"))
+    Ok(KEY_MANAGER.get_or_init(|| KeyManager::new().expect("failed to initialize key manager")))
 }
 
 #[cfg(test)]
@@ -357,6 +397,25 @@ mod tests {
         KeyManager {
             master_key: [0x42; 32],
             keys,
+        }
+    }
+
+    #[test]
+    fn fallback_master_key_is_persisted_with_private_permissions() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let path = tempdir.path().join("stembot-master.key");
+
+        let first = load_or_create_file_master_key_at(&path).unwrap();
+        let second = load_or_create_file_master_key_at(&path).unwrap();
+        assert_eq!(first, second);
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(
+                std::fs::metadata(path).unwrap().permissions().mode() & 0o777,
+                0o600
+            );
         }
     }
 

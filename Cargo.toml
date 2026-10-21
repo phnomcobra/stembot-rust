@@ -41,6 +41,7 @@ md5 = "0.8.0"
 aes = "0.8"
 eax = "0.5"
 hex = "0.4"
+keyring = "4.2.0"
 
 [features]
 debian = []

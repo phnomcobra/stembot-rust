@@ -18,15 +18,21 @@ async fn bench_poll_timing(
 ) -> CheckTicket {
     let start = std::time::Instant::now();
     let mut check = CheckTicket {
-        tckuuid:     ticket.tckuuid.clone(),
+        tckuuid: ticket.tckuuid.clone(),
         create_time: Some(ticket.create_time),
         ..Default::default()
     };
     while start.elapsed().as_secs() < timeout_secs && check.service_time.is_none() {
-        match client.send_control_form(ControlForm::CheckTicket(check.clone())).await {
+        match client
+            .send_control_form(ControlForm::CheckTicket(check.clone()))
+            .await
+        {
             Ok(ControlForm::CheckTicket(c)) => check = c,
             Ok(_) => break,
-            Err(e) => { eprintln!("poll error: {e}"); break; }
+            Err(e) => {
+                eprintln!("poll error: {e}");
+                break;
+            }
         }
         if check.service_time.is_none() {
             sleep(Duration::from_secs(1)).await;
@@ -59,17 +65,21 @@ async fn bench_run_direction(
             let form = if outbound {
                 ControlForm::Benchmark(Benchmark {
                     outbound_size: Some(size as i64),
-                    inbound_size:  None,
+                    inbound_size: None,
                     ..Default::default()
                 })
             } else {
                 ControlForm::Benchmark(Benchmark {
                     outbound_size: None,
-                    inbound_size:  Some(size as i64),
+                    inbound_size: Some(size as i64),
                     ..Default::default()
                 })
             };
-            ControlFormTicket { dst: agtuuid.clone(), form, ..ControlFormTicket::default() }
+            ControlFormTicket {
+                dst: agtuuid.clone(),
+                form,
+                ..ControlFormTicket::default()
+            }
         })
         .collect();
 
@@ -81,9 +91,9 @@ async fn bench_run_direction(
     let mut sent: Vec<ControlFormTicket> = Vec::new();
     while let Some(res) = join_set.join_next().await {
         match res {
-            Ok(Ok(t))  => sent.push(t),
+            Ok(Ok(t)) => sent.push(t),
             Ok(Err(e)) => eprintln!("bench send error: {e}"),
-            Err(e)     => eprintln!("join error: {e}"),
+            Err(e) => eprintln!("join error: {e}"),
         }
     }
 
@@ -95,7 +105,7 @@ async fn bench_run_direction(
     let mut checks: Vec<CheckTicket> = Vec::new();
     while let Some(res) = join_set.join_next().await {
         match res {
-            Ok(c)  => checks.push(c),
+            Ok(c) => checks.push(c),
             Err(e) => eprintln!("join error: {e}"),
         }
     }
@@ -109,34 +119,53 @@ async fn bench_run(
     concurrency: usize,
     timeout_secs: u64,
 ) {
-    let out_checks = bench_run_direction(Arc::clone(&client), agtuuid.clone(), size, concurrency, timeout_secs, true).await;
-    let in_checks  = bench_run_direction(Arc::clone(&client), agtuuid,         size, concurrency, timeout_secs, false).await;
+    let out_checks = bench_run_direction(
+        Arc::clone(&client),
+        agtuuid.clone(),
+        size,
+        concurrency,
+        timeout_secs,
+        true,
+    )
+    .await;
+    let in_checks = bench_run_direction(
+        Arc::clone(&client),
+        agtuuid,
+        size,
+        concurrency,
+        timeout_secs,
+        false,
+    )
+    .await;
 
-    let print_row = |dir: &str, checks: &[CheckTicket]| {
-        let completed: Vec<&CheckTicket> = checks.iter().filter(|c| c.service_time.is_some()).collect();
-        let elapsed = completed.iter()
+    let calculate = |checks: &[CheckTicket]| {
+        let completed: Vec<&CheckTicket> =
+            checks.iter().filter(|c| c.service_time.is_some()).collect();
+        let elapsed = completed
+            .iter()
             .filter_map(|c| c.service_time.zip(c.create_time).map(|(s, ct)| s - ct))
             .fold(0.0f64, f64::max);
         let ok = completed.len();
-        let bw = if elapsed > 0.0 { (ok * size) as f64 / elapsed } else { 0.0 };
-        println!(
-            "   {dir:<6} {:<11} {:<12} {:<8} {:<10} {}",
-            format!("{:.3}s", elapsed),
-            format_bytes((ok * size) as f64),
-            format!("{ok}:{concurrency}"),
-            format_bytes(size as f64),
-            format_bandwidth(bw),
-        );
+        let bw = if elapsed > 0.0 {
+            (ok * size) as f64 / elapsed
+        } else {
+            0.0
+        };
+        (elapsed, ok, bw)
     };
-    print_row("OUT", &out_checks);
-    print_row("IN",  &in_checks);
+    let (out_elapsed, out_ok, out_bw) = calculate(&out_checks);
+    let (in_elapsed, in_ok, in_bw) = calculate(&in_checks);
+    println!(
+        "   {:<23} {:<12} {:<17} {:<10} {}",
+        format!("{out_elapsed:.3}s / {in_elapsed:.3}s"),
+        format_bytes(((out_ok + in_ok) * size) as f64),
+        format!("{out_ok}:{concurrency} / {in_ok}:{concurrency}"),
+        format_bytes(size as f64),
+        format!("{} / {}", format_bandwidth(out_bw), format_bandwidth(in_bw)),
+    );
 }
 
-pub async fn cmd_bench(
-    client: Arc<AgentClient>,
-    agtuuid: String,
-    timeout: u64,
-) -> Result<()> {
+pub async fn cmd_bench(client: Arc<AgentClient>, agtuuid: String, timeout: u64) -> Result<()> {
     println!();
     println!("{}", "=".repeat(76));
     println!("Benchmark Results for {agtuuid}");
@@ -144,12 +173,12 @@ pub async fn cmd_bench(
     println!();
 
     println!(
-        "   {:.<6} {:.<11} {:.<12} {:.<8} {:.<10} Bandwidth",
-        "Dir", "Elapsed (s)", "Total Bytes", "Success", "Bytes/Op"
+        "   {:.<23} {:.<12} {:.<17} {:.<10} Bandwidth (out/in)",
+        "Elapsed (out/in)", "Total Bytes", "Success (out/in)", "Bytes/Op"
     );
     println!("{}", "-".repeat(76));
 
-    let sizes:         Vec<usize> = (0..21).map(|x| (1 * KB) << x).collect();
+    let sizes: Vec<usize> = (0..21).map(|x| (1 * KB) << x).collect();
     let concurrencies: Vec<usize> = (0..5).map(|x| 1 << x).collect();
 
     for size in &sizes {
@@ -157,7 +186,14 @@ pub async fn cmd_bench(
             if size * concurrency > 256 * MB {
                 continue;
             }
-            bench_run(Arc::clone(&client), agtuuid.clone(), *size, *concurrency, timeout).await;
+            bench_run(
+                Arc::clone(&client),
+                agtuuid.clone(),
+                *size,
+                *concurrency,
+                timeout,
+            )
+            .await;
         }
     }
 

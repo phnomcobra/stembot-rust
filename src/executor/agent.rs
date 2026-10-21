@@ -11,19 +11,18 @@
 //! Tag:            hex(16-byte AES-EAX MAC tag)
 //! Body:           AES.encrypt(json_data)   [raw binary ciphertext]
 //! ```
-//! All messages are AES-256-EAX encrypted using the 32-byte key derived from
-//! `Config::secret_digest`.  `send_network_message` sets `isrc` to the local
-//! agent UUID before encrypting.
+//! Each request identifies its destination-specific key with a `Key-UUID`
+//! header. `send_network_message` sets `isrc` to the local agent UUID.
 
-use anyhow::{anyhow, Result};
 use aes::Aes256;
-use eax::Eax;
+use anyhow::{anyhow, Result};
 use eax::aead::{Aead, AeadCore, KeyInit};
+use eax::Eax;
 use rand::rngs::OsRng;
 
-use crate::models::config::Config;
 use crate::models::control::{ControlForm, ControlFormTicket};
 use crate::models::network::NetworkMessage;
+use crate::{crypto::key_manager, models::config::Config};
 
 type Aes256Eax = Eax<Aes256>;
 
@@ -34,8 +33,7 @@ type Aes256Eax = Eax<Aes256>;
 /// Returns `(nonce, tag, ciphertext)` — all three are needed to decrypt.
 /// The nonce is 16 random bytes; the MAC tag is 16 bytes.
 pub(crate) fn encrypt(key: &[u8; 32], plaintext: &[u8]) -> Result<([u8; 16], Vec<u8>, Vec<u8>)> {
-    let cipher = Aes256Eax::new_from_slice(key)
-        .map_err(|e| anyhow!("bad key length: {e:?}"))?;
+    let cipher = Aes256Eax::new_from_slice(key).map_err(|e| anyhow!("bad key length: {e:?}"))?;
 
     let nonce = Aes256Eax::generate_nonce(&mut OsRng);
 
@@ -61,8 +59,7 @@ pub(crate) fn decrypt(
     tag: &[u8],
     ciphertext: &[u8],
 ) -> Result<Vec<u8>> {
-    let cipher = Aes256Eax::new_from_slice(key)
-        .map_err(|e| anyhow!("bad key length: {e:?}"))?;
+    let cipher = Aes256Eax::new_from_slice(key).map_err(|e| anyhow!("bad key length: {e:?}"))?;
 
     // Reconstruct the `ciphertext || tag` layout expected by the AEAD trait.
     let mut ct_with_tag = ciphertext.to_vec();
@@ -83,23 +80,28 @@ pub(crate) fn decrypt(
 pub struct AgentClient {
     /// Target URL (e.g., `http://agent:8080/control`).
     pub url: String,
-    key: [u8; 32],
+    credentials: Option<(String, [u8; 32])>,
     agtuuid: String,
     client: reqwest::Client,
 }
 
 impl AgentClient {
-    /// Create a client using the current node's configured key and agtuuid.
+    /// Create a client that resolves the appropriate key for its destination.
     pub fn new(url: String) -> Self {
         let config = Config::load();
-        Self::with_credentials(url, config.key(), config.agtuuid)
+        Self {
+            url,
+            credentials: None,
+            agtuuid: config.agtuuid,
+            client: reqwest::Client::new(),
+        }
     }
 
     /// Create a client with explicit credentials (useful in tests).
     pub fn with_credentials(url: String, key: [u8; 32], agtuuid: String) -> Self {
         Self {
             url,
-            key,
+            credentials: Some(("test-key-uuid".to_string(), key)),
             agtuuid,
             client: reqwest::Client::new(),
         }
@@ -111,28 +113,27 @@ impl AgentClient {
     /// (Content-Type: application/binary). The nonce and MAC tag are
     /// transmitted as hex strings in the Nonce and Tag headers.
     /// Mirrors `send_control_form(form)`.
-    pub async fn send_control_form(
-        &self,
-        form: ControlForm,
-    ) -> Result<ControlForm> {
+    pub async fn send_control_form(&self, form: ControlForm) -> Result<ControlForm> {
         log::debug!("{}", form.form_type());
 
+        let (keyuuid, key) = self.credentials()?;
         let plaintext = serde_json::to_vec(&form)?;
-        let (nonce, tag, ct) = encrypt(&self.key, &plaintext)?;
+        let (nonce, tag, ct) = encrypt(&key, &plaintext)?;
 
         let response = self
             .client
             .post(&self.url)
             .header("Nonce", hex::encode(nonce))
             .header("Tag", hex::encode(&tag))
+            .header("Key-UUID", &keyuuid)
             .header("Content-Type", "application/binary")
             .header("Content-Length", ct.len().to_string())
             .body(ct)
             .send()
             .await?;
 
-        response.error_for_status_ref()?;
-        let plain = self.decrypt_response(response).await?;
+        let response = self.check_response(response, &keyuuid)?;
+        let plain = self.decrypt_response(response, &key).await?;
         Ok(serde_json::from_slice(&plain)?)
     }
 
@@ -146,22 +147,24 @@ impl AgentClient {
     pub async fn send_ticket(&self, ticket: ControlFormTicket) -> Result<ControlFormTicket> {
         log::debug!("{} -> {}", ticket.form_type, ticket.dst);
 
+        let (keyuuid, key) = self.credentials()?;
         let plaintext = serde_json::to_vec(&ticket)?;
-        let (nonce, tag, ct) = encrypt(&self.key, &plaintext)?;
+        let (nonce, tag, ct) = encrypt(&key, &plaintext)?;
 
         let response = self
             .client
             .post(&self.url)
             .header("Nonce", hex::encode(nonce))
             .header("Tag", hex::encode(&tag))
+            .header("Key-UUID", &keyuuid)
             .header("Content-Type", "application/binary")
             .header("Content-Length", ct.len().to_string())
             .body(ct)
             .send()
             .await?;
 
-        response.error_for_status_ref()?;
-        let plain = self.decrypt_response(response).await?;
+        let response = self.check_response(response, &keyuuid)?;
+        let plain = self.decrypt_response(response, &key).await?;
         Ok(serde_json::from_slice(&plain)?)
     }
 
@@ -172,34 +175,51 @@ impl AgentClient {
     /// transmitted as hex strings in the Nonce and Tag headers.
     /// Sets `isrc` to this agent's UUID before encrypting.
     /// Mirrors `send_network_message(message)`.
-    pub async fn send_network_message(
-        &self,
-        mut msg: NetworkMessage,
-    ) -> Result<NetworkMessage> {
+    pub async fn send_network_message(&self, mut msg: NetworkMessage) -> Result<NetworkMessage> {
         set_isrc(&mut msg, self.agtuuid.clone());
 
+        let (keyuuid, key) = self.credentials()?;
         let plaintext = serde_json::to_vec(&msg)?;
-        let (nonce, tag, ct) = encrypt(&self.key, &plaintext)?;
+        let (nonce, tag, ct) = encrypt(&key, &plaintext)?;
 
         let response = self
             .client
             .post(&self.url)
             .header("Nonce", hex::encode(nonce))
             .header("Tag", hex::encode(&tag))
+            .header("Key-UUID", &keyuuid)
             .header("Content-Type", "application/binary")
             .header("Content-Length", ct.len().to_string())
             .body(ct)
             .send()
             .await?;
 
-        response.error_for_status_ref()?;
-        let plain = self.decrypt_response(response).await?;
+        let response = self.check_response(response, &keyuuid)?;
+        let plain = self.decrypt_response(response, &key).await?;
         Ok(serde_json::from_slice(&plain)?)
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
 
-    async fn decrypt_response(&self, resp: reqwest::Response) -> Result<Vec<u8>> {
+    fn credentials(&self) -> Result<(String, [u8; 32])> {
+        match &self.credentials {
+            Some((keyuuid, key)) => Ok((keyuuid.clone(), *key)),
+            None => key_manager()?.resolve_for_url(&self.url, &self.agtuuid),
+        }
+    }
+
+    fn check_response(
+        &self,
+        response: reqwest::Response,
+        keyuuid: &str,
+    ) -> Result<reqwest::Response> {
+        if response.status() == reqwest::StatusCode::UNAUTHORIZED && self.credentials.is_none() {
+            key_manager()?.delete_dist_key(keyuuid)?;
+        }
+        Ok(response.error_for_status()?)
+    }
+
+    async fn decrypt_response(&self, resp: reqwest::Response, key: &[u8; 32]) -> Result<Vec<u8>> {
         let nonce_hex = resp
             .headers()
             .get("Nonce")
@@ -214,10 +234,10 @@ impl AgentClient {
             .to_string();
 
         let nonce = hex::decode(&nonce_hex)?;
-        let tag   = hex::decode(&tag_hex)?;
-        let body  = resp.bytes().await?.to_vec();
+        let tag = hex::decode(&tag_hex)?;
+        let body = resp.bytes().await?.to_vec();
 
-        decrypt(&self.key, &nonce, &tag, &body)
+        decrypt(key, &nonce, &tag, &body)
     }
 }
 
@@ -225,14 +245,15 @@ impl AgentClient {
 fn set_isrc(msg: &mut NetworkMessage, isrc: String) {
     use NetworkMessage::*;
     match msg {
-        Ping(m)                => m.isrc = Some(isrc),
-        MessagesRequest(m)     => m.isrc = Some(isrc),
-        MessagesResponse(m)    => m.isrc = Some(isrc),
-        Acknowledgement(m)     => m.isrc = Some(isrc),
-        Advertisement(m)       => m.isrc = Some(isrc),
+        Ping(m) => m.isrc = Some(isrc),
+        MessagesRequest(m) => m.isrc = Some(isrc),
+        MessagesResponse(m) => m.isrc = Some(isrc),
+        Acknowledgement(m) => m.isrc = Some(isrc),
+        Advertisement(m) => m.isrc = Some(isrc),
         TicketTraceResponse(m) => m.isrc = Some(isrc),
-        TicketRequest(m)       => m.isrc = Some(isrc),
-        TicketResponse(m)      => m.isrc = Some(isrc),
+        TicketRequest(m) => m.isrc = Some(isrc),
+        TicketResponse(m) => m.isrc = Some(isrc),
+        ExchangeKeys(m) => m.isrc = Some(isrc),
     }
 }
 
@@ -343,6 +364,7 @@ mod tests {
         let mut server = mockito::Server::new_async().await;
         let _mock = server
             .mock("POST", "/control")
+            .match_header("Key-UUID", "test-key-uuid")
             .with_status(200)
             .with_header("Nonce", &hex::encode(r_nonce))
             .with_header("Tag", &hex::encode(&r_tag))
@@ -444,12 +466,12 @@ mod tests {
 
         // Build Ping with known fixed values
         let msg = NetworkMessage::Ping(Ping {
-            src:       TEST_AGTUUID.to_string(),
-            dest:      None,
-            isrc:      None, // must be set by send_network_message
+            src: TEST_AGTUUID.to_string(),
+            dest: None,
+            isrc: None, // must be set by send_network_message
             timestamp: Some(1000.0),
-            objuuid:   None,
-            coluuid:   None,
+            objuuid: None,
+            coluuid: None,
         });
 
         let result = client.send_network_message(msg).await.unwrap();
@@ -509,12 +531,12 @@ mod tests {
     #[test]
     fn test_ping_canonical_json_with_isrc() {
         let mut msg = NetworkMessage::Ping(Ping {
-            src:       TEST_AGTUUID.to_string(),
-            dest:      None,
-            isrc:      None,
+            src: TEST_AGTUUID.to_string(),
+            dest: None,
+            isrc: None,
             timestamp: Some(1000.0),
-            objuuid:   None,
-            coluuid:   None,
+            objuuid: None,
+            coluuid: None,
         });
         set_isrc(&mut msg, TEST_AGTUUID.to_string());
 

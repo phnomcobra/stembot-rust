@@ -12,9 +12,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use anyhow::Result;
 
 use crate::collections::{open_messages, open_peers, open_routes};
+use crate::config::config;
 use crate::executor::agent::AgentClient;
 use crate::models::network::{NetworkMessage, NetworkMessagesRequest};
-use crate::config::config;
 
 fn unix_now() -> f64 {
     SystemTime::now()
@@ -40,9 +40,7 @@ pub fn push_network_message(message: NetworkMessage) -> Result<()> {
 /// destined for agents that route through `request.isrc` as a gateway.
 ///
 /// Mirrors `pull_network_messages(message)`.
-pub fn pull_network_messages(
-    request: &NetworkMessagesRequest,
-) -> Result<Vec<NetworkMessage>> {
+pub fn pull_network_messages(request: &NetworkMessagesRequest) -> Result<Vec<NetworkMessage>> {
     let isrc = request.isrc.as_deref().unwrap_or("");
 
     // Build best-gateway map: agtuuid -> (weight, gtwuuid)
@@ -50,11 +48,13 @@ pub fn pull_network_messages(
         std::collections::HashMap::new();
     for obj in open_routes()?.find(&[])? {
         let agtuuid = obj.object.agtuuid.clone();
-        let weight  = obj.object.weight;
+        let weight = obj.object.weight;
         let gtwuuid = obj.object.gtwuuid.clone();
         match gateway_map.get(&agtuuid) {
             Some((w, _)) if *w <= weight => {}
-            _ => { gateway_map.insert(agtuuid, (weight, gtwuuid)); }
+            _ => {
+                gateway_map.insert(agtuuid, (weight, gtwuuid));
+            }
         }
     }
 
@@ -73,7 +73,9 @@ pub fn pull_network_messages(
         let popped = match request.limit {
             Some(lim) => {
                 let remaining = lim as usize - result.len();
-                if remaining == 0 { break; }
+                if remaining == 0 {
+                    break;
+                }
                 messages.pop_limited(&[("dest", agtuuid.as_str())], remaining)?
             }
             None => messages.pop(&[("dest", agtuuid.as_str())])?,
@@ -169,16 +171,16 @@ fn apply_network_whitelist(
     whitelist: &[String],
 ) -> (Vec<NetworkMessage>, Vec<NetworkMessage>) {
     let mut allowed = Vec::new();
-    let mut errors  = Vec::new();
+    let mut errors = Vec::new();
     for msg in messages {
         if whitelist.iter().any(|w| w == msg.message_type()) {
             allowed.push(msg);
         } else {
             if let NetworkMessage::TicketRequest(ref ticket) = msg {
-                let mut err  = ticket.clone();
-                let old_src  = err.src.clone();
+                let mut err = ticket.clone();
+                let old_src = err.src.clone();
                 let old_dest = err.dest.clone().unwrap_or_default();
-                err.src  = old_dest;
+                err.src = old_dest;
                 err.dest = Some(old_src);
                 err.error = Some(format!(
                     "Network message type '{}' is not allowed by whitelist.",
@@ -203,7 +205,7 @@ fn apply_control_whitelist(
     whitelist: &[String],
 ) -> (Vec<NetworkMessage>, Vec<NetworkMessage>) {
     let mut allowed = Vec::new();
-    let mut errors  = Vec::new();
+    let mut errors = Vec::new();
     for msg in messages {
         match &msg {
             NetworkMessage::TicketRequest(ticket) => {
@@ -211,10 +213,10 @@ fn apply_control_whitelist(
                 if whitelist.iter().any(|w| w == form_type) {
                     allowed.push(msg);
                 } else {
-                    let mut err  = ticket.clone();
-                    let old_src  = err.src.clone();
+                    let mut err = ticket.clone();
+                    let old_src = err.src.clone();
                     let old_dest = err.dest.clone().unwrap_or_default();
-                    err.src  = old_dest;
+                    err.src = old_dest;
                     err.dest = Some(old_src);
                     err.error = Some(format!(
                         "Control form type '{}' is not allowed by whitelist.",
@@ -239,16 +241,14 @@ fn apply_control_whitelist(
 /// Mirrors `forward_network_message(message)`.
 pub async fn forward_network_message(message: NetworkMessage) -> Result<()> {
     let dest = dest_of(&message);
-    let peers  = open_peers()?;
+    let peers = open_peers()?;
     let routes = open_routes()?;
 
     // ── Try direct delivery ───────────────────────────────────────────────────
     let direct = peers.find(&[("agtuuid", dest.as_str()), ("url", "$!eq:null")])?;
     if let Some(peer_obj) = direct.first() {
         if let Some(url) = peer_obj.object.url.clone() {
-            let client = AgentClient::with_credentials(
-                url.clone(), config().key(), config().agtuuid.clone(),
-            );
+            let client = AgentClient::new(url.clone());
             match client.send_network_message(message.clone()).await {
                 Ok(resp) => log_ack_error(&resp),
                 Err(e) => {
@@ -266,7 +266,7 @@ pub async fn forward_network_message(message: NetworkMessage) -> Result<()> {
     for obj in routes.find(&[("agtuuid", dest.as_str())])? {
         let w = obj.object.weight;
         if best_weight.is_none_or(|bw| w < bw) {
-            best_weight  = Some(w);
+            best_weight = Some(w);
             best_gtwuuid = Some(obj.object.gtwuuid.clone());
         }
     }
@@ -275,9 +275,7 @@ pub async fn forward_network_message(message: NetworkMessage) -> Result<()> {
         let gtw_peers = peers.find(&[("agtuuid", gtwuuid.as_str()), ("url", "$!eq:null")])?;
         if let Some(peer_obj) = gtw_peers.first() {
             if let Some(url) = peer_obj.object.url.clone() {
-                let client = AgentClient::with_credentials(
-                    url.clone(), config().key(), config().agtuuid.clone(),
-                );
+                let client = AgentClient::new(url.clone());
                 match client.send_network_message(message.clone()).await {
                     Ok(resp) => log_ack_error(&resp),
                     Err(e) => {
@@ -314,14 +312,15 @@ pub fn expire_network_messages() -> Result<()> {
 /// Extract the `dest` field from any `NetworkMessageVariant`.
 fn dest_of(msg: &NetworkMessage) -> String {
     match msg {
-        NetworkMessage::Ping(m)                => m.dest.clone().unwrap_or_default(),
-        NetworkMessage::MessagesRequest(m)     => m.dest.clone().unwrap_or_default(),
-        NetworkMessage::MessagesResponse(m)    => m.dest.clone().unwrap_or_default(),
-        NetworkMessage::Acknowledgement(m)     => m.dest.clone().unwrap_or_default(),
-        NetworkMessage::Advertisement(m)       => m.dest.clone().unwrap_or_default(),
+        NetworkMessage::Ping(m) => m.dest.clone().unwrap_or_default(),
+        NetworkMessage::MessagesRequest(m) => m.dest.clone().unwrap_or_default(),
+        NetworkMessage::ExchangeKeys(m) => m.dest.clone().unwrap_or_default(),
+        NetworkMessage::MessagesResponse(m) => m.dest.clone().unwrap_or_default(),
+        NetworkMessage::Acknowledgement(m) => m.dest.clone().unwrap_or_default(),
+        NetworkMessage::Advertisement(m) => m.dest.clone().unwrap_or_default(),
         NetworkMessage::TicketTraceResponse(m) => m.dest.clone().unwrap_or_default(),
-        NetworkMessage::TicketRequest(m)       => m.dest.clone().unwrap_or_default(),
-        NetworkMessage::TicketResponse(m)      => m.dest.clone().unwrap_or_default(),
+        NetworkMessage::TicketRequest(m) => m.dest.clone().unwrap_or_default(),
+        NetworkMessage::TicketResponse(m) => m.dest.clone().unwrap_or_default(),
     }
 }
 
@@ -359,17 +358,25 @@ mod tests {
             form: ControlForm::SyncProcess(SyncProcess {
                 command: CommandArg::Single("echo hi".into()),
                 timeout: 15,
-                stdout: None, stderr: None, status: None,
-                start_time: None, elapsed_time: None, error: None,
-                objuuid: None, coluuid: None,
+                stdout: None,
+                stderr: None,
+                status: None,
+                start_time: None,
+                elapsed_time: None,
+                error: None,
+                objuuid: None,
+                coluuid: None,
             }),
             tracing: false,
             src: src.into(),
             dest: Some(dest.into()),
             isrc: Some(src.into()),
             timestamp: Some(1000.0),
-            create_time: None, service_time: None, error: None,
-            objuuid: None, coluuid: None,
+            create_time: None,
+            service_time: None,
+            error: None,
+            objuuid: None,
+            coluuid: None,
         })
     }
 
@@ -377,7 +384,7 @@ mod tests {
 
     #[test]
     fn test_network_whitelist_allows_matching_type() {
-        let ping   = make_ping("origin", "local");
+        let ping = make_ping("origin", "local");
         let ticket = make_sync_process_ticket("origin", "local");
         let whitelist = vec!["ping".to_string()];
 
@@ -391,7 +398,7 @@ mod tests {
 
     #[test]
     fn test_network_whitelist_error_ticket_has_swapped_src_dest() {
-        let ticket    = make_sync_process_ticket("origin", "local");
+        let ticket = make_sync_process_ticket("origin", "local");
         let whitelist = vec!["ping".to_string()];
 
         let (allowed, errors) = apply_network_whitelist(vec![ticket], &whitelist);
@@ -402,7 +409,11 @@ mod tests {
         if let NetworkMessage::TicketResponse(err) = &errors[0] {
             assert_eq!(err.src, "local");
             assert_eq!(err.dest.as_deref(), Some("origin"));
-            assert!(err.error.as_deref().unwrap().contains("not allowed by whitelist"));
+            assert!(err
+                .error
+                .as_deref()
+                .unwrap()
+                .contains("not allowed by whitelist"));
         } else {
             panic!("expected TicketResponse");
         }
@@ -410,7 +421,7 @@ mod tests {
 
     #[test]
     fn test_network_whitelist_non_ticket_dropped_silently() {
-        let ping      = make_ping("origin", "local");
+        let ping = make_ping("origin", "local");
         let whitelist = vec!["ticket_request".to_string()];
 
         let (allowed, errors) = apply_network_whitelist(vec![ping], &whitelist);
@@ -423,7 +434,7 @@ mod tests {
 
     #[test]
     fn test_control_whitelist_filters_disallowed_form_and_enqueues_error() {
-        let ticket    = make_sync_process_ticket("origin", "local");
+        let ticket = make_sync_process_ticket("origin", "local");
         let whitelist = vec!["get_peers".to_string()];
 
         let (allowed, errors) = apply_control_whitelist(vec![ticket], &whitelist);
@@ -434,7 +445,11 @@ mod tests {
         if let NetworkMessage::TicketResponse(err) = &errors[0] {
             assert_eq!(err.src, "local");
             assert_eq!(err.dest.as_deref(), Some("origin"));
-            assert!(err.error.as_deref().unwrap().contains("not allowed by whitelist"));
+            assert!(err
+                .error
+                .as_deref()
+                .unwrap()
+                .contains("not allowed by whitelist"));
         } else {
             panic!("expected TicketResponse");
         }
@@ -442,7 +457,7 @@ mod tests {
 
     #[test]
     fn test_control_whitelist_allows_matching_form() {
-        let ticket    = make_sync_process_ticket("origin", "local");
+        let ticket = make_sync_process_ticket("origin", "local");
         let whitelist = vec!["sync_process".to_string()];
 
         let (allowed, errors) = apply_control_whitelist(vec![ticket], &whitelist);
@@ -453,7 +468,7 @@ mod tests {
 
     #[test]
     fn test_control_whitelist_passes_non_ticket_messages_through() {
-        let ping      = make_ping("origin", "local");
+        let ping = make_ping("origin", "local");
         let whitelist = vec!["get_peers".to_string()];
 
         let (allowed, errors) = apply_control_whitelist(vec![ping], &whitelist);
@@ -486,7 +501,11 @@ mod tests {
         if let NetworkMessage::TicketResponse(err) = &pending[0].object {
             assert_eq!(err.src, dest);
             assert_eq!(err.dest.as_deref(), Some("origin"));
-            assert!(err.error.as_deref().unwrap().contains("not allowed by whitelist"));
+            assert!(err
+                .error
+                .as_deref()
+                .unwrap()
+                .contains("not allowed by whitelist"));
         } else {
             panic!("expected TicketResponse");
         }
@@ -512,7 +531,11 @@ mod tests {
         if let NetworkMessage::TicketResponse(err) = &pending[0].object {
             assert_eq!(err.src, dest);
             assert_eq!(err.dest.as_deref(), Some("origin"));
-            assert!(err.error.as_deref().unwrap().contains("not allowed by whitelist"));
+            assert!(err
+                .error
+                .as_deref()
+                .unwrap()
+                .contains("not allowed by whitelist"));
         } else {
             panic!("expected TicketResponse");
         }

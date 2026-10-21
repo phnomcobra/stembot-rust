@@ -9,10 +9,10 @@ This is the Rust implementation of StemBot. It is protocol-compatible with [stem
 Key features:
 - **Multi-agent networking** — agents discover peers and automatically share routing tables so messages can traverse multi-hop paths
 - **Asynchronous tickets** — control requests are wrapped in tickets and delivered asynchronously, with optional path tracing through the network
-- **AES-256 encryption** — every request and response is encrypted end-to-end using AES-256 in EAX mode
+- **Per-peer AES-256 encryption** — each request identifies a managed key with `Key-UUID`; shared passphrase-derived user keys bootstrap peers and short-lived distributed keys are exchanged automatically
 - **Polling mode** — agents with one-way connectivity can poll their peers rather than relying on inbound connections
 - **CLI tools** — `agt-configure` for offline setup and `agt-control` for live agent management
-- **In-memory collections** — messages, tickets, traces, and routes are held in named in-memory SQLite databases (via `file:?mode=memory` URIs) for low-latency access; peers and the key-value store are file-backed
+- **In-memory collections** — messages, tickets, traces, and routes are held in named in-memory SQLite databases (via `file:?mode=memory` URIs) for low-latency access; peers, keys, and the key-value store are file-backed
 - **Debian package** — `scripts/build_deb.sh` produces a `.deb` that installs binaries and a systemd service unit
 - **Multi-stage Docker build** — the Dockerfile compiles with `rust:slim`, then copies the release binaries into a minimal `ubuntu:24.04` runtime image that includes logrotate for log management
 
@@ -52,7 +52,10 @@ There are two ways to configure an agent before starting it.
 export AGT_UUID="my-agent"
 export AGT_PORT="8080"
 export AGT_HOST="0.0.0.0"
-export AGT_SECRET="mypassword"
+export AGT_USER_KEY_OBJUUID="shared-user-key"
+export AGT_USER_KEY_PASSPHRASE="shared-passphrase"
+# Optional association with a specific peer:
+# export AGT_USER_KEY_AGTUUID="peer-agent"
 export AGT_CLIENT_CONTROL_URL="http://127.0.0.1:8080/control"
 export AGT_WORKERS="4"
 export AGT_LOG_LEVEL_APP="info"
@@ -69,7 +72,8 @@ agt-configure --load-env
 **Option 2: CLI flags**
 
 ```bash
-agt-configure --agtuuid my-agent --port 8080 --host 0.0.0.0 --secret mypassword
+agt-configure --agtuuid my-agent --port 8080 --host 0.0.0.0
+agt-configure --user-key-objuuid shared-user-key --user-key-passphrase shared-passphrase
 agt-configure --workers 4 --log-level-app info --log-level-api error
 agt-configure --peer-timeout-secs 60 --peer-refresh-secs 30 --max-weight 600
 agt-configure --ticket-timeout-secs 600 --message-timeout-secs 600
@@ -100,7 +104,8 @@ Logs are written to stderr/stdout only. Use an external tool such as logrotate o
 
 ```bash
 cargo build --release
-agt-configure --agtuuid agent-a --port 8080 --host 0.0.0.0 --secret mypassword
+agt-configure --agtuuid agent-a --port 8080 --host 0.0.0.0
+agt-configure --user-key-objuuid shared-user-key --user-key-passphrase shared-passphrase
 agt-configure --client-local
 agt-control discover http://agent-b:8080/mpi --delay 10 &
 agt-server
@@ -112,6 +117,12 @@ The included `docker-compose.yml` spins up a five-node mesh (`r1`–`r5`) for lo
 
 ```bash
 docker compose up --build
+```
+
+For example, run the control CLI inside the `r1` container with:
+
+```bash
+./scripts/agt-control.sh stat r5
 ```
 
 The Dockerfile uses a two-stage build: a `rust:slim` builder compiles the release binaries, and a `ubuntu:24.04` runtime image contains only the binaries plus their shared-library dependencies (`libssl3`, `libsqlite3-0`) and logrotate.
@@ -151,6 +162,7 @@ StemBot uses a layered protocol stack for distributed agent communication. The s
 │  - CreatePeer, DiscoverPeer             │
 │  - DeletePeers, LoadFile, WriteFile     │
 │  - SyncProcess, GetConfig, GetRoutes    │
+│  - CreateUserKey, GetKeyMetadata        │
 └──────────────┬──────────────────────────┘
                │
                ▼
@@ -158,6 +170,7 @@ StemBot uses a layered protocol stack for distributed agent communication. The s
 │      NetworkMessage (Routing Layer)     │
 │  - NetworkTicket (async delivery)       │
 │  - Ping, Advertisement, Acknowledgement │
+│  - ExchangeKeys (peer key exchange)     │
 │  - Routes messages between peers        │
 └──────────────┬──────────────────────────┘
                │
@@ -184,6 +197,8 @@ StemBot uses a layered protocol stack for distributed agent communication. The s
 - `SyncProcess` — Execute a command synchronously and retrieve output
 - `LoadFile` — Load file from remote agent (compressed and encoded)
 - `WriteFile` — Write file to remote agent (compressed and encoded)
+- `CreateUserKey` — Create or remotely bootstrap a passphrase-derived user key
+- `GetKeyMetadata` — List key type, associated agent, UUID, and remaining TTL
 
 **Wrapper Type:** `ControlFormTicket`
 - Wraps a ControlForm with ticket metadata for asynchronous delivery
@@ -200,6 +215,7 @@ StemBot uses a layered protocol stack for distributed agent communication. The s
 - `NetworkMessagesRequest` — Poll peer for pending messages
 - `NetworkMessagesResponse` — Return list of pending messages
 - `TicketTraceResponse` — Report ticket hop through this agent
+- `ExchangeKeys` — Exchange expiring random keys with a directly connected peer
 
 **Key Fields:**
 - `type` — Message type enumeration
@@ -251,6 +267,12 @@ agt-control put /local/path /remote/path --dst-agtuuid r5
 
 # Performance benchmark (multiple file sizes, latency + throughput)
 agt-control bench r5
+
+# Provision a matching user key on another agent
+agt-control set-user-key r5 shared-user-key shared-passphrase
+
+# Run the synthetic control-form suite against one or more agents
+agt-control test r5,r4
 ```
 
 ### Encryption and Security
@@ -263,6 +285,7 @@ Nonce:          hex(random_nonce)
 Tag:            hex(aes_authentication_tag)
 Content-Type:   application/binary
 Content-Length: <ciphertext byte length>
+Key-UUID:       <UUID of the key used for this request>
 ```
 
 **Payload:**
@@ -270,7 +293,9 @@ Content-Length: <ciphertext byte length>
 AES.encrypt(json_data)   [raw binary ciphertext]
 ```
 
-The encryption key is derived from `SHA-256(secret)` and must be 32 bytes. Defaults to `SHA-256("changeme")`. **Change this in production.**
+User keys are derived deterministically with PBKDF2-HMAC-SHA256 from a passphrase and key UUID. Provision the same passphrase and UUID out-of-band on both peers, or use `agt-control set-user-key` to bootstrap the receiving peer. Agents then exchange random `AUTO` keys directly with peers; those distributed keys are preferred over user keys, expire, and are periodically rotated. Unknown or expired key UUIDs are rejected with HTTP 401.
+
+The local master key used to encrypt stored key material is generated once and saved in `stembot-master.key` with owner-only permissions on Unix systems. Protect this file and the agent's SQLite key database as sensitive state; losing the master key makes the stored keys unusable. This Rust storage is local to the Rust implementation and is not interchangeable with Python's OS-keyring-backed storage; agents interoperate over the encrypted network protocol.
 
 ### In-Memory Collections
 
@@ -284,6 +309,7 @@ Unlike stembot-python, the Rust implementation holds several hot collections in 
 | routes     | in-memory | Routing table                       |
 | peers      | file      | Peer relationships (`peers.sqlite`) |
 | kvstore    | file      | Configuration (`kvstore.sqlite`)    |
+| keys    | file      | Encrypted key records (`keys.sqlite`) |
 
 Each collection is a process-wide singleton (`OnceLock`) wrapped in `Arc<Mutex<Connection>>`, so all threads share a single connection with no connection overhead per request.
 

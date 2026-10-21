@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::models::crypto::KeyMetadata;
 use crate::models::routing::{Peer, Route};
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -46,11 +47,11 @@ impl Default for CommandArg {
 /// Maps to Python's `LoadFile(ControlForm)`.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct LoadFile {
-    pub path:    String,
+    pub path: String,
     pub b64zlib: Option<String>,
-    pub size:    Option<i64>,
-    pub md5sum:  Option<String>,
-    pub error:   Option<String>,
+    pub size: Option<i64>,
+    pub md5sum: Option<String>,
+    pub error: Option<String>,
     pub objuuid: Option<String>,
     pub coluuid: Option<String>,
 }
@@ -60,10 +61,10 @@ pub struct LoadFile {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct WriteFile {
     pub b64zlib: String,
-    pub path:    String,
-    pub size:    Option<i64>,
-    pub md5sum:  Option<String>,
-    pub error:   Option<String>,
+    pub path: String,
+    pub size: Option<i64>,
+    pub md5sum: Option<String>,
+    pub error: Option<String>,
     pub objuuid: Option<String>,
     pub coluuid: Option<String>,
 }
@@ -72,20 +73,39 @@ pub struct WriteFile {
 /// Maps to Python's `SyncProcess(ControlForm)`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SyncProcess {
-    pub command:      CommandArg,
+    pub command: CommandArg,
     #[serde(default = "default_sync_timeout")]
-    pub timeout:      i64,
-    pub stdout:       Option<String>,
-    pub stderr:       Option<String>,
-    pub status:       Option<i64>,
-    pub start_time:   Option<f64>,
+    pub timeout: i64,
+    pub stdout: Option<String>,
+    pub stderr: Option<String>,
+    pub status: Option<i64>,
+    pub start_time: Option<f64>,
     pub elapsed_time: Option<f64>,
-    pub error:        Option<String>,
-    pub objuuid:      Option<String>,
-    pub coluuid:      Option<String>,
+    pub error: Option<String>,
+    pub objuuid: Option<String>,
+    pub coluuid: Option<String>,
 }
 
-fn default_sync_timeout() -> i64 { 15 }
+impl Default for SyncProcess {
+    fn default() -> Self {
+        Self {
+            command: CommandArg::default(),
+            timeout: default_sync_timeout(),
+            stdout: None,
+            stderr: None,
+            status: None,
+            start_time: None,
+            elapsed_time: None,
+            error: None,
+            objuuid: None,
+            coluuid: None,
+        }
+    }
+}
+
+fn default_sync_timeout() -> i64 {
+    15
+}
 
 /// Request to create a peer connection to another agent.
 /// Maps to Python's `CreatePeer(ControlForm)`.
@@ -94,9 +114,9 @@ pub struct CreatePeer {
     pub agtuuid: String,
     #[serde(default)]
     pub polling: bool,
-    pub url:     Option<String>,
-    pub ttl:     Option<f64>,
-    pub error:   Option<String>,
+    pub url: Option<String>,
+    pub ttl: Option<f64>,
+    pub error: Option<String>,
     pub objuuid: Option<String>,
     pub coluuid: Option<String>,
 }
@@ -105,12 +125,12 @@ pub struct CreatePeer {
 /// Maps to Python's `DiscoverPeer(ControlForm)`.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct DiscoverPeer {
-    pub url:     String,
+    pub url: String,
     #[serde(default)]
     pub polling: bool,
     pub agtuuid: Option<String>,
-    pub ttl:     Option<f64>,
-    pub error:   Option<String>,
+    pub ttl: Option<f64>,
+    pub error: Option<String>,
     pub objuuid: Option<String>,
     pub coluuid: Option<String>,
 }
@@ -120,9 +140,9 @@ pub struct DiscoverPeer {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct DeletePeers {
     pub agtuuids: Option<Vec<String>>,
-    pub error:    Option<String>,
-    pub objuuid:  Option<String>,
-    pub coluuid:  Option<String>,
+    pub error: Option<String>,
+    pub objuuid: Option<String>,
+    pub coluuid: Option<String>,
 }
 
 /// Request to retrieve all current peer connections.
@@ -130,8 +150,8 @@ pub struct DeletePeers {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct GetPeers {
     #[serde(default)]
-    pub peers:   Vec<Peer>,
-    pub error:   Option<String>,
+    pub peers: Vec<Peer>,
+    pub error: Option<String>,
     pub objuuid: Option<String>,
     pub coluuid: Option<String>,
 }
@@ -141,8 +161,8 @@ pub struct GetPeers {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct GetRoutes {
     #[serde(default)]
-    pub routes:  Vec<Route>,
-    pub error:   Option<String>,
+    pub routes: Vec<Route>,
+    pub error: Option<String>,
     pub objuuid: Option<String>,
     pub coluuid: Option<String>,
 }
@@ -152,19 +172,19 @@ pub struct GetRoutes {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Benchmark {
     pub outbound_size: Option<i64>,
-    pub inbound_size:  Option<i64>,
-    pub payload:       Option<String>,
-    pub error:         Option<String>,
-    pub objuuid:       Option<String>,
-    pub coluuid:       Option<String>,
+    pub inbound_size: Option<i64>,
+    pub payload: Option<String>,
+    pub error: Option<String>,
+    pub objuuid: Option<String>,
+    pub coluuid: Option<String>,
 }
 
 /// Request to retrieve the agent configuration.
 /// Maps to Python's `GetConfig(ControlForm)`.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct GetConfig {
-    pub config:  Option<Value>,
-    pub error:   Option<String>,
+    pub config: Option<Value>,
+    pub error: Option<String>,
     pub objuuid: Option<String>,
     pub coluuid: Option<String>,
 }
@@ -173,12 +193,12 @@ pub struct GetConfig {
 /// Maps to Python's `CheckTicket(ControlForm)`.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CheckTicket {
-    pub tckuuid:      String,
-    pub create_time:  Option<f64>,
+    pub tckuuid: String,
+    pub create_time: Option<f64>,
     pub service_time: Option<f64>,
-    pub error:        Option<String>,
-    pub objuuid:      Option<String>,
-    pub coluuid:      Option<String>,
+    pub error: Option<String>,
+    pub objuuid: Option<String>,
+    pub coluuid: Option<String>,
 }
 
 /// Request to close an existing ticket.
@@ -186,7 +206,26 @@ pub struct CheckTicket {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CloseTicket {
     pub tckuuid: String,
-    pub error:   Option<String>,
+    pub error: Option<String>,
+    pub objuuid: Option<String>,
+    pub coluuid: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct CreateUserKey {
+    pub objuuid: String,
+    #[serde(default)]
+    pub passphrase: String,
+    pub agtuuid: Option<String>,
+    pub error: Option<String>,
+    pub coluuid: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct GetKeyMetadata {
+    #[serde(default)]
+    pub metadata: Option<Vec<KeyMetadata>>,
+    pub error: Option<String>,
     pub objuuid: Option<String>,
     pub coluuid: Option<String>,
 }
@@ -201,18 +240,34 @@ pub struct CloseTicket {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum ControlForm {
-    #[serde(rename = "create_peer")]   CreatePeer(CreatePeer),
-    #[serde(rename = "discover_peer")] DiscoverPeer(DiscoverPeer),
-    #[serde(rename = "delete_peers")]  DeletePeers(DeletePeers),
-    #[serde(rename = "get_peers")]     GetPeers(GetPeers),
-    #[serde(rename = "get_routes")]    GetRoutes(GetRoutes),
-    #[serde(rename = "sync_process")]  SyncProcess(SyncProcess),
-    #[serde(rename = "write_file")]    WriteFile(WriteFile),
-    #[serde(rename = "load_file")]     LoadFile(LoadFile),
-    #[serde(rename = "benchmark")]     Benchmark(Benchmark),
-    #[serde(rename = "get_config")]    GetConfig(GetConfig),
-    #[serde(rename = "check_ticket")]  CheckTicket(CheckTicket),
-    #[serde(rename = "close_ticket")]  CloseTicket(CloseTicket),
+    #[serde(rename = "create_peer")]
+    CreatePeer(CreatePeer),
+    #[serde(rename = "discover_peer")]
+    DiscoverPeer(DiscoverPeer),
+    #[serde(rename = "delete_peers")]
+    DeletePeers(DeletePeers),
+    #[serde(rename = "get_peers")]
+    GetPeers(GetPeers),
+    #[serde(rename = "get_routes")]
+    GetRoutes(GetRoutes),
+    #[serde(rename = "sync_process")]
+    SyncProcess(SyncProcess),
+    #[serde(rename = "write_file")]
+    WriteFile(WriteFile),
+    #[serde(rename = "load_file")]
+    LoadFile(LoadFile),
+    #[serde(rename = "benchmark")]
+    Benchmark(Benchmark),
+    #[serde(rename = "get_config")]
+    GetConfig(GetConfig),
+    #[serde(rename = "check_ticket")]
+    CheckTicket(CheckTicket),
+    #[serde(rename = "close_ticket")]
+    CloseTicket(CloseTicket),
+    #[serde(rename = "create_user_key")]
+    CreateUserKey(CreateUserKey),
+    #[serde(rename = "get_key_metadata")]
+    GetKeyMetadata(GetKeyMetadata),
 }
 
 impl Default for ControlForm {
@@ -225,18 +280,20 @@ impl ControlForm {
     /// Return the wire-format type string for this variant.
     pub fn form_type(&self) -> &'static str {
         match self {
-            Self::CreatePeer(_)   => "create_peer",
+            Self::CreatePeer(_) => "create_peer",
             Self::DiscoverPeer(_) => "discover_peer",
-            Self::DeletePeers(_)  => "delete_peers",
-            Self::GetPeers(_)     => "get_peers",
-            Self::GetRoutes(_)    => "get_routes",
-            Self::SyncProcess(_)  => "sync_process",
-            Self::WriteFile(_)    => "write_file",
-            Self::LoadFile(_)     => "load_file",
-            Self::Benchmark(_)    => "benchmark",
-            Self::GetConfig(_)    => "get_config",
-            Self::CheckTicket(_)  => "check_ticket",
-            Self::CloseTicket(_)  => "close_ticket",
+            Self::DeletePeers(_) => "delete_peers",
+            Self::GetPeers(_) => "get_peers",
+            Self::GetRoutes(_) => "get_routes",
+            Self::SyncProcess(_) => "sync_process",
+            Self::WriteFile(_) => "write_file",
+            Self::LoadFile(_) => "load_file",
+            Self::Benchmark(_) => "benchmark",
+            Self::GetConfig(_) => "get_config",
+            Self::CheckTicket(_) => "check_ticket",
+            Self::CloseTicket(_) => "close_ticket",
+            Self::CreateUserKey(_) => "create_user_key",
+            Self::GetKeyMetadata(_) => "get_key_metadata",
         }
     }
 }
@@ -247,7 +304,7 @@ impl ControlForm {
 /// Maps to Python's `Hop(BaseModel)` in `models/control.py`.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Hop {
-    pub agtuuid:  String,
+    pub agtuuid: String,
     pub hop_time: f64,
     pub type_str: String,
 }
@@ -259,41 +316,41 @@ pub struct Hop {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ControlFormTicket {
     #[serde(rename = "type", default = "default_create_ticket")]
-    pub form_type:    String,
+    pub form_type: String,
     #[serde(default = "gen_uuid")]
-    pub tckuuid:      String,
+    pub tckuuid: String,
     #[serde(default)]
-    pub src:          String,
+    pub src: String,
     #[serde(default)]
-    pub dst:          String,
+    pub dst: String,
     #[serde(default = "unix_now_f64")]
-    pub create_time:  f64,
+    pub create_time: f64,
     #[serde(default)]
-    pub tracing:      bool,
+    pub tracing: bool,
     #[serde(default)]
-    pub hops:         Vec<Hop>,
-    pub form:         ControlForm,
+    pub hops: Vec<Hop>,
+    pub form: ControlForm,
     pub service_time: Option<f64>,
-    pub error:        Option<String>,
-    pub objuuid:      Option<String>,
-    pub coluuid:      Option<String>,
+    pub error: Option<String>,
+    pub objuuid: Option<String>,
+    pub coluuid: Option<String>,
 }
 
 impl Default for ControlFormTicket {
     fn default() -> Self {
         Self {
-            form_type:    "create_ticket".to_string(),
-            tckuuid:      gen_uuid(),
-            src:          String::new(),
-            dst:          String::new(),
-            create_time:  unix_now_f64(),
-            tracing:      false,
-            hops:         Vec::new(),
-            form:         ControlForm::default(),
+            form_type: "create_ticket".to_string(),
+            tckuuid: gen_uuid(),
+            src: String::new(),
+            dst: String::new(),
+            create_time: unix_now_f64(),
+            tracing: false,
+            hops: Vec::new(),
+            form: ControlForm::default(),
             service_time: None,
-            error:        None,
-            objuuid:      None,
-            coluuid:      None,
+            error: None,
+            objuuid: None,
+            coluuid: None,
         }
     }
 }
@@ -434,9 +491,14 @@ mod tests {
         let form = ControlForm::SyncProcess(SyncProcess {
             command: CommandArg::Single("ls /".into()),
             timeout: 15,
-            stdout: None, stderr: None, status: None,
-            start_time: None, elapsed_time: None,
-            error: None, objuuid: None, coluuid: None,
+            stdout: None,
+            stderr: None,
+            status: None,
+            start_time: None,
+            elapsed_time: None,
+            error: None,
+            objuuid: None,
+            coluuid: None,
         });
         assert_ser_eq(&form, SYNC_PROCESS_STR_CMD_JSON);
     }
@@ -446,9 +508,14 @@ mod tests {
         let form = ControlForm::SyncProcess(SyncProcess {
             command: CommandArg::Multi(vec!["ls".into(), "/".into()]),
             timeout: 15,
-            stdout: None, stderr: None, status: None,
-            start_time: None, elapsed_time: None,
-            error: None, objuuid: None, coluuid: None,
+            stdout: None,
+            stderr: None,
+            status: None,
+            start_time: None,
+            elapsed_time: None,
+            error: None,
+            objuuid: None,
+            coluuid: None,
         });
         assert_ser_eq(&form, SYNC_PROCESS_LIST_CMD_JSON);
     }
@@ -463,7 +530,9 @@ mod tests {
             status: Some(0),
             start_time: Some(1000.0),
             elapsed_time: Some(0.01),
-            error: None, objuuid: None, coluuid: None,
+            error: None,
+            objuuid: None,
+            coluuid: None,
         });
         assert_ser_eq(&form, SYNC_PROCESS_RESPONSE_JSON);
     }
@@ -568,9 +637,8 @@ mod tests {
 
     // ── GetPeers ──────────────────────────────────────────────────────────────
 
-    const GET_PEERS_EMPTY_JSON: &str = concat!(
-        r#"{"type":"get_peers","error":null,"objuuid":null,"coluuid":null,"peers":[]}"#
-    );
+    const GET_PEERS_EMPTY_JSON: &str =
+        concat!(r#"{"type":"get_peers","error":null,"objuuid":null,"coluuid":null,"peers":[]}"#);
     const GET_PEERS_DATA_JSON: &str = concat!(
         r#"{"type":"get_peers","error":null,"objuuid":null,"coluuid":null,"#,
         r#""peers":[{"agtuuid":"a2","polling":false,"destroy_time":2000.0,"#,
@@ -613,9 +681,8 @@ mod tests {
 
     // ── GetRoutes ─────────────────────────────────────────────────────────────
 
-    const GET_ROUTES_EMPTY_JSON: &str = concat!(
-        r#"{"type":"get_routes","error":null,"objuuid":null,"coluuid":null,"routes":[]}"#
-    );
+    const GET_ROUTES_EMPTY_JSON: &str =
+        concat!(r#"{"type":"get_routes","error":null,"objuuid":null,"coluuid":null,"routes":[]}"#);
     const GET_ROUTES_DATA_JSON: &str = concat!(
         r#"{"type":"get_routes","error":null,"objuuid":null,"coluuid":null,"#,
         r#""routes":[{"agtuuid":"a2","gtwuuid":"a1","weight":1,"objuuid":null,"coluuid":null}]}"#
@@ -631,7 +698,13 @@ mod tests {
     fn test_ser_get_routes_with_data() {
         use crate::models::routing::Route;
         let form = ControlForm::GetRoutes(GetRoutes {
-            routes: vec![Route { agtuuid: "a2".into(), gtwuuid: "a1".into(), weight: 1, objuuid: None, coluuid: None }],
+            routes: vec![Route {
+                agtuuid: "a2".into(),
+                gtwuuid: "a1".into(),
+                weight: 1,
+                objuuid: None,
+                coluuid: None,
+            }],
             ..Default::default()
         });
         assert_ser_eq(&form, GET_ROUTES_DATA_JSON);
@@ -684,12 +757,15 @@ mod tests {
 
     // ── Hop ───────────────────────────────────────────────────────────────────
 
-    const HOP_JSON: &str =
-        r#"{"agtuuid":"a1","hop_time":1000.0,"type_str":"ticket_request"}"#;
+    const HOP_JSON: &str = r#"{"agtuuid":"a1","hop_time":1000.0,"type_str":"ticket_request"}"#;
 
     #[test]
     fn test_ser_hop() {
-        let hop = Hop { agtuuid: "a1".into(), hop_time: 1000.0, type_str: "ticket_request".into() };
+        let hop = Hop {
+            agtuuid: "a1".into(),
+            hop_time: 1000.0,
+            type_str: "ticket_request".into(),
+        };
         assert_ser_eq(&hop, HOP_JSON);
     }
 
@@ -722,9 +798,14 @@ mod tests {
         ControlForm::SyncProcess(SyncProcess {
             command: CommandArg::Single("ls /".into()),
             timeout: 15,
-            stdout: None, stderr: None, status: None,
-            start_time: None, elapsed_time: None,
-            error: None, objuuid: None, coluuid: None,
+            stdout: None,
+            stderr: None,
+            status: None,
+            start_time: None,
+            elapsed_time: None,
+            error: None,
+            objuuid: None,
+            coluuid: None,
         })
     }
 
@@ -740,7 +821,9 @@ mod tests {
             tracing: false,
             hops: vec![],
             form: sync_process_ls(),
-            error: None, objuuid: None, coluuid: None,
+            error: None,
+            objuuid: None,
+            coluuid: None,
         };
         assert_ser_eq(&ticket, CFT_CREATE_JSON);
     }
@@ -755,9 +838,15 @@ mod tests {
             create_time: 1000.0,
             service_time: Some(0.5),
             tracing: true,
-            hops: vec![Hop { agtuuid: "a1".into(), hop_time: 1001.0, type_str: "ticket_request".into() }],
+            hops: vec![Hop {
+                agtuuid: "a1".into(),
+                hop_time: 1001.0,
+                type_str: "ticket_request".into(),
+            }],
             form: sync_process_ls(),
-            error: None, objuuid: None, coluuid: None,
+            error: None,
+            objuuid: None,
+            coluuid: None,
         };
         assert_ser_eq(&ticket, CFT_READ_WITH_HOPS_JSON);
     }
@@ -835,4 +924,3 @@ mod tests {
         assert_deser_roundtrip::<ControlForm>(CLOSE_TICKET_JSON);
     }
 }
-

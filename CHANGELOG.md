@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.0] - 2026-10-20
+
+### Changed
+- **Breaking: removed the shared encryption secret.** `secret_digest`, `AGT_SECRET`, and `agt-configure --secret` are removed. Requests now identify their key with a `Key-UUID` header.
+- HTTP clients resolve keys for the destination peer, preferring distributed keys over user keys and auto keys. Rejected distributed keys are removed after HTTP 401 responses.
+- Benchmark output now reports paired outbound/inbound values on one row for each payload size and concurrency.
+
+### Added
+- Per-agent key management with 200,000-round PBKDF2-HMAC-SHA256 user keys, encrypted key records, 90-day auto keys, and key metadata.
+- `ExchangeKeys` network messages and a scheduled task that exchanges and rotates keys with directly connected peers.
+- `agt-configure --user-key-objuuid/--user-key-passphrase/--user-key-agtuuid` and matching environment variables.
+- `agt-control set-user-key` and `agt-control test` subcommands.
+- `scripts/agt-control.sh` for running `agt-control` in the `r1` Docker Compose container.
+
+### Migration
+- Provision a matching user-key UUID and passphrase out-of-band on directly connected agents before discovery. The Docker Compose mesh demonstrates environment and CLI provisioning.
+- Protect `stembot-master.key` and the `keys.sqlite` database; both are required to retain encrypted key records.
+- Rust key storage is implementation-local; Python/Rust compatibility is provided over the wire, not by sharing local key databases.
+
 ## [2.1.1] - 2026-08-01
 
 ### Changed

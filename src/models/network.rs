@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::models::control::{ControlForm, Hop};
+use crate::models::crypto::KeyDistribution;
 use crate::models::routing::Route;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -36,13 +37,13 @@ fn unix_now_f64() -> f64 {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Ping {
     #[serde(default)]
-    pub src:       String,
-    pub dest:      Option<String>,
-    pub isrc:      Option<String>,
+    pub src: String,
+    pub dest: Option<String>,
+    pub isrc: Option<String>,
     #[serde(default = "unix_now_opt")]
     pub timestamp: Option<f64>,
-    pub objuuid:   Option<String>,
-    pub coluuid:   Option<String>,
+    pub objuuid: Option<String>,
+    pub coluuid: Option<String>,
 }
 
 /// Request to retrieve pending messages from an agent.
@@ -50,47 +51,61 @@ pub struct Ping {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct NetworkMessagesRequest {
     #[serde(default)]
-    pub src:               String,
-    pub dest:              Option<String>,
-    pub isrc:              Option<String>,
+    pub src: String,
+    pub dest: Option<String>,
+    pub isrc: Option<String>,
     #[serde(default = "unix_now_opt")]
-    pub timestamp:         Option<f64>,
-    pub limit:             Option<u64>,
+    pub timestamp: Option<f64>,
+    pub limit: Option<u64>,
     pub network_whitelist: Option<Vec<String>>,
     pub control_whitelist: Option<Vec<String>>,
-    pub objuuid:           Option<String>,
-    pub coluuid:           Option<String>,
+    pub objuuid: Option<String>,
+    pub coluuid: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ExchangeKeys {
+    #[serde(default)]
+    pub distributions: Vec<KeyDistribution>,
+    #[serde(default)]
+    pub src: String,
+    pub dest: Option<String>,
+    pub isrc: Option<String>,
+    #[serde(default = "unix_now_opt")]
+    pub timestamp: Option<f64>,
+    pub objuuid: Option<String>,
+    pub coluuid: Option<String>,
 }
 
 /// Acknowledgement of a received message.
 /// Maps to Python's `Acknowledgement(NetworkMessage)`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Acknowledgement {
-    pub ack_type:  String,
+    pub ack_type: String,
     #[serde(default)]
-    pub src:       String,
-    pub dest:      Option<String>,
-    pub isrc:      Option<String>,
+    pub src: String,
+    pub dest: Option<String>,
+    pub isrc: Option<String>,
     #[serde(default = "unix_now_opt")]
     pub timestamp: Option<f64>,
     pub forwarded: Option<String>,
-    pub error:     Option<String>,
-    pub objuuid:   Option<String>,
-    pub coluuid:   Option<String>,
+    pub error: Option<String>,
+    pub objuuid: Option<String>,
+    pub coluuid: Option<String>,
 }
 
 impl Default for Acknowledgement {
     fn default() -> Self {
         Self {
-            ack_type:  "ping".to_string(),
-            src:       String::new(),
-            dest:      None,
-            isrc:      None,
+            ack_type: "ping".to_string(),
+            src: String::new(),
+            dest: None,
+            isrc: None,
             timestamp: None,
             forwarded: None,
-            error:     None,
-            objuuid:   None,
-            coluuid:   None,
+            error: None,
+            objuuid: None,
+            coluuid: None,
         }
     }
 }
@@ -99,17 +114,17 @@ impl Default for Acknowledgement {
 /// Maps to Python's `Advertisement(NetworkMessage)`.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Advertisement {
-    pub agtuuid:   String,
+    pub agtuuid: String,
     #[serde(default)]
-    pub routes:    Vec<Route>,
+    pub routes: Vec<Route>,
     #[serde(default)]
-    pub src:       String,
-    pub dest:      Option<String>,
-    pub isrc:      Option<String>,
+    pub src: String,
+    pub dest: Option<String>,
+    pub isrc: Option<String>,
     #[serde(default = "unix_now_opt")]
     pub timestamp: Option<f64>,
-    pub objuuid:   Option<String>,
-    pub coluuid:   Option<String>,
+    pub objuuid: Option<String>,
+    pub coluuid: Option<String>,
 }
 
 /// Response to a NetworkMessagesRequest containing pending messages.
@@ -117,33 +132,33 @@ pub struct Advertisement {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct NetworkMessagesResponse {
     #[serde(default)]
-    pub messages:  Vec<NetworkMessage>,
+    pub messages: Vec<NetworkMessage>,
     #[serde(default)]
-    pub src:       String,
-    pub dest:      Option<String>,
-    pub isrc:      Option<String>,
+    pub src: String,
+    pub dest: Option<String>,
+    pub isrc: Option<String>,
     #[serde(default = "unix_now_opt")]
     pub timestamp: Option<f64>,
-    pub objuuid:   Option<String>,
-    pub coluuid:   Option<String>,
+    pub objuuid: Option<String>,
+    pub coluuid: Option<String>,
 }
 
 /// Response indicating a ticket has been traced through the network.
 /// Maps to Python's `TicketTraceResponse(NetworkMessage)`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TicketTraceResponse {
-    pub tckuuid:             String,
+    pub tckuuid: String,
     pub network_ticket_type: String,
     #[serde(default = "unix_now_f64")]
-    pub hop_time:            f64,
+    pub hop_time: f64,
     #[serde(default)]
-    pub src:                 String,
-    pub dest:                Option<String>,
-    pub isrc:                Option<String>,
+    pub src: String,
+    pub dest: Option<String>,
+    pub isrc: Option<String>,
     #[serde(default = "unix_now_opt")]
-    pub timestamp:           Option<f64>,
-    pub objuuid:             Option<String>,
-    pub coluuid:             Option<String>,
+    pub timestamp: Option<f64>,
+    pub objuuid: Option<String>,
+    pub coluuid: Option<String>,
 }
 
 impl TicketTraceResponse {
@@ -151,7 +166,7 @@ impl TicketTraceResponse {
     /// Maps to the `hop` property in Python's `TicketTraceResponse`.
     pub fn hop(&self) -> Hop {
         Hop {
-            agtuuid:  self.src.clone(),
+            agtuuid: self.src.clone(),
             hop_time: self.hop_time,
             type_str: self.network_ticket_type.clone(),
         }
@@ -161,15 +176,15 @@ impl TicketTraceResponse {
 impl Default for TicketTraceResponse {
     fn default() -> Self {
         Self {
-            tckuuid:             String::new(),
+            tckuuid: String::new(),
             network_ticket_type: String::new(),
-            hop_time:            0.0,
-            src:                 String::new(),
-            dest:                None,
-            isrc:                None,
-            timestamp:           None,
-            objuuid:             None,
-            coluuid:             None,
+            hop_time: 0.0,
+            src: String::new(),
+            dest: None,
+            isrc: None,
+            timestamp: None,
+            objuuid: None,
+            coluuid: None,
         }
     }
 }
@@ -182,21 +197,21 @@ impl Default for TicketTraceResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NetworkTicket {
     #[serde(default = "gen_uuid")]
-    pub tckuuid:      String,
-    pub form:         ControlForm,
+    pub tckuuid: String,
+    pub form: ControlForm,
     #[serde(default)]
-    pub tracing:      bool,
+    pub tracing: bool,
     #[serde(default)]
-    pub src:          String,
-    pub dest:         Option<String>,
-    pub isrc:         Option<String>,
+    pub src: String,
+    pub dest: Option<String>,
+    pub isrc: Option<String>,
     #[serde(default = "unix_now_opt")]
-    pub timestamp:    Option<f64>,
-    pub create_time:  Option<f64>,
+    pub timestamp: Option<f64>,
+    pub create_time: Option<f64>,
     pub service_time: Option<f64>,
-    pub error:        Option<String>,
-    pub objuuid:      Option<String>,
-    pub coluuid:      Option<String>,
+    pub error: Option<String>,
+    pub objuuid: Option<String>,
+    pub coluuid: Option<String>,
 }
 
 // ── Tagged union of all network message variants ──────────────────────────────
@@ -209,14 +224,24 @@ pub struct NetworkTicket {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum NetworkMessage {
-    #[serde(rename = "ping")]                  Ping(Ping),
-    #[serde(rename = "messages_request")]      MessagesRequest(NetworkMessagesRequest),
-    #[serde(rename = "messages_response")]     MessagesResponse(NetworkMessagesResponse),
-    #[serde(rename = "acknowledgement")]       Acknowledgement(Acknowledgement),
-    #[serde(rename = "advertisement")]         Advertisement(Advertisement),
-    #[serde(rename = "ticket_trace_response")] TicketTraceResponse(TicketTraceResponse),
-    #[serde(rename = "ticket_request")]        TicketRequest(NetworkTicket),
-    #[serde(rename = "ticket_response")]       TicketResponse(NetworkTicket),
+    #[serde(rename = "ping")]
+    Ping(Ping),
+    #[serde(rename = "messages_request")]
+    MessagesRequest(NetworkMessagesRequest),
+    #[serde(rename = "exchange_keys")]
+    ExchangeKeys(ExchangeKeys),
+    #[serde(rename = "messages_response")]
+    MessagesResponse(NetworkMessagesResponse),
+    #[serde(rename = "acknowledgement")]
+    Acknowledgement(Acknowledgement),
+    #[serde(rename = "advertisement")]
+    Advertisement(Advertisement),
+    #[serde(rename = "ticket_trace_response")]
+    TicketTraceResponse(TicketTraceResponse),
+    #[serde(rename = "ticket_request")]
+    TicketRequest(NetworkTicket),
+    #[serde(rename = "ticket_response")]
+    TicketResponse(NetworkTicket),
 }
 
 impl Default for NetworkMessage {
@@ -229,14 +254,15 @@ impl NetworkMessage {
     /// Return the wire-format type string for this variant.
     pub fn message_type(&self) -> &'static str {
         match self {
-            Self::Ping(_)                => "ping",
-            Self::MessagesRequest(_)     => "messages_request",
-            Self::MessagesResponse(_)    => "messages_response",
-            Self::Acknowledgement(_)     => "acknowledgement",
-            Self::Advertisement(_)       => "advertisement",
+            Self::Ping(_) => "ping",
+            Self::MessagesRequest(_) => "messages_request",
+            Self::ExchangeKeys(_) => "exchange_keys",
+            Self::MessagesResponse(_) => "messages_response",
+            Self::Acknowledgement(_) => "acknowledgement",
+            Self::Advertisement(_) => "advertisement",
             Self::TicketTraceResponse(_) => "ticket_trace_response",
-            Self::TicketRequest(_)       => "ticket_request",
-            Self::TicketResponse(_)      => "ticket_response",
+            Self::TicketRequest(_) => "ticket_request",
+            Self::TicketResponse(_) => "ticket_response",
         }
     }
 }
@@ -247,6 +273,7 @@ impl NetworkMessage {
 mod tests {
     use super::*;
     use crate::models::control::{CommandArg, SyncProcess};
+    use crate::models::crypto::KeyDistribution;
 
     fn assert_ser_eq(value: &impl Serialize, expected_json: &str) {
         let got: serde_json::Value = serde_json::to_value(value).unwrap();
@@ -276,7 +303,10 @@ mod tests {
         let msg = NetworkMessage::Ping(Ping {
             src: "a1".into(),
             timestamp: Some(1000.0),
-            dest: None, isrc: None, objuuid: None, coluuid: None,
+            dest: None,
+            isrc: None,
+            objuuid: None,
+            coluuid: None,
         });
         assert_ser_eq(&msg, PING_JSON);
     }
@@ -301,7 +331,10 @@ mod tests {
             limit: None,
             network_whitelist: None,
             control_whitelist: None,
-            dest: None, isrc: None, objuuid: None, coluuid: None,
+            dest: None,
+            isrc: None,
+            objuuid: None,
+            coluuid: None,
         });
         assert_ser_eq(&msg, MSGS_REQUEST_JSON);
     }
@@ -336,7 +369,10 @@ mod tests {
             limit: Some(10),
             network_whitelist: None,
             control_whitelist: None,
-            dest: None, isrc: None, objuuid: None, coluuid: None,
+            dest: None,
+            isrc: None,
+            objuuid: None,
+            coluuid: None,
         });
         let json = serde_json::to_string(&msg).unwrap();
         let v: serde_json::Value = serde_json::from_str(&json).unwrap();
@@ -351,11 +387,17 @@ mod tests {
             limit: None,
             network_whitelist: Some(vec!["ping".into(), "ticket_request".into()]),
             control_whitelist: None,
-            dest: None, isrc: None, objuuid: None, coluuid: None,
+            dest: None,
+            isrc: None,
+            objuuid: None,
+            coluuid: None,
         });
         let json = serde_json::to_string(&msg).unwrap();
         let v: serde_json::Value = serde_json::from_str(&json).unwrap();
-        assert_eq!(v["network_whitelist"], serde_json::json!(["ping", "ticket_request"]));
+        assert_eq!(
+            v["network_whitelist"],
+            serde_json::json!(["ping", "ticket_request"])
+        );
         assert_eq!(v["control_whitelist"], serde_json::Value::Null);
     }
 
@@ -367,12 +409,18 @@ mod tests {
             limit: None,
             network_whitelist: None,
             control_whitelist: Some(vec!["sync_process".into(), "get_peers".into()]),
-            dest: None, isrc: None, objuuid: None, coluuid: None,
+            dest: None,
+            isrc: None,
+            objuuid: None,
+            coluuid: None,
         });
         let json = serde_json::to_string(&msg).unwrap();
         let v: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert_eq!(v["network_whitelist"], serde_json::Value::Null);
-        assert_eq!(v["control_whitelist"], serde_json::json!(["sync_process", "get_peers"]));
+        assert_eq!(
+            v["control_whitelist"],
+            serde_json::json!(["sync_process", "get_peers"])
+        );
     }
 
     #[test]
@@ -384,8 +432,14 @@ mod tests {
         );
         let parsed: NetworkMessage = serde_json::from_str(json).unwrap();
         if let NetworkMessage::MessagesRequest(req) = parsed {
-            assert_eq!(req.network_whitelist.as_deref(), Some(["ping".to_string()].as_slice()));
-            assert_eq!(req.control_whitelist.as_deref(), Some(["sync_process".to_string()].as_slice()));
+            assert_eq!(
+                req.network_whitelist.as_deref(),
+                Some(["ping".to_string()].as_slice())
+            );
+            assert_eq!(
+                req.control_whitelist.as_deref(),
+                Some(["sync_process".to_string()].as_slice())
+            );
         } else {
             panic!("wrong variant");
         }
@@ -412,7 +466,12 @@ mod tests {
             ack_type: "ping".to_string(),
             src: "a1".into(),
             timestamp: Some(1000.0),
-            dest: None, isrc: None, forwarded: None, error: None, objuuid: None, coluuid: None,
+            dest: None,
+            isrc: None,
+            forwarded: None,
+            error: None,
+            objuuid: None,
+            coluuid: None,
         });
         assert_ser_eq(&msg, ACK_PING_JSON);
     }
@@ -424,7 +483,11 @@ mod tests {
             src: "a1".into(),
             timestamp: Some(1000.0),
             error: Some("timeout".into()),
-            dest: None, isrc: None, forwarded: None, objuuid: None, coluuid: None,
+            dest: None,
+            isrc: None,
+            forwarded: None,
+            objuuid: None,
+            coluuid: None,
         });
         assert_ser_eq(&msg, ACK_ERROR_JSON);
     }
@@ -436,7 +499,11 @@ mod tests {
             src: "a1".into(),
             timestamp: Some(1000.0),
             forwarded: Some("a2".into()),
-            dest: None, isrc: None, error: None, objuuid: None, coluuid: None,
+            dest: None,
+            isrc: None,
+            error: None,
+            objuuid: None,
+            coluuid: None,
         });
         assert_ser_eq(&msg, ACK_FORWARDED_JSON);
     }
@@ -476,7 +543,10 @@ mod tests {
             src: "a1".into(),
             timestamp: Some(1000.0),
             routes: vec![],
-            dest: None, isrc: None, objuuid: None, coluuid: None,
+            dest: None,
+            isrc: None,
+            objuuid: None,
+            coluuid: None,
         });
         assert_ser_eq(&msg, ADV_EMPTY_JSON);
     }
@@ -488,8 +558,17 @@ mod tests {
             agtuuid: "a1".into(),
             src: "a1".into(),
             timestamp: Some(1000.0),
-            routes: vec![Route { agtuuid: "a2".into(), gtwuuid: "a1".into(), weight: 1, objuuid: None, coluuid: None }],
-            dest: None, isrc: None, objuuid: None, coluuid: None,
+            routes: vec![Route {
+                agtuuid: "a2".into(),
+                gtwuuid: "a1".into(),
+                weight: 1,
+                objuuid: None,
+                coluuid: None,
+            }],
+            dest: None,
+            isrc: None,
+            objuuid: None,
+            coluuid: None,
         });
         assert_ser_eq(&msg, ADV_ROUTES_JSON);
     }
@@ -523,7 +602,10 @@ mod tests {
             src: "a1".into(),
             timestamp: Some(1000.0),
             messages: vec![],
-            dest: None, isrc: None, objuuid: None, coluuid: None,
+            dest: None,
+            isrc: None,
+            objuuid: None,
+            coluuid: None,
         });
         assert_ser_eq(&msg, MSGS_RESP_EMPTY_JSON);
     }
@@ -536,9 +618,15 @@ mod tests {
             messages: vec![NetworkMessage::Ping(Ping {
                 src: "b1".into(),
                 timestamp: Some(2000.0),
-                dest: None, isrc: None, objuuid: None, coluuid: None,
+                dest: None,
+                isrc: None,
+                objuuid: None,
+                coluuid: None,
             })],
-            dest: None, isrc: None, objuuid: None, coluuid: None,
+            dest: None,
+            isrc: None,
+            objuuid: None,
+            coluuid: None,
         });
         assert_ser_eq(&msg, MSGS_RESP_WITH_PING_JSON);
     }
@@ -569,7 +657,10 @@ mod tests {
             hop_time: 1000.0,
             src: "a1".into(),
             timestamp: Some(1000.0),
-            dest: None, isrc: None, objuuid: None, coluuid: None,
+            dest: None,
+            isrc: None,
+            objuuid: None,
+            coluuid: None,
         });
         assert_ser_eq(&msg, TTR_JSON);
     }
@@ -602,9 +693,14 @@ mod tests {
         ControlForm::SyncProcess(SyncProcess {
             command: CommandArg::Single("ls /".into()),
             timeout: 15,
-            stdout: None, stderr: None, status: None,
-            start_time: None, elapsed_time: None,
-            error: None, objuuid: None, coluuid: None,
+            stdout: None,
+            stderr: None,
+            status: None,
+            start_time: None,
+            elapsed_time: None,
+            error: None,
+            objuuid: None,
+            coluuid: None,
         })
     }
 
@@ -616,9 +712,13 @@ mod tests {
             timestamp: Some(1000.0),
             form: sync_ls_request(),
             tracing: false,
-            dest: None, isrc: None,
-            create_time: None, service_time: None,
-            error: None, objuuid: None, coluuid: None,
+            dest: None,
+            isrc: None,
+            create_time: None,
+            service_time: None,
+            error: None,
+            objuuid: None,
+            coluuid: None,
         });
         assert_ser_eq(&msg, NT_REQUEST_JSON);
     }
@@ -638,12 +738,17 @@ mod tests {
                 status: Some(0),
                 start_time: Some(1000.0),
                 elapsed_time: Some(0.1),
-                error: None, objuuid: None, coluuid: None,
+                error: None,
+                objuuid: None,
+                coluuid: None,
             }),
             tracing: false,
-            dest: None, isrc: None,
+            dest: None,
+            isrc: None,
             create_time: None,
-            error: None, objuuid: None, coluuid: None,
+            error: None,
+            objuuid: None,
+            coluuid: None,
         });
         assert_ser_eq(&msg, NT_RESPONSE_JSON);
     }
@@ -657,5 +762,34 @@ mod tests {
     fn test_deser_network_ticket_response() {
         assert_deser_roundtrip::<NetworkMessage>(NT_RESPONSE_JSON);
     }
-}
 
+    #[test]
+    fn test_exchange_keys_matches_python_wire_shape() {
+        let message = NetworkMessage::ExchangeKeys(ExchangeKeys {
+            distributions: vec![KeyDistribution {
+                b64_key: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=".to_string(),
+                objuuid: "auto-key".to_string(),
+                ttl: 120.0,
+            }],
+            src: "agent-a".to_string(),
+            dest: Some("agent-b".to_string()),
+            isrc: Some("agent-a".to_string()),
+            timestamp: Some(1000.0),
+            objuuid: None,
+            coluuid: None,
+        });
+        let value = serde_json::to_value(&message).unwrap();
+        assert_eq!(value["type"], "exchange_keys");
+        assert_eq!(value["src"], "agent-a");
+        assert_eq!(value["dest"], "agent-b");
+        assert_eq!(
+            value["distributions"][0],
+            serde_json::json!({
+                "b64_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+                "objuuid": "auto-key",
+                "ttl": 120.0
+            })
+        );
+        assert_deser_roundtrip::<NetworkMessage>(&serde_json::to_string(&message).unwrap());
+    }
+}

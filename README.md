@@ -122,7 +122,7 @@ docker compose up --build
 For example, run the control CLI inside the `r1` container with:
 
 ```bash
-./scripts/agt-control.sh stat r5
+./scripts/agt-control.sh r1 stat r5
 ```
 
 The Dockerfile uses a two-stage build: a `rust:slim` builder compiles the release binaries, and a `ubuntu:24.04` runtime image contains only the binaries plus their shared-library dependencies (`libssl3`, `libsqlite3-0`) and logrotate.
@@ -273,6 +273,8 @@ agt-control set-user-key r5 shared-user-key shared-passphrase
 
 # Run the synthetic control-form suite against one or more agents
 agt-control test r5,r4
+agt-control test r5,r4 --verbose            # pretty print every ticket
+agt-control test r5,r4 --print-on-failure   # pretty print only failing tickets
 ```
 
 ### Encryption and Security

@@ -12,7 +12,13 @@ use crate::{
 
 use super::poll_ticket;
 
-pub async fn cmd_test(client: Arc<AgentClient>, destinations: String, timeout: u64) -> Result<()> {
+pub async fn cmd_test(
+    client: Arc<AgentClient>,
+    destinations: String,
+    timeout: u64,
+    verbose: bool,
+    print_on_failure: bool,
+) -> Result<()> {
     let destinations = destinations
         .split(',')
         .map(str::trim)
@@ -46,6 +52,8 @@ pub async fn cmd_test(client: Arc<AgentClient>, destinations: String, timeout: u
                     form_name,
                     false,
                     result,
+                    verbose,
+                    print_on_failure,
                     &mut passed,
                     &mut failed,
                 );
@@ -68,7 +76,7 @@ pub async fn cmd_test(client: Arc<AgentClient>, destinations: String, timeout: u
                 ControlForm::CreateUserKey(CreateUserKey {
                     agtuuid: Some("test".to_string()),
                     objuuid: "test".to_string(),
-                    passphrase: "test".to_string(),
+                    passphrase: Some("test".to_string()),
                     ..Default::default()
                 }),
                 false,
@@ -133,6 +141,8 @@ pub async fn cmd_test(client: Arc<AgentClient>, destinations: String, timeout: u
                 form_name,
                 expect_failure,
                 result,
+                verbose,
+                print_on_failure,
                 &mut passed,
                 &mut failed,
             );
@@ -146,15 +156,22 @@ pub async fn cmd_test(client: Arc<AgentClient>, destinations: String, timeout: u
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn record_test_result(
     destination: &str,
     index: usize,
     form_name: &str,
     expect_failure: bool,
     result: ControlFormTicket,
+    verbose: bool,
+    print_on_failure: bool,
     passed: &mut usize,
     failed: &mut usize,
 ) {
+    if verbose {
+        print_ticket_json(&result);
+    }
+
     let form_error = match &result.form {
         ControlForm::WriteFile(form) => form.error.as_deref(),
         ControlForm::GetPeers(form) => form.error.as_deref(),
@@ -172,10 +189,22 @@ fn record_test_result(
         println!("ok {destination} test {index} ({form_name})");
         *passed += 1;
     } else {
+        if print_on_failure && !verbose {
+            print_ticket_json(&result);
+        }
         eprintln!(
             "FAIL {destination} test {index} ({form_name}): ticket_error={:?}, form_error={form_error:?}",
             result.error
         );
         *failed += 1;
+    }
+}
+
+/// Pretty-print a ticket's JSON representation, mirroring Python's
+/// `click.echo(ticket.model_dump_json(indent=4))`.
+fn print_ticket_json(ticket: &ControlFormTicket) {
+    match serde_json::to_string_pretty(ticket) {
+        Ok(json) => println!("{json}"),
+        Err(error) => eprintln!("failed to serialize ticket for printing: {error}"),
     }
 }

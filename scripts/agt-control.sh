@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-container_id=$(sudo docker-compose ps -q r1)
+service="$1"
+shift
+
+container_id=$(sudo docker compose ps -q "$service")
 if [[ -z "$container_id" ]]; then
-    echo "No running r1 container found; start the stack first." >&2
+    echo "No running container found for service '$service'; start the stack first." >&2
     exit 1
 fi
 

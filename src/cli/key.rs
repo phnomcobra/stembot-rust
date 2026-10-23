@@ -30,7 +30,7 @@ pub async fn cmd_set_user_key(
             dst: dst_agtuuid.clone(),
             form: ControlForm::CreateUserKey(CreateUserKey {
                 objuuid: objuuid.clone(),
-                passphrase,
+                passphrase: Some(passphrase),
                 agtuuid,
                 ..Default::default()
             }),

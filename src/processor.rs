@@ -270,9 +270,13 @@ pub async fn process_control_form(form: ControlForm) -> ControlForm {
         }
 
         ControlForm::CreateUserKey(mut f) => {
-            if let Err(e) = key_manager().and_then(|manager| {
-                manager.create_user_key(&f.objuuid, &f.passphrase, f.agtuuid.as_deref())
-            }) {
+            let result = match f.passphrase.as_deref() {
+                Some(passphrase) => key_manager().and_then(|manager| {
+                    manager.create_user_key(&f.objuuid, passphrase, f.agtuuid.as_deref())
+                }),
+                None => Err(anyhow::anyhow!("passphrase is required")),
+            };
+            if let Err(e) = result {
                 f.error = Some(e.to_string());
             }
             ControlForm::CreateUserKey(f)

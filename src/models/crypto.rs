@@ -16,20 +16,21 @@ fn now() -> f64 {
 
 /// Category of locally stored key.
 ///
-/// The uppercase serialized names are part of the wire and database formats.
+/// The lowercase serialized names are part of the wire and database formats,
+/// matching Python's `StrEnum` value (e.g. `KeyType.USER.value == "user"`).
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq, Default)]
 pub enum KeyType {
     /// A key derived from a passphrase shared out of band.
-    #[serde(rename = "USER")]
+    #[serde(rename = "user")]
     User,
     /// A locally generated random key shared with peers.
-    #[serde(rename = "AUTO")]
+    #[serde(rename = "auto")]
     Auto,
     /// An automatic key received from a peer.
-    #[serde(rename = "DIST")]
+    #[serde(rename = "dist")]
     Dist,
     /// An uninitialized or unrecognized key record.
-    #[serde(rename = "UNKNOWN")]
+    #[serde(rename = "unknown")]
     #[default]
     Unknown,
 }
@@ -142,4 +143,65 @@ pub struct KeyMetadata {
     pub agtuuid: Option<String>,
     /// Remaining key lifetime in seconds; may be negative for an expired key.
     pub ttl: f64,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `KeyType` must serialize/deserialize as lowercase to match Python's
+    /// `StrEnum` value (e.g. `KeyType.USER.value == "user"`), even though its
+    /// `Display` impl (used to bind the key-wrapping hash) renders uppercase.
+    /// This is the protocol/storage wire format shared with stembot-python.
+    #[test]
+    fn test_key_type_wire_format_is_lowercase() {
+        for (variant, expected) in [
+            (KeyType::User, "\"user\""),
+            (KeyType::Auto, "\"auto\""),
+            (KeyType::Dist, "\"dist\""),
+            (KeyType::Unknown, "\"unknown\""),
+        ] {
+            assert_eq!(serde_json::to_string(&variant).unwrap(), expected);
+            let roundtrip: KeyType = serde_json::from_str(expected).unwrap();
+            assert_eq!(roundtrip, variant);
+        }
+    }
+
+    #[test]
+    fn test_key_type_display_is_uppercase() {
+        assert_eq!(KeyType::User.to_string(), "USER");
+        assert_eq!(KeyType::Auto.to_string(), "AUTO");
+        assert_eq!(KeyType::Dist.to_string(), "DIST");
+        assert_eq!(KeyType::Unknown.to_string(), "UNKNOWN");
+    }
+
+    #[test]
+    fn test_key_metadata_serializes_lowercase_type() {
+        let metadata = KeyMetadata {
+            objuuid: "o1".into(),
+            r#type: KeyType::User,
+            agtuuid: Some("a1".into()),
+            ttl: 120.0,
+        };
+        let value: serde_json::Value = serde_json::to_value(&metadata).unwrap();
+        assert_eq!(
+            value,
+            serde_json::json!({
+                "objuuid": "o1",
+                "type": "user",
+                "agtuuid": "a1",
+                "ttl": 120.0,
+            })
+        );
+    }
+
+    #[test]
+    fn test_key_metadata_deserializes_lowercase_type() {
+        let json = r#"{"objuuid":"o1","type":"dist","agtuuid":null,"ttl":60.5}"#;
+        let metadata: KeyMetadata = serde_json::from_str(json).unwrap();
+        assert_eq!(metadata.objuuid, "o1");
+        assert_eq!(metadata.r#type, KeyType::Dist);
+        assert_eq!(metadata.agtuuid, None);
+        assert_eq!(metadata.ttl, 60.5);
+    }
 }

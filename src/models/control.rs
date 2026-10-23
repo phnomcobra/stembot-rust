@@ -215,7 +215,7 @@ pub struct CloseTicket {
 pub struct CreateUserKey {
     pub objuuid: String,
     #[serde(default)]
-    pub passphrase: String,
+    pub passphrase: Option<String>,
     pub agtuuid: Option<String>,
     pub error: Option<String>,
     pub coluuid: Option<String>,
@@ -922,5 +922,142 @@ mod tests {
     #[test]
     fn test_deser_close_ticket() {
         assert_deser_roundtrip::<ControlForm>(CLOSE_TICKET_JSON);
+    }
+
+    // ── CreateUserKey ─────────────────────────────────────────────────────────
+
+    use crate::models::crypto::KeyType;
+
+    const CREATE_USER_KEY_JSON: &str = concat!(
+        r#"{"type":"create_user_key","error":null,"objuuid":"o1","coluuid":null,"#,
+        r#""agtuuid":"a1","passphrase":"p1"}"#
+    );
+    const CREATE_USER_KEY_MINIMAL_JSON: &str = concat!(
+        r#"{"type":"create_user_key","error":null,"objuuid":"o1","coluuid":null,"#,
+        r#""agtuuid":null,"passphrase":null}"#
+    );
+
+    #[test]
+    fn test_ser_create_user_key() {
+        let form = ControlForm::CreateUserKey(CreateUserKey {
+            objuuid: "o1".into(),
+            agtuuid: Some("a1".into()),
+            passphrase: Some("p1".into()),
+            ..Default::default()
+        });
+        assert_ser_eq(&form, CREATE_USER_KEY_JSON);
+    }
+
+    #[test]
+    fn test_ser_create_user_key_minimal() {
+        let form = ControlForm::CreateUserKey(CreateUserKey {
+            objuuid: "o1".into(),
+            ..Default::default()
+        });
+        assert_ser_eq(&form, CREATE_USER_KEY_MINIMAL_JSON);
+    }
+
+    #[test]
+    fn test_deser_create_user_key() {
+        assert_deser_roundtrip::<ControlForm>(CREATE_USER_KEY_JSON);
+    }
+
+    #[test]
+    fn test_deser_create_user_key_minimal() {
+        assert_deser_roundtrip::<ControlForm>(CREATE_USER_KEY_MINIMAL_JSON);
+    }
+
+    // ── GetKeyMetadata ────────────────────────────────────────────────────────
+    // Python's `ttl` field is typed `int | float`, so a whole-number ttl such as
+    // 120 serializes without a decimal point there. Rust's `ttl` is a plain
+    // `f64`, which always serializes with one (e.g. `120.0`). The values are
+    // numerically identical and interoperate fine; only the literals below
+    // reflect Rust's canonical (not Python's) textual formatting.
+
+    const GET_KEY_METADATA_EMPTY_JSON: &str = concat!(
+        r#"{"type":"get_key_metadata","error":null,"objuuid":null,"coluuid":null,"#,
+        r#""metadata":null}"#
+    );
+    const GET_KEY_METADATA_WITH_DATA_JSON: &str = concat!(
+        r#"{"type":"get_key_metadata","error":null,"objuuid":null,"coluuid":null,"#,
+        r#""metadata":[{"objuuid":"o1","type":"user","agtuuid":"a1","ttl":120.0}]}"#
+    );
+    const GET_KEY_METADATA_WITH_MULTIPLE_ENTRIES_JSON: &str = concat!(
+        r#"{"type":"get_key_metadata","error":null,"objuuid":null,"coluuid":null,"#,
+        r#""metadata":["#,
+        r#"{"objuuid":"o1","type":"user","agtuuid":"a1","ttl":120.0},"#,
+        r#"{"objuuid":"o2","type":"auto","agtuuid":null,"ttl":60.5},"#,
+        r#"{"objuuid":"o3","type":"dist","agtuuid":"a2","ttl":0.0},"#,
+        r#"{"objuuid":"o4","type":"unknown","agtuuid":null,"ttl":0.0}"#,
+        r#"]}"#
+    );
+
+    #[test]
+    fn test_ser_get_key_metadata_empty() {
+        let form = ControlForm::GetKeyMetadata(GetKeyMetadata::default());
+        assert_ser_eq(&form, GET_KEY_METADATA_EMPTY_JSON);
+    }
+
+    #[test]
+    fn test_ser_get_key_metadata_with_data() {
+        let form = ControlForm::GetKeyMetadata(GetKeyMetadata {
+            metadata: Some(vec![KeyMetadata {
+                objuuid: "o1".into(),
+                r#type: KeyType::User,
+                agtuuid: Some("a1".into()),
+                ttl: 120.0,
+            }]),
+            ..Default::default()
+        });
+        assert_ser_eq(&form, GET_KEY_METADATA_WITH_DATA_JSON);
+    }
+
+    #[test]
+    fn test_ser_get_key_metadata_with_multiple_entries() {
+        let form = ControlForm::GetKeyMetadata(GetKeyMetadata {
+            metadata: Some(vec![
+                KeyMetadata {
+                    objuuid: "o1".into(),
+                    r#type: KeyType::User,
+                    agtuuid: Some("a1".into()),
+                    ttl: 120.0,
+                },
+                KeyMetadata {
+                    objuuid: "o2".into(),
+                    r#type: KeyType::Auto,
+                    agtuuid: None,
+                    ttl: 60.5,
+                },
+                KeyMetadata {
+                    objuuid: "o3".into(),
+                    r#type: KeyType::Dist,
+                    agtuuid: Some("a2".into()),
+                    ttl: 0.0,
+                },
+                KeyMetadata {
+                    objuuid: "o4".into(),
+                    r#type: KeyType::Unknown,
+                    agtuuid: None,
+                    ttl: 0.0,
+                },
+            ]),
+            ..Default::default()
+        });
+        assert_ser_eq(&form, GET_KEY_METADATA_WITH_MULTIPLE_ENTRIES_JSON);
+    }
+
+    #[test]
+    fn test_deser_get_key_metadata_empty() {
+        assert_deser_roundtrip::<ControlForm>(GET_KEY_METADATA_EMPTY_JSON);
+    }
+
+    #[test]
+    fn test_deser_get_key_metadata_with_data() {
+        assert_deser_roundtrip::<ControlForm>(GET_KEY_METADATA_WITH_DATA_JSON);
+    }
+
+    #[test]
+    fn test_deser_get_key_metadata_with_multiple_entries() {
+        assert_deser_roundtrip::<ControlForm>(GET_KEY_METADATA_WITH_MULTIPLE_ENTRIES_JSON);
     }
 }

@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.1] - 2026-10-23
+
+### Fixed
+- `KeyType` (and therefore `KeyMetadata`/`Key`) serialized as `USER`/`AUTO`/`DIST`/`UNKNOWN`, which did not match stembot-python's lowercase `StrEnum` wire format (`user`/`auto`/`dist`/`unknown`); broad cross-implementation integration testing caught the resulting interop failures in `get_key_metadata` and stored key records. `KeyType`'s `Display` impl (used only for the key-wrapping hash) is unchanged and still renders uppercase.
+- `CreateUserKey.passphrase` now serializes/deserializes as `Option<String>` (`null` when absent) instead of defaulting to an empty string, matching stembot-python's `str | None` field.
+
+### Added
+- Unit tests in `models::control` and `models::crypto` covering `CreateUserKey` and `GetKeyMetadata` serialization/deserialization, ported from stembot-python's updated protocol contract tests.
+- `agt-control test --verbose/-v` and `--print-on-failure/-f` flags to pretty-print tickets, ported from stembot-python's `agt-control test` command.
+
+### Changed
+- `scripts/agt-control.sh` now takes a Docker Compose service name as its first argument (e.g. `./scripts/agt-control.sh r1 stat r5`) instead of always targeting `r1`, and uses the `docker compose` (v2) plugin instead of the legacy `docker-compose` binary.
+
 ## [3.0.0] - 2026-10-20
 
 ### Changed

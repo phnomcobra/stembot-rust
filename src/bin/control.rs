@@ -103,6 +103,12 @@ enum Commands {
         destinations: String,
         #[clap(default_value = "15")]
         timeout: u64,
+        /// Pretty print every ticket before asserting
+        #[clap(short = 'v', long)]
+        verbose: bool,
+        /// Pretty print tickets that fail an assertion
+        #[clap(short = 'f', long)]
+        print_on_failure: bool,
     },
 }
 
@@ -185,7 +191,9 @@ async fn main() -> Result<()> {
         Commands::Test {
             destinations,
             timeout,
-        } => cli::test::cmd_test(client, destinations, timeout).await?,
+            verbose,
+            print_on_failure,
+        } => cli::test::cmd_test(client, destinations, timeout, verbose, print_on_failure).await?,
     }
 
     Ok(())

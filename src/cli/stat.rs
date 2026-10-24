@@ -122,10 +122,10 @@ pub async fn cmd_stat(
     if key_metadata.is_empty() {
         println!("   (No key metadata received)");
     } else {
-        println!("   {:<6} {:<38} {:<38} {:<10}", "Type", "Object UUID", "Agent UUID", "TTL");
+        println!("   {:<10} {:<36} {:<36} {:<10}", "Type", "Object UUID", "Agent UUID", "TTL");
         for m in &key_metadata {
             println!(
-                "   {:<6} {:.<38} {:.<38} {:<10}",
+                "   {:<10} {:.<36} {:.<36} {:<10}",
                 m.r#type.to_string(),
                 m.objuuid,
                 m.agtuuid.as_deref().unwrap_or(""),

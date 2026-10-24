@@ -6,7 +6,14 @@ use std::time::Duration;
 use tokio::time::sleep;
 
 use stembot_rust::{
-    collections::vacuum_collections, config::config, logger::init_logger, messaging::expire_network_messages, processor::{advertizing, control_handler, mpi_handler, polling, replay}, ticketing::expire_tickets
+    collections::vacuum_collections,
+    config::config,
+    logger::init_logger,
+    messaging::expire_network_messages,
+    processor::{
+        advertizing, control_handler, mpi_handler, polling, replay, rotate_and_exchange_keys,
+    },
+    ticketing::expire_tickets,
 };
 
 #[actix_web::main]
@@ -17,11 +24,12 @@ async fn main() -> Result<(), std::io::Error> {
 
     let config = config();
 
-
-    init_logger(config.log_level_app.to_string(), config.log_level_api.to_string());
+    init_logger(
+        config.log_level_app.to_string(),
+        config.log_level_api.to_string(),
+    );
 
     config.log();
-
 
     let mut scheduler = AsyncScheduler::new();
 
@@ -33,7 +41,8 @@ async fn main() -> Result<(), std::io::Error> {
 
     scheduler.every(Seconds(config.ticket_timeout_secs)).run({
         move || async move {
-            expire_network_messages().unwrap_or_else(|e| log::error!("Error expiring network messages: {e}"));
+            expire_network_messages()
+                .unwrap_or_else(|e| log::error!("Error expiring network messages: {e}"));
         }
     });
 
@@ -42,9 +51,15 @@ async fn main() -> Result<(), std::io::Error> {
     });
 
     scheduler.every(Seconds(1)).run(|| async { replay().await });
-    scheduler.every(Seconds(1)).run(|| async { polling().await });
-    scheduler.every(Seconds(10)).run(|| async { advertizing().await });
-
+    scheduler
+        .every(Seconds(1))
+        .run(|| async { polling().await });
+    scheduler
+        .every(Seconds(10))
+        .run(|| async { advertizing().await });
+    scheduler
+        .every(Seconds(60))
+        .run(|| async { rotate_and_exchange_keys().await });
 
     log::info!("Starting scheduler");
 
@@ -57,24 +72,19 @@ async fn main() -> Result<(), std::io::Error> {
         }
     });
 
-    let server = HttpServer::new(
-        move || {
-            App::new()
-                .wrap(TracingLogger::default())
-                .app_data(web::PayloadConfig::new(usize::MAX))
-                .app_data(web::Data::new(config.clone()))
-                .route("/control", web::post().to(control_handler))
-                .route("/mpi",     web::post().to(mpi_handler))
-        }
-    )
+    let server = HttpServer::new(move || {
+        App::new()
+            .wrap(TracingLogger::default())
+            .app_data(web::PayloadConfig::new(usize::MAX))
+            .route("/control", web::post().to(control_handler))
+            .route("/mpi", web::post().to(mpi_handler))
+    })
     .workers(config.workers as usize);
 
     log::info!("Starting server");
 
-    server.bind(
-        (
-            config.socket_host.clone(),
-            config.socket_port,
-        )
-    )?.run().await
+    server
+        .bind((config.socket_host.clone(), config.socket_port))?
+        .run()
+        .await
 }

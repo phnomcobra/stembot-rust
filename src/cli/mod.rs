@@ -1,9 +1,11 @@
 pub mod bench;
 pub mod delete;
 pub mod discover;
+pub mod key;
 pub mod put;
 pub mod run;
 pub mod stat;
+pub mod test;
 
 use std::sync::Arc;
 use tokio::time::{sleep, Duration};
@@ -18,17 +20,41 @@ pub const MB: usize = 1_024 * 1_024;
 pub const GB: usize = 1_024 * 1_024 * 1_024;
 
 pub fn format_bytes(n: f64) -> String {
-    if n < KB as f64       { format!("{n:.0} B") }
-    else if n < MB as f64  { format!("{:.1} KB", n / KB as f64) }
-    else if n < GB as f64  { format!("{:.1} MB", n / MB as f64) }
-    else                   { format!("{:.1} GB", n / GB as f64) }
+    if n < KB as f64 {
+        format!("{n:.0} B")
+    } else if n < MB as f64 {
+        format!("{:.1} KB", n / KB as f64)
+    } else if n < GB as f64 {
+        format!("{:.1} MB", n / MB as f64)
+    } else {
+        format!("{:.1} GB", n / GB as f64)
+    }
+}
+
+pub fn format_duration(seconds: f64) -> String {
+    let sign = if seconds < 0.0 { "-" } else { "" };
+    let s = seconds.abs();
+    if s < 60.0 {
+        format!("{sign}{s:.0}s")
+    } else if s < 3_600.0 {
+        format!("{sign}{:.1}m", s / 60.0)
+    } else if s < 86_400.0 {
+        format!("{sign}{:.1}h", s / 3_600.0)
+    } else {
+        format!("{sign}{:.1}d", s / 86_400.0)
+    }
 }
 
 pub fn format_bandwidth(bps: f64) -> String {
-    if bps < KB as f64      { format!("{bps:.0} B/s") }
-    else if bps < MB as f64 { format!("{:.1} KB/s", bps / KB as f64) }
-    else if bps < GB as f64 { format!("{:.1} MB/s", bps / MB as f64) }
-    else                    { format!("{:.1} GB/s", bps / GB as f64) }
+    if bps < KB as f64 {
+        format!("{bps:.0} B/s")
+    } else if bps < MB as f64 {
+        format!("{:.1} KB/s", bps / KB as f64)
+    } else if bps < GB as f64 {
+        format!("{:.1} MB/s", bps / MB as f64)
+    } else {
+        format!("{:.1} GB/s", bps / GB as f64)
+    }
 }
 
 /// Poll a ticket until serviced or timeout, then read and close it.
@@ -45,15 +71,21 @@ pub async fn poll_ticket(
 
     // Poll with CheckTicket until the ticket is serviced
     let mut check = CheckTicket {
-        tckuuid:     ticket.tckuuid.clone(),
+        tckuuid: ticket.tckuuid.clone(),
         create_time: Some(ticket.create_time),
         ..Default::default()
     };
     while start.elapsed().as_secs() < timeout_secs && check.service_time.is_none() {
-        match client.send_control_form(ControlForm::CheckTicket(check.clone())).await {
+        match client
+            .send_control_form(ControlForm::CheckTicket(check.clone()))
+            .await
+        {
             Ok(ControlForm::CheckTicket(c)) => check = c,
             Ok(_) => break,
-            Err(e) => { eprintln!("poll error: {e}"); break; }
+            Err(e) => {
+                eprintln!("poll error: {e}");
+                break;
+            }
         }
         if check.service_time.is_none() {
             sleep(Duration::from_secs(1)).await;
@@ -64,8 +96,11 @@ pub async fn poll_ticket(
     let mut read = ticket.clone();
     read.form_type = "read_ticket".to_string();
     let result = match client.send_ticket(read.clone()).await {
-        Ok(t)  => t,
-        Err(e) => { eprintln!("read ticket error: {e}"); read }
+        Ok(t) => t,
+        Err(e) => {
+            eprintln!("read ticket error: {e}");
+            read
+        }
     };
 
     // Close the ticket

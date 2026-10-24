@@ -4,8 +4,7 @@ use uuid::Uuid;
 use crate::dao::kvstore::KVStore;
 
 /// Log level, mirroring Python's `LogLevel` IntEnum.
-#[derive(Clone, Debug, PartialEq)]
-#[derive(Default)]
+#[derive(Clone, Debug, PartialEq, Default)]
 pub enum LogLevel {
     Debug,
     #[default]
@@ -15,14 +14,13 @@ pub enum LogLevel {
     Critical,
 }
 
-
 impl std::fmt::Display for LogLevel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            LogLevel::Debug    => write!(f, "DEBUG"),
-            LogLevel::Info     => write!(f, "INFO"),
-            LogLevel::Warning  => write!(f, "WARNING"),
-            LogLevel::Error    => write!(f, "ERROR"),
+            LogLevel::Debug => write!(f, "DEBUG"),
+            LogLevel::Info => write!(f, "INFO"),
+            LogLevel::Warning => write!(f, "WARNING"),
+            LogLevel::Error => write!(f, "ERROR"),
             LogLevel::Critical => write!(f, "CRITICAL"),
         }
     }
@@ -32,12 +30,14 @@ impl std::str::FromStr for LogLevel {
     type Err = String;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_uppercase().as_str() {
-            "DEBUG"            => Ok(LogLevel::Debug),
-            "INFO"             => Ok(LogLevel::Info),
+            "DEBUG" => Ok(LogLevel::Debug),
+            "INFO" => Ok(LogLevel::Info),
             "WARNING" | "WARN" => Ok(LogLevel::Warning),
-            "ERROR"            => Ok(LogLevel::Error),
-            "CRITICAL"         => Ok(LogLevel::Critical),
-            _ => Err(format!("unknown log level '{s}'; expected DEBUG, INFO, WARNING, ERROR, or CRITICAL")),
+            "ERROR" => Ok(LogLevel::Error),
+            "CRITICAL" => Ok(LogLevel::Critical),
+            _ => Err(format!(
+                "unknown log level '{s}'; expected DEBUG, INFO, WARNING, ERROR, or CRITICAL"
+            )),
         }
     }
 }
@@ -54,8 +54,6 @@ pub struct Config {
     pub socket_host: String,
     /// Port number for the HTTP server (default: 8080).
     pub socket_port: u16,
-    /// SHA-256 hex digest of the secret key (default: sha256("changeme")).
-    pub secret_digest: String,
     /// URL where the control client can reach this agent.
     pub client_control_url: String,
     /// Log level for the application logger (default: INFO).
@@ -126,37 +124,26 @@ impl Config {
 
         Self {
             agtuuid,
-            workers:              kv_u32!("workers",              2u32),
-            socket_host:          kv_str!("socket_host",          "0.0.0.0"),
+            workers: kv_u32!("workers", 2u32),
+            socket_host: kv_str!("socket_host", "0.0.0.0"),
             socket_port,
-            secret_digest:        kv_str!("secret_digest",        sha256::digest("changeme").as_str()),
-            client_control_url:   kv_str!("client_control_url",   "http://localhost:8080"),
-            log_level_app:        kv_level!("log_level_app",      "Info"),
-            log_level_api:        kv_level!("log_level_api",      "Info"),
-            peer_timeout_secs:    kv_u32!("peer_timeout_secs",    60u32),
-            peer_refresh_secs:    kv_u32!("peer_refresh_secs",    30u32),
-            max_weight:           kv_u32!("max_weight",           600u32),
-            ticket_timeout_secs:  kv_u32!("ticket_timeout_secs",  600u32),
+            client_control_url: kv_str!("client_control_url", "http://localhost:8080"),
+            log_level_app: kv_level!("log_level_app", "Info"),
+            log_level_api: kv_level!("log_level_api", "Info"),
+            peer_timeout_secs: kv_u32!("peer_timeout_secs", 60u32),
+            peer_refresh_secs: kv_u32!("peer_refresh_secs", 30u32),
+            max_weight: kv_u32!("max_weight", 600u32),
+            ticket_timeout_secs: kv_u32!("ticket_timeout_secs", 600u32),
             message_timeout_secs: kv_u32!("message_timeout_secs", 600u32),
         }
-    }
-
-    /// Decode `secret_digest` (hex string) into a 32-byte AES-256 key.
-    pub fn key(&self) -> [u8; 32] {
-        let bytes = hex::decode(&self.secret_digest)
-            .expect("secret_digest is not valid hex");
-        assert!(bytes.len() >= 32, "secret_digest must decode to at least 32 bytes");
-        let mut key = [0u8; 32];
-        key.copy_from_slice(&bytes[..32]);
-        key
     }
 
     /// Log the current configuration values.
     pub fn log(&self) {
         log::info!(
-            "\n  agtuuid:              {}\n  workers:              {}\n  socket_host:          {}\n  socket_port:          {}\n  secret_digest:        {}\n  client_control_url:   {}\n  log_level_app:        {}\n  log_level_api:        {}\n  peer_timeout_secs:    {}\n  peer_refresh_secs:    {}\n  max_weight:           {}\n  ticket_timeout_secs:  {}\n  message_timeout_secs: {}",
+            "\n  agtuuid:              {}\n  workers:              {}\n  socket_host:          {}\n  socket_port:          {}\n  client_control_url:   {}\n  log_level_app:        {}\n  log_level_api:        {}\n  peer_timeout_secs:    {}\n  peer_refresh_secs:    {}\n  max_weight:           {}\n  ticket_timeout_secs:  {}\n  message_timeout_secs: {}",
             self.agtuuid, self.workers, self.socket_host, self.socket_port,
-            self.secret_digest, self.client_control_url,
+            self.client_control_url,
             self.log_level_app, self.log_level_api,
             self.peer_timeout_secs, self.peer_refresh_secs, self.max_weight,
             self.ticket_timeout_secs, self.message_timeout_secs,

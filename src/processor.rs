@@ -11,29 +11,34 @@
 //!   (Content-Type: application/binary).
 //! - The AES nonce and MAC tag are transmitted as hex strings in the
 //!   Nonce and Tag HTTP headers respectively.
+//! - The Key-UUID header specifies which key to use for decryption.
 
 use actix_web::{web, HttpRequest, HttpResponse, Result as ActixResult};
 use serde_json::{json, Value};
 
 use crate::collections::{open_peers, open_tickets};
 use crate::config::config;
+use crate::crypto::key_manager;
 use crate::executor::agent::{decrypt, encrypt, AgentClient};
 use crate::executor::file::{load_file_to_form, write_file_from_form};
 use crate::executor::process::sync_process;
-use crate::messaging::{forward_network_message, pop_network_messages, pull_filtered_network_messages};
-use crate::models::config::Config;
+use crate::messaging::{
+    forward_network_message, pop_network_messages, pull_filtered_network_messages,
+};
 use crate::models::control::{
-    CheckTicket, CommandArg, ControlFormTicket, ControlForm, SyncProcess as SyncProcessForm,
+    CheckTicket, CommandArg, ControlForm, ControlFormTicket, SyncProcess as SyncProcessForm,
 };
 use crate::models::network::{
-    Acknowledgement, NetworkMessage, NetworkMessagesRequest, NetworkMessagesResponse,
+    Acknowledgement, ExchangeKeys, NetworkMessage, NetworkMessagesRequest, NetworkMessagesResponse,
     NetworkTicket,
 };
 use crate::peering::{
     age_routes, create_peer, create_route_advertisement, delete_peer, delete_peers, get_peers,
     get_routes, process_route_advertisement, touch_peer,
 };
-use crate::ticketing::{check_ticket, close_ticket, dedup_trace, read_ticket, service_ticket, service_trace};
+use crate::ticketing::{
+    check_ticket, close_ticket, dedup_trace, read_ticket, service_ticket, service_trace,
+};
 
 // ── HTTP Handlers ─────────────────────────────────────────────────────────────
 
@@ -44,44 +49,44 @@ use crate::ticketing::{check_ticket, close_ticket, dedup_trace, read_ticket, ser
 /// response in the same format.
 ///
 /// Mirrors Python's `/control` endpoint.
-pub async fn control_handler(
-    body: web::Bytes,
-    config_data: web::Data<Config>,
-    request: HttpRequest,
-) -> ActixResult<HttpResponse> {
-    let key = config_data.key();
-
-    let nonce = extract_header_hex(&request, "Nonce")?;
-    let tag   = extract_header_hex(&request, "Tag")?;
-    let ct    = body.to_vec();
-
-    let plaintext = decrypt(&key, &nonce, &tag, &ct)
-        .map_err(actix_web::error::ErrorBadRequest)?;
-
-    let raw: Value = serde_json::from_slice(&plaintext)
-        .map_err(actix_web::error::ErrorBadRequest)?;
-
-    let raw_response = match raw.get("type").and_then(Value::as_str) {
-        Some("create_ticket") | Some("read_ticket") => {
-            let ticket: ControlFormTicket = serde_json::from_value(raw)
-                .map_err(actix_web::error::ErrorBadRequest)?;
-            log::debug!("{}", ticket.form_type);
-            let result = process_ticket_form(ticket).await;
-            serde_json::to_vec(&result)
-                .map_err(actix_web::error::ErrorInternalServerError)?
-        }
-        _ => {
-            let form: ControlForm = serde_json::from_value(raw)
-                .map_err(actix_web::error::ErrorBadRequest)?;
-            log::debug!("{}", form.form_type());
-            let result = process_control_form(form).await;
-            serde_json::to_vec(&result)
-                .map_err(actix_web::error::ErrorInternalServerError)?
+pub async fn control_handler(body: web::Bytes, request: HttpRequest) -> ActixResult<HttpResponse> {
+    let keyuuid = extract_header(&request, "Key-UUID")?;
+    let key = match key_manager().and_then(|manager| manager.decrypt_key(&keyuuid)) {
+        Ok(key) => key,
+        Err(error) => {
+            log::warn!("request rejected for key {keyuuid}: {error}");
+            return Ok(HttpResponse::Unauthorized().finish());
         }
     };
 
-    let (nonce_out, tag_out, ct_out) = encrypt(&key, &raw_response)
-        .map_err(actix_web::error::ErrorInternalServerError)?;
+    let nonce = extract_header_hex(&request, "Nonce")?;
+    let tag = extract_header_hex(&request, "Tag")?;
+    let ct = body.to_vec();
+
+    let plaintext = decrypt(&key, &nonce, &tag, &ct).map_err(actix_web::error::ErrorBadRequest)?;
+
+    let raw: Value =
+        serde_json::from_slice(&plaintext).map_err(actix_web::error::ErrorBadRequest)?;
+
+    let raw_response = match raw.get("type").and_then(Value::as_str) {
+        Some("create_ticket") | Some("read_ticket") => {
+            let ticket: ControlFormTicket =
+                serde_json::from_value(raw).map_err(actix_web::error::ErrorBadRequest)?;
+            log::debug!("{}", ticket.form_type);
+            let result = process_ticket_form(ticket).await;
+            serde_json::to_vec(&result).map_err(actix_web::error::ErrorInternalServerError)?
+        }
+        _ => {
+            let form: ControlForm =
+                serde_json::from_value(raw).map_err(actix_web::error::ErrorBadRequest)?;
+            log::debug!("{}", form.form_type());
+            let result = process_control_form(form).await;
+            serde_json::to_vec(&result).map_err(actix_web::error::ErrorInternalServerError)?
+        }
+    };
+
+    let (nonce_out, tag_out, ct_out) =
+        encrypt(&key, &raw_response).map_err(actix_web::error::ErrorInternalServerError)?;
 
     Ok(HttpResponse::Ok()
         .append_header(("Nonce", hex::encode(nonce_out)))
@@ -96,22 +101,24 @@ pub async fn control_handler(
 /// response in the same format.
 ///
 /// Mirrors Python's `/mpi` endpoint.
-pub async fn mpi_handler(
-    body: web::Bytes,
-    config_data: web::Data<Config>,
-    request: HttpRequest,
-) -> ActixResult<HttpResponse> {
-    let key = config_data.key();
+pub async fn mpi_handler(body: web::Bytes, request: HttpRequest) -> ActixResult<HttpResponse> {
+    let keyuuid = extract_header(&request, "Key-UUID")?;
+    let key = match key_manager().and_then(|manager| manager.decrypt_key(&keyuuid)) {
+        Ok(key) => key,
+        Err(error) => {
+            log::warn!("request rejected for key {keyuuid}: {error}");
+            return Ok(HttpResponse::Unauthorized().finish());
+        }
+    };
 
     let nonce = extract_header_hex(&request, "Nonce")?;
-    let tag   = extract_header_hex(&request, "Tag")?;
-    let ct    = body.to_vec();
+    let tag = extract_header_hex(&request, "Tag")?;
+    let ct = body.to_vec();
 
-    let plaintext = decrypt(&key, &nonce, &tag, &ct)
-        .map_err(actix_web::error::ErrorBadRequest)?;
+    let plaintext = decrypt(&key, &nonce, &tag, &ct).map_err(actix_web::error::ErrorBadRequest)?;
 
-    let mut message: NetworkMessage = serde_json::from_slice(&plaintext)
-        .map_err(actix_web::error::ErrorBadRequest)?;
+    let mut message: NetworkMessage =
+        serde_json::from_slice(&plaintext).map_err(actix_web::error::ErrorBadRequest)?;
 
     if let Some(isrc) = isrc_of(&message) {
         touch_peer(&isrc).unwrap_or_else(|e| log::error!("touch_peer error: {e}"));
@@ -123,11 +130,11 @@ pub async fn mpi_handler(
 
     let response = route_network_message(message).await;
 
-    let raw_response = serde_json::to_vec(&response)
-        .map_err(actix_web::error::ErrorInternalServerError)?;
+    let raw_response =
+        serde_json::to_vec(&response).map_err(actix_web::error::ErrorInternalServerError)?;
 
-    let (nonce_out, tag_out, ct_out) = encrypt(&key, &raw_response)
-        .map_err(actix_web::error::ErrorInternalServerError)?;
+    let (nonce_out, tag_out, ct_out) =
+        encrypt(&key, &raw_response).map_err(actix_web::error::ErrorInternalServerError)?;
 
     Ok(HttpResponse::Ok()
         .append_header(("Nonce", hex::encode(nonce_out)))
@@ -144,15 +151,9 @@ pub async fn process_control_form(form: ControlForm) -> ControlForm {
     log::debug!("{}", form.form_type());
     match form {
         ControlForm::DiscoverPeer(mut f) => {
-            let client = AgentClient::with_credentials(
-                f.url.clone(),
-                config().key(),
-                config().agtuuid.clone(),
-            );
+            let client = AgentClient::new(f.url.clone());
             match client
-                .send_network_message(NetworkMessage::Ping(
-                    crate::models::network::Ping::default(),
-                ))
+                .send_network_message(NetworkMessage::Ping(crate::models::network::Ping::default()))
                 .await
             {
                 Ok(NetworkMessage::Acknowledgement(ack)) => {
@@ -182,9 +183,12 @@ pub async fn process_control_form(form: ControlForm) -> ControlForm {
         }
 
         ControlForm::CreatePeer(mut f) => {
-            if let Err(e) =
-                create_peer(&f.agtuuid, f.url.clone(), f.ttl.map(|t| t as u32), f.polling)
-            {
+            if let Err(e) = create_peer(
+                &f.agtuuid,
+                f.url.clone(),
+                f.ttl.map(|t| t as u32),
+                f.polling,
+            ) {
                 f.error = Some(e.to_string());
             }
             ControlForm::CreatePeer(f)
@@ -223,16 +227,16 @@ pub async fn process_control_form(form: ControlForm) -> ControlForm {
                 Err(e) => {
                     log::error!("sync_process task error: {e}");
                     ControlForm::SyncProcess(SyncProcessForm {
-                        command:      CommandArg::default(),
-                        timeout:      15,
-                        stdout:       None,
-                        stderr:       None,
-                        status:       None,
-                        start_time:   None,
+                        command: CommandArg::default(),
+                        timeout: 15,
+                        stdout: None,
+                        stderr: None,
+                        status: None,
+                        start_time: None,
                         elapsed_time: None,
-                        error:        Some(e.to_string()),
-                        objuuid:      None,
-                        coluuid:      None,
+                        error: Some(e.to_string()),
+                        objuuid: None,
+                        coluuid: None,
                     })
                 }
             }
@@ -252,16 +256,38 @@ pub async fn process_control_form(form: ControlForm) -> ControlForm {
             ControlForm::GetConfig(f)
         }
 
-        ControlForm::CheckTicket(f) => {
-            match check_ticket(f) {
-                Ok(updated) => ControlForm::CheckTicket(updated),
-                Err(e) => ControlForm::CheckTicket(CheckTicket { error: Some(e.to_string()), ..Default::default() }),
-            }
-        }
+        ControlForm::CheckTicket(f) => match check_ticket(f) {
+            Ok(updated) => ControlForm::CheckTicket(updated),
+            Err(e) => ControlForm::CheckTicket(CheckTicket {
+                error: Some(e.to_string()),
+                ..Default::default()
+            }),
+        },
 
         ControlForm::CloseTicket(f) => {
             close_ticket(&f).unwrap_or_else(|e| log::error!("close_ticket error: {e}"));
             ControlForm::CloseTicket(f)
+        }
+
+        ControlForm::CreateUserKey(mut f) => {
+            let result = match f.passphrase.as_deref() {
+                Some(passphrase) => key_manager().and_then(|manager| {
+                    manager.create_user_key(&f.objuuid, passphrase, f.agtuuid.as_deref())
+                }),
+                None => Err(anyhow::anyhow!("passphrase is required")),
+            };
+            if let Err(e) = result {
+                f.error = Some(e.to_string());
+            }
+            ControlForm::CreateUserKey(f)
+        }
+
+        ControlForm::GetKeyMetadata(mut f) => {
+            match key_manager().and_then(|manager| manager.describe()) {
+                Ok(metadata) => f.metadata = Some(metadata),
+                Err(e) => f.error = Some(e.to_string()),
+            }
+            ControlForm::GetKeyMetadata(f)
         }
     }
 }
@@ -275,7 +301,7 @@ async fn process_ticket_form(mut ticket: ControlFormTicket) -> ControlFormTicket
         "create_ticket" => create_form_ticket(ticket).await,
         "read_ticket" => match read_ticket(&ticket) {
             Ok(Some(t)) => t,
-            Ok(None)    => ticket,
+            Ok(None) => ticket,
             Err(e) => {
                 ticket.error = Some(e.to_string());
                 ticket
@@ -295,18 +321,18 @@ pub async fn create_form_ticket(mut control_form_ticket: ControlFormTicket) -> C
     }
 
     let network_ticket = NetworkTicket {
-        tckuuid:      control_form_ticket.tckuuid.clone(),
-        form:         control_form_ticket.form.clone(),
-        tracing:      control_form_ticket.tracing,
-        src:          config().agtuuid.clone(),
-        dest:         Some(control_form_ticket.dst.clone()),
-        isrc:         None,
-        timestamp:    None,
-        create_time:  Some(control_form_ticket.create_time),
+        tckuuid: control_form_ticket.tckuuid.clone(),
+        form: control_form_ticket.form.clone(),
+        tracing: control_form_ticket.tracing,
+        src: config().agtuuid.clone(),
+        dest: Some(control_form_ticket.dst.clone()),
+        isrc: None,
+        timestamp: None,
+        create_time: Some(control_form_ticket.create_time),
         service_time: None,
-        error:        None,
-        objuuid:      None,
-        coluuid:      None,
+        error: None,
+        objuuid: None,
+        coluuid: None,
     };
 
     let stored = open_tickets()
@@ -326,7 +352,7 @@ pub async fn create_form_ticket(mut control_form_ticket: ControlFormTicket) -> C
                 f.payload = None;
             }
             ticket
-        },
+        }
         Err(e) => {
             log::error!("create_form_ticket: failed to store ticket: {e}");
             control_form_ticket
@@ -343,65 +369,65 @@ pub fn route_network_message(
     message_in: NetworkMessage,
 ) -> std::pin::Pin<Box<dyn std::future::Future<Output = NetworkMessage> + Send>> {
     Box::pin(async move {
-    // Handle dedup tracing for ticket messages
-    let ticket_type = match &message_in {
-        NetworkMessage::TicketRequest(_)  => Some("ticket_request"),
-        NetworkMessage::TicketResponse(_) => Some("ticket_response"),
-        _ => None,
-    };
-
-    if let Some(ttype) = ticket_type {
-        let ticket = match &message_in {
-            NetworkMessage::TicketRequest(t)  => t.clone(),
-            NetworkMessage::TicketResponse(t) => t.clone(),
-            _ => unreachable!(),
+        // Handle dedup tracing for ticket messages
+        let ticket_type = match &message_in {
+            NetworkMessage::TicketRequest(_) => Some("ticket_request"),
+            NetworkMessage::TicketResponse(_) => Some("ticket_response"),
+            _ => None,
         };
-        match dedup_trace(&ticket, ttype) {
-            Ok(Some(trace)) => {
-                let dest = trace.dest.clone().unwrap_or_default();
-                let trace_msg = NetworkMessage::TicketTraceResponse(trace);
-                if dest == config().agtuuid {
-                    process_network_message(trace_msg).await;
-                } else {
-                    tokio::spawn(async move {
-                        if let Err(e) = forward_network_message(trace_msg).await {
-                            log::error!("forward trace error: {e}");
-                        }
-                    });
+
+        if let Some(ttype) = ticket_type {
+            let ticket = match &message_in {
+                NetworkMessage::TicketRequest(t) => t.clone(),
+                NetworkMessage::TicketResponse(t) => t.clone(),
+                _ => unreachable!(),
+            };
+            match dedup_trace(&ticket, ttype) {
+                Ok(Some(trace)) => {
+                    let dest = trace.dest.clone().unwrap_or_default();
+                    let trace_msg = NetworkMessage::TicketTraceResponse(trace);
+                    if dest == config().agtuuid {
+                        process_network_message(trace_msg).await;
+                    } else {
+                        tokio::spawn(async move {
+                            if let Err(e) = forward_network_message(trace_msg).await {
+                                log::error!("forward trace error: {e}");
+                            }
+                        });
+                    }
                 }
+                Ok(None) => {}
+                Err(e) => log::error!("dedup_trace error: {e}"),
             }
-            Ok(None) => {}
-            Err(e) => log::error!("dedup_trace error: {e}"),
         }
-    }
 
-    let dest = dest_of(&message_in);
+        let dest = dest_of(&message_in);
 
-    if dest == config().agtuuid {
-        return match process_network_message(message_in.clone()).await {
-            Some(response) => response,
-            None => NetworkMessage::Acknowledgement(Acknowledgement {
-                ack_type: msg_type_of(&message_in).to_string(),
-                src:      src_of(&message_in),
-                dest:     Some(dest),
-                ..Default::default()
-            }),
-        };
-    }
-
-    let msg = message_in.clone();
-    tokio::spawn(async move {
-        if let Err(e) = forward_network_message(msg).await {
-            log::error!("forward_network_message error: {e}");
+        if dest == config().agtuuid {
+            return match process_network_message(message_in.clone()).await {
+                Some(response) => response,
+                None => NetworkMessage::Acknowledgement(Acknowledgement {
+                    ack_type: msg_type_of(&message_in).to_string(),
+                    src: src_of(&message_in),
+                    dest: Some(dest),
+                    ..Default::default()
+                }),
+            };
         }
-    });
 
-    NetworkMessage::Acknowledgement(Acknowledgement {
-        ack_type: msg_type_of(&message_in).to_string(),
-        src:      src_of(&message_in),
-        dest:     Some(dest),
-        ..Default::default()
-    })
+        let msg = message_in.clone();
+        tokio::spawn(async move {
+            if let Err(e) = forward_network_message(msg).await {
+                log::error!("forward_network_message error: {e}");
+            }
+        });
+
+        NetworkMessage::Acknowledgement(Acknowledgement {
+            ack_type: msg_type_of(&message_in).to_string(),
+            src: src_of(&message_in),
+            dest: Some(dest),
+            ..Default::default()
+        })
     }) // end Box::pin
 }
 
@@ -413,57 +439,71 @@ fn process_network_message(
 ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Option<NetworkMessage>> + Send>> {
     log::debug!("{}", message.message_type());
     Box::pin(async move {
-    match message {
-        NetworkMessage::Ping(_) => None,
+        match message {
+            NetworkMessage::Ping(_) => None,
 
-        NetworkMessage::Advertisement(adv) => {
-            if let Err(e) = process_route_advertisement(&adv) {
-                log::error!("process_route_advertisement error: {e}");
+            NetworkMessage::Advertisement(adv) => {
+                if let Err(e) = process_route_advertisement(&adv) {
+                    log::error!("process_route_advertisement error: {e}");
+                }
+                None
             }
-            None
-        }
 
-        NetworkMessage::TicketRequest(mut ticket) => {
-            ticket.form = process_control_form(ticket.form).await;
-            let src  = ticket.src.clone();
-            let dest = ticket.dest.clone().unwrap_or_default();
-            ticket.src  = dest;
-            ticket.dest = Some(src);
-            route_network_message(NetworkMessage::TicketResponse(ticket)).await;
-            None
-        }
-
-        NetworkMessage::TicketResponse(ticket) => {
-            if let Err(e) = service_ticket(&ticket) {
-                log::error!("service_ticket error: {e}");
+            NetworkMessage::TicketRequest(mut ticket) => {
+                ticket.form = process_control_form(ticket.form).await;
+                let src = ticket.src.clone();
+                let dest = ticket.dest.clone().unwrap_or_default();
+                ticket.src = dest;
+                ticket.dest = Some(src);
+                route_network_message(NetworkMessage::TicketResponse(ticket)).await;
+                None
             }
-            None
-        }
 
-        NetworkMessage::TicketTraceResponse(trace) => {
-            if let Err(e) = service_trace(trace) {
-                log::error!("service_trace error: {e}");
+            NetworkMessage::TicketResponse(ticket) => {
+                if let Err(e) = service_ticket(&ticket) {
+                    log::error!("service_ticket error: {e}");
+                }
+                None
             }
-            None
-        }
 
-        NetworkMessage::MessagesRequest(req) => {
-            let messages = pull_filtered_network_messages(&req).unwrap_or_else(|e| {
-                log::error!("pull_filtered_network_messages error: {e}");
-                Vec::new()
-            });
-            Some(NetworkMessage::MessagesResponse(NetworkMessagesResponse {
-                messages,
-                dest: req.isrc.clone(),
-                ..Default::default()
-            }))
-        }
+            NetworkMessage::TicketTraceResponse(trace) => {
+                if let Err(e) = service_trace(trace) {
+                    log::error!("service_trace error: {e}");
+                }
+                None
+            }
 
-        _ => {
-            log::warn!("unknown network message type encountered");
-            None
+            NetworkMessage::MessagesRequest(req) => {
+                let messages = pull_filtered_network_messages(&req).unwrap_or_else(|e| {
+                    log::error!("pull_filtered_network_messages error: {e}");
+                    Vec::new()
+                });
+                Some(NetworkMessage::MessagesResponse(NetworkMessagesResponse {
+                    messages,
+                    dest: req.isrc.clone(),
+                    ..Default::default()
+                }))
+            }
+
+            NetworkMessage::ExchangeKeys(mut exchange) => {
+                match key_manager().and_then(|manager| {
+                    manager.process_key_distributions(&exchange.distributions, &exchange.src)?;
+                    exchange.distributions = manager.create_key_distributions()?;
+                    Ok(())
+                }) {
+                    Ok(()) => Some(NetworkMessage::ExchangeKeys(exchange)),
+                    Err(error) => {
+                        log::error!("key exchange failed: {error}");
+                        None
+                    }
+                }
+            }
+
+            _ => {
+                log::warn!("unknown network message type encountered");
+                None
+            }
         }
-    }
     }) // end Box::pin
 }
 
@@ -503,13 +543,9 @@ pub async fn polling() {
         tokio::spawn(async move {
             let url = match peer.url {
                 Some(u) => u,
-                None    => return,
+                None => return,
             };
-            let client = AgentClient::with_credentials(
-                url.clone(),
-                config().key(),
-                config().agtuuid.clone(),
-            );
+            let client = AgentClient::new(url.clone());
             match client
                 .send_network_message(NetworkMessage::MessagesRequest(
                     NetworkMessagesRequest::default(),
@@ -556,7 +592,7 @@ pub async fn advertizing() {
         tokio::spawn(async move {
             let agtuuid = match peer.agtuuid {
                 Some(ref id) => id.clone(),
-                None         => return,
+                None => return,
             };
             match create_route_advertisement() {
                 Ok(mut adv) => {
@@ -582,6 +618,15 @@ fn extract_header_hex(req: &HttpRequest, name: &str) -> ActixResult<Vec<u8>> {
     hex::decode(value).map_err(|e| actix_web::error::ErrorBadRequest(e.to_string()))
 }
 
+fn extract_header(req: &HttpRequest, name: &str) -> ActixResult<String> {
+    req.headers()
+        .get(name)
+        .ok_or_else(|| actix_web::error::ErrorBadRequest(format!("missing header: {name}")))?
+        .to_str()
+        .map(str::to_owned)
+        .map_err(|e| actix_web::error::ErrorBadRequest(e.to_string()))
+}
+
 fn config_to_json() -> Value {
     let c = config();
     json!({
@@ -589,7 +634,6 @@ fn config_to_json() -> Value {
         "workers":             c.workers,
         "socket_host":         c.socket_host,
         "socket_port":         c.socket_port,
-        "secret_digest":       c.secret_digest,
         "client_control_url":  c.client_control_url,
         "log_level_api":       c.log_level_api.to_string(),
         "log_level_app":       c.log_level_app.to_string(),
@@ -601,56 +645,134 @@ fn config_to_json() -> Value {
     })
 }
 
+/// Remove expired keys, rotate stale fallback keys, and exchange active keys
+/// with each directly connected peer.
+pub async fn rotate_and_exchange_keys() {
+    let manager = match key_manager() {
+        Ok(manager) => manager,
+        Err(error) => {
+            log::error!("key manager initialization failed: {error}");
+            return;
+        }
+    };
+    if let Err(error) = manager.delete_expired_keys() {
+        log::error!("delete expired keys failed: {error}");
+        return;
+    }
+    match manager.all_auto_keys_deprecated() {
+        Ok(true) => {
+            if let Err(error) = manager.create_auto_key() {
+                log::error!("auto key rotation failed: {error}");
+                return;
+            }
+        }
+        Ok(false) => {}
+        Err(error) => {
+            log::error!("auto key age check failed: {error}");
+            return;
+        }
+    }
+    let distributions = match manager.create_key_distributions() {
+        Ok(distributions) => distributions,
+        Err(error) => {
+            log::error!("creating key distributions failed: {error}");
+            return;
+        }
+    };
+    let peers = match open_peers().and_then(|peers| peers.find(&[("url", "$!eq:null")])) {
+        Ok(peers) => peers,
+        Err(error) => {
+            log::error!("loading peers for key exchange failed: {error}");
+            return;
+        }
+    };
+
+    for peer in peers {
+        let (Some(url), Some(agtuuid)) = (peer.object.url, peer.object.agtuuid) else {
+            continue;
+        };
+        let exchange = ExchangeKeys {
+            distributions: distributions.clone(),
+            src: config().agtuuid.clone(),
+            ..Default::default()
+        };
+        tokio::spawn(async move {
+            let client = AgentClient::new(url.clone());
+            match client
+                .send_network_message(NetworkMessage::ExchangeKeys(exchange))
+                .await
+            {
+                Ok(NetworkMessage::ExchangeKeys(response)) => {
+                    if let Err(error) = key_manager().and_then(|manager| {
+                        manager.process_key_distributions(&response.distributions, &agtuuid)
+                    }) {
+                        log::error!("processing exchanged keys from {agtuuid} failed: {error}");
+                    }
+                }
+                Ok(other) => log::warn!(
+                    "unexpected response to key exchange with {agtuuid}: {}",
+                    other.message_type()
+                ),
+                Err(error) => log::warn!("key exchange with {agtuuid} at {url} failed: {error}"),
+            }
+        });
+    }
+}
+
 fn dest_of(msg: &NetworkMessage) -> String {
     match msg {
-        NetworkMessage::Ping(m)                => m.dest.clone().unwrap_or_default(),
-        NetworkMessage::MessagesRequest(m)     => m.dest.clone().unwrap_or_default(),
-        NetworkMessage::MessagesResponse(m)    => m.dest.clone().unwrap_or_default(),
-        NetworkMessage::Acknowledgement(m)     => m.dest.clone().unwrap_or_default(),
-        NetworkMessage::Advertisement(m)       => m.dest.clone().unwrap_or_default(),
+        NetworkMessage::Ping(m) => m.dest.clone().unwrap_or_default(),
+        NetworkMessage::MessagesRequest(m) => m.dest.clone().unwrap_or_default(),
+        NetworkMessage::ExchangeKeys(m) => m.dest.clone().unwrap_or_default(),
+        NetworkMessage::MessagesResponse(m) => m.dest.clone().unwrap_or_default(),
+        NetworkMessage::Acknowledgement(m) => m.dest.clone().unwrap_or_default(),
+        NetworkMessage::Advertisement(m) => m.dest.clone().unwrap_or_default(),
         NetworkMessage::TicketTraceResponse(m) => m.dest.clone().unwrap_or_default(),
-        NetworkMessage::TicketRequest(m)       => m.dest.clone().unwrap_or_default(),
-        NetworkMessage::TicketResponse(m)      => m.dest.clone().unwrap_or_default(),
+        NetworkMessage::TicketRequest(m) => m.dest.clone().unwrap_or_default(),
+        NetworkMessage::TicketResponse(m) => m.dest.clone().unwrap_or_default(),
     }
 }
 
 fn src_of(msg: &NetworkMessage) -> String {
     match msg {
-        NetworkMessage::Ping(m)                => m.src.clone(),
-        NetworkMessage::MessagesRequest(m)     => m.src.clone(),
-        NetworkMessage::MessagesResponse(m)    => m.src.clone(),
-        NetworkMessage::Acknowledgement(m)     => m.src.clone(),
-        NetworkMessage::Advertisement(m)       => m.src.clone(),
+        NetworkMessage::Ping(m) => m.src.clone(),
+        NetworkMessage::MessagesRequest(m) => m.src.clone(),
+        NetworkMessage::ExchangeKeys(m) => m.src.clone(),
+        NetworkMessage::MessagesResponse(m) => m.src.clone(),
+        NetworkMessage::Acknowledgement(m) => m.src.clone(),
+        NetworkMessage::Advertisement(m) => m.src.clone(),
         NetworkMessage::TicketTraceResponse(m) => m.src.clone(),
-        NetworkMessage::TicketRequest(m)       => m.src.clone(),
-        NetworkMessage::TicketResponse(m)      => m.src.clone(),
+        NetworkMessage::TicketRequest(m) => m.src.clone(),
+        NetworkMessage::TicketResponse(m) => m.src.clone(),
     }
 }
 
 fn isrc_of(msg: &NetworkMessage) -> Option<String> {
     match msg {
-        NetworkMessage::Ping(m)                => m.isrc.clone(),
-        NetworkMessage::MessagesRequest(m)     => m.isrc.clone(),
-        NetworkMessage::MessagesResponse(m)    => m.isrc.clone(),
-        NetworkMessage::Acknowledgement(m)     => m.isrc.clone(),
-        NetworkMessage::Advertisement(m)       => m.isrc.clone(),
+        NetworkMessage::Ping(m) => m.isrc.clone(),
+        NetworkMessage::MessagesRequest(m) => m.isrc.clone(),
+        NetworkMessage::ExchangeKeys(m) => m.isrc.clone(),
+        NetworkMessage::MessagesResponse(m) => m.isrc.clone(),
+        NetworkMessage::Acknowledgement(m) => m.isrc.clone(),
+        NetworkMessage::Advertisement(m) => m.isrc.clone(),
         NetworkMessage::TicketTraceResponse(m) => m.isrc.clone(),
-        NetworkMessage::TicketRequest(m)       => m.isrc.clone(),
-        NetworkMessage::TicketResponse(m)      => m.isrc.clone(),
+        NetworkMessage::TicketRequest(m) => m.isrc.clone(),
+        NetworkMessage::TicketResponse(m) => m.isrc.clone(),
     }
 }
 
 fn set_dest(msg: &mut NetworkMessage, dest: String) {
     let d = Some(dest);
     match msg {
-        NetworkMessage::Ping(m)                => m.dest = d,
-        NetworkMessage::MessagesRequest(m)     => m.dest = d,
-        NetworkMessage::MessagesResponse(m)    => m.dest = d,
-        NetworkMessage::Acknowledgement(m)     => m.dest = d,
-        NetworkMessage::Advertisement(m)       => m.dest = d,
+        NetworkMessage::Ping(m) => m.dest = d,
+        NetworkMessage::MessagesRequest(m) => m.dest = d,
+        NetworkMessage::ExchangeKeys(m) => m.dest = d,
+        NetworkMessage::MessagesResponse(m) => m.dest = d,
+        NetworkMessage::Acknowledgement(m) => m.dest = d,
+        NetworkMessage::Advertisement(m) => m.dest = d,
         NetworkMessage::TicketTraceResponse(m) => m.dest = d,
-        NetworkMessage::TicketRequest(m)       => m.dest = d,
-        NetworkMessage::TicketResponse(m)      => m.dest = d,
+        NetworkMessage::TicketRequest(m) => m.dest = d,
+        NetworkMessage::TicketResponse(m) => m.dest = d,
     }
 }
 

@@ -6,10 +6,12 @@ use chrono::{SecondsFormat, TimeZone, Utc};
 
 use crate::{
     executor::agent::AgentClient,
-    models::control::{ControlForm, ControlFormTicket, GetConfig, GetPeers, GetRoutes},
+    models::control::{
+        ControlForm, ControlFormTicket, GetConfig, GetKeyMetadata, GetPeers, GetRoutes,
+    },
 };
 
-use super::poll_ticket;
+use super::{format_duration, poll_ticket};
 
 pub async fn cmd_stat(
     client: Arc<AgentClient>,
@@ -33,17 +35,25 @@ pub async fn cmd_stat(
         ..ControlFormTicket::default()
     };
 
-    // Send all three initial tickets concurrently
-    let (config_res, peers_res, routes_res) = tokio::join!(
+    let keys_ticket = ControlFormTicket {
+        dst: agtuuid.clone(),
+        form: ControlForm::GetKeyMetadata(GetKeyMetadata::default()),
+        ..ControlFormTicket::default()
+    };
+
+    // Send all initial tickets concurrently
+    let (config_res, peers_res, routes_res, keys_res) = tokio::join!(
         client.send_ticket(config_ticket),
         client.send_ticket(peers_ticket),
         client.send_ticket(routes_ticket),
+        client.send_ticket(keys_ticket),
     );
     let it = Instant::now();
 
     let config_ticket  = config_res?;
     let peers_ticket   = peers_res?;
     let routes_ticket  = routes_res?;
+    let keys_ticket    = keys_res?;
 
     let config_ticket  = poll_ticket(Arc::clone(&client), config_ticket, timeout).await;
     let et = config_ticket
@@ -54,9 +64,18 @@ pub async fn cmd_stat(
     let peers_ticket   = poll_ticket(Arc::clone(&client), peers_ticket, timeout).await;
     let routes_ticket  = poll_ticket(Arc::clone(&client), routes_ticket, timeout).await;
 
-    for ticket in [&config_ticket, &peers_ticket, &routes_ticket] {
+    let keys_ticket    = poll_ticket(Arc::clone(&client), keys_ticket, timeout).await;
+
+    for ticket in [&config_ticket, &peers_ticket, &routes_ticket, &keys_ticket] {
         if let Some(ref e) = ticket.error { eprintln!("{e}"); }
     }
+    if let ControlForm::GetKeyMetadata(f) = &keys_ticket.form {
+        if let Some(ref e) = f.error { eprintln!("{e}"); }
+    }
+    let key_metadata = match &keys_ticket.form {
+        ControlForm::GetKeyMetadata(f) => f.metadata.clone().unwrap_or_default(),
+        _ => vec![],
+    };
 
     let config = match &config_ticket.form {
         ControlForm::GetConfig(f) => f.config.clone(),
@@ -96,6 +115,23 @@ pub async fn cmd_stat(
         }
     } else {
         println!("   (No configuration data received)");
+    }
+
+    println!();
+    println!("Keys");
+    if key_metadata.is_empty() {
+        println!("   (No key metadata received)");
+    } else {
+        println!("   {:<10} {:<36} {:<36} {:<10}", "Type", "Object UUID", "Agent UUID", "TTL");
+        for m in &key_metadata {
+            println!(
+                "   {:<10} {:.<36} {:.<36} {:<10}",
+                m.r#type.to_string(),
+                m.objuuid,
+                m.agtuuid.as_deref().unwrap_or(""),
+                format_duration(m.ttl),
+            );
+        }
     }
 
     println!();

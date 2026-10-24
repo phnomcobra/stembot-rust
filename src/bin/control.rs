@@ -7,11 +7,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 
-use stembot_rust::{
-    cli,
-    executor::agent::AgentClient,
-    models::config::Config,
-};
+use stembot_rust::{cli, executor::agent::AgentClient, models::config::Config};
 
 // ── CLI definition ────────────────────────────────────────────────────────────
 
@@ -89,6 +85,31 @@ enum Commands {
         #[clap(short = 't', long, default_value = "15")]
         timeout: u64,
     },
+    /// Set a passphrase-derived user key on a destination agent
+    SetUserKey {
+        dst_agtuuid: String,
+        objuuid: String,
+        passphrase: String,
+        #[clap(long)]
+        agtuuid: Option<String>,
+        #[clap(short = 'd', long)]
+        delay: Option<u64>,
+        #[clap(short = 't', long, default_value = "15")]
+        timeout: u64,
+    },
+    /// Run synthetic control-form integration tests against agent UUIDs
+    Test {
+        /// Comma-separated destination agent UUIDs
+        destinations: String,
+        #[clap(default_value = "15")]
+        timeout: u64,
+        /// Pretty print every ticket before asserting
+        #[clap(short = 'v', long)]
+        verbose: bool,
+        /// Pretty print tickets that fail an assertion
+        #[clap(short = 'f', long)]
+        print_on_failure: bool,
+    },
 }
 
 // ── Entry point ───────────────────────────────────────────────────────────────
@@ -103,23 +124,76 @@ async fn main() -> Result<()> {
     let client = Arc::new(AgentClient::new(config.client_control_url.clone()));
 
     match cli.command {
-        Commands::Discover { peer_url, polling, delay, ttl } =>
-            cli::discover::cmd_discover(client, peer_url, polling, delay, ttl).await?,
+        Commands::Discover {
+            peer_url,
+            polling,
+            delay,
+            ttl,
+        } => cli::discover::cmd_discover(client, peer_url, polling, delay, ttl).await?,
 
-        Commands::Delete { delete_all, agtuuid } =>
-            cli::delete::cmd_delete(client, delete_all, agtuuid).await?,
+        Commands::Delete {
+            delete_all,
+            agtuuid,
+        } => cli::delete::cmd_delete(client, delete_all, agtuuid).await?,
 
-        Commands::Stat { agtuuid, timeout } =>
-            cli::stat::cmd_stat(client, agtuuid, timeout).await?,
+        Commands::Stat { agtuuid, timeout } => {
+            cli::stat::cmd_stat(client, agtuuid, timeout).await?
+        }
 
-        Commands::Bench { agtuuid, timeout } =>
-            cli::bench::cmd_bench(client, agtuuid, timeout).await?,
+        Commands::Bench { agtuuid, timeout } => {
+            cli::bench::cmd_bench(client, agtuuid, timeout).await?
+        }
 
-        Commands::Put { src_path, dst_path, timeout, src_agtuuid, dst_agtuuid } =>
-            cli::put::cmd_put(client, src_path, dst_path, timeout, src_agtuuid, dst_agtuuid).await?,
+        Commands::Put {
+            src_path,
+            dst_path,
+            timeout,
+            src_agtuuid,
+            dst_agtuuid,
+        } => {
+            cli::put::cmd_put(
+                client,
+                src_path,
+                dst_path,
+                timeout,
+                src_agtuuid,
+                dst_agtuuid,
+            )
+            .await?
+        }
 
-        Commands::Run { agtuuid, command, timeout } =>
-            cli::run::cmd_run(client, agtuuid, command, timeout).await?,
+        Commands::Run {
+            agtuuid,
+            command,
+            timeout,
+        } => cli::run::cmd_run(client, agtuuid, command, timeout).await?,
+
+        Commands::SetUserKey {
+            dst_agtuuid,
+            objuuid,
+            passphrase,
+            agtuuid,
+            delay,
+            timeout,
+        } => {
+            cli::key::cmd_set_user_key(
+                client,
+                dst_agtuuid,
+                objuuid,
+                passphrase,
+                agtuuid,
+                delay,
+                timeout,
+            )
+            .await?
+        }
+
+        Commands::Test {
+            destinations,
+            timeout,
+            verbose,
+            print_on_failure,
+        } => cli::test::cmd_test(client, destinations, timeout, verbose, print_on_failure).await?,
     }
 
     Ok(())

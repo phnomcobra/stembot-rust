@@ -2,7 +2,7 @@
 set -e
 
 PACKAGE_NAME="stembot-rust"
-VERSION="1.0.0"
+VERSION="3.0.1"
 ARCH="amd64"
 DEB_NAME="${PACKAGE_NAME}_${VERSION}_${ARCH}.deb"
 DIST_DIR="$(dirname "$0")/../dist"

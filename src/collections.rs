@@ -1,4 +1,4 @@
-//! Shared collection singletons for messaging, ticketing, and peering.
+//! Shared collection singletons for messaging, ticketing, key management, and peering.
 //!
 //! Each public opener returns a cheap clone of a process-wide singleton
 //! `Collection<T>`.  Because `Collection` wraps an `Arc<Mutex<Connection>>`
@@ -7,7 +7,7 @@
 //!
 //! In-memory collections use a `file:?mode=memory` URI so that a single
 //! named connection is created once and reused for the lifetime of the
-//! process.  File-backed collections (peers, kvstore) open their usual
+//! process.  File-backed collections (keys, peers, kvstore) open their usual
 //! `{name}.sqlite` path.
 
 use std::sync::OnceLock;
@@ -18,6 +18,7 @@ use crate::dao::collection::Collection;
 use crate::dao::db_path;
 use crate::dao::kvstore::KeyValuePair;
 use crate::models::control::ControlFormTicket;
+use crate::models::crypto::Key;
 use crate::models::network::{NetworkMessage, TicketTraceResponse};
 use crate::models::routing::{Peer, Route};
 
@@ -36,6 +37,7 @@ static TRACES:   OnceLock<Collection<TicketTraceResponse>> = OnceLock::new();
 static PEERS:    OnceLock<Collection<Peer>>                = OnceLock::new();
 static ROUTES:   OnceLock<Collection<Route>>               = OnceLock::new();
 static KVSTORE:  OnceLock<Collection<KeyValuePair>>        = OnceLock::new();
+static KEYS:     OnceLock<Collection<Key>>                 = OnceLock::new();
 
 // ── Collection openers ────────────────────────────────────────────────────────
 
@@ -107,6 +109,19 @@ pub fn open_kvstore() -> Result<Collection<KeyValuePair>> {
     }).clone())
 }
 
+/// Open (or return the cached singleton for) the file-backed `keys` collection.
+pub fn open_keys() -> Result<Collection<Key>> {
+    Ok(KEYS.get_or_init(|| {
+        let c = Collection::new("keys", Some(db_path("keys").as_ref()))
+            .expect("failed to open keys collection");
+        c.create_attribute("create_time", "/create_time").ok();
+        c.create_attribute("expire_time", "/expire_time").ok();
+        c.create_attribute("agtuuid",     "/agtuuid").ok();
+        c.create_attribute("type",        "/type").ok();
+        c
+    }).clone())
+}
+
 /// Vacuum all collections to reclaim space from deleted records.
 pub fn vacuum_collections() -> Result<()> {
     open_messages()?.document.vacuum()?;
@@ -115,5 +130,6 @@ pub fn vacuum_collections() -> Result<()> {
     open_peers()?.document.vacuum()?;
     open_routes()?.document.vacuum()?;
     open_kvstore()?.document.vacuum()?;
+    open_keys()?.document.vacuum()?;
     Ok(())
 }

@@ -1,8 +1,5 @@
 use clap::Parser;
-use stembot_rust::{
-    dao::kvstore::KVStore,
-    models::config::LogLevel,
-};
+use stembot_rust::{crypto::KeyManager, dao::kvstore::KVStore, models::config::LogLevel};
 
 #[derive(Parser, Debug)]
 #[clap(name = "agt-configure", about = "Configure offline agent settings")]
@@ -16,19 +13,26 @@ struct Args {
     #[clap(short = 'd', long, help = "Server host address")]
     host: Option<String>,
 
-    #[clap(short = 's', long, help = "Encryption key (will be hashed with SHA-256)")]
-    secret: Option<String>,
-
-    #[clap(short = 'c', long = "client-url", help = "Set the agent client control URL")]
+    #[clap(
+        short = 'c',
+        long = "client-url",
+        help = "Set the agent client control URL"
+    )]
     client_url: Option<String>,
 
     #[clap(short = 'w', long, help = "Number of worker processes")]
     workers: Option<u32>,
 
-    #[clap(long, help = "Application log level (DEBUG/INFO/WARNING/ERROR/CRITICAL)")]
+    #[clap(
+        long,
+        help = "Application log level (DEBUG/INFO/WARNING/ERROR/CRITICAL)"
+    )]
     log_level_app: Option<String>,
 
-    #[clap(long, help = "API/framework log level (DEBUG/INFO/WARNING/ERROR/CRITICAL)")]
+    #[clap(
+        long,
+        help = "API/framework log level (DEBUG/INFO/WARNING/ERROR/CRITICAL)"
+    )]
     log_level_api: Option<String>,
 
     #[clap(long, help = "Seconds before an unresponsive peer is considered dead")]
@@ -46,14 +50,30 @@ struct Args {
     #[clap(long, help = "Seconds before a pending message is discarded")]
     message_timeout_secs: Option<u32>,
 
-    #[clap(long, help = "Set client control URL to local host (http://127.0.0.1:<port>/control)")]
+    #[clap(
+        long,
+        help = "Set client control URL to local host (http://127.0.0.1:<port>/control)"
+    )]
     client_local: bool,
 
     #[clap(short = 'v', long, help = "View current configuration settings")]
     view: bool,
 
-    #[clap(short = 'e', long = "load-env", help = "Load configuration from environment variables")]
+    #[clap(
+        short = 'e',
+        long = "load-env",
+        help = "Load configuration from environment variables"
+    )]
     load_env: bool,
+
+    #[clap(long, help = "UUID identifying the shared passphrase-derived user key")]
+    user_key_objuuid: Option<String>,
+
+    #[clap(long, help = "Passphrase used to derive the user key")]
+    user_key_passphrase: Option<String>,
+
+    #[clap(long, help = "Agent UUID associated with the user key")]
+    user_key_agtuuid: Option<String>,
 }
 
 fn load_from_environment(store: &KVStore) -> Result<(), Box<dyn std::error::Error>> {
@@ -70,11 +90,6 @@ fn load_from_environment(store: &KVStore) -> Result<(), Box<dyn std::error::Erro
             store.commit("socket_port", port)?;
             println!("✓ Loaded AGT_PORT: {v}");
         }
-    }
-    if let Ok(v) = std::env::var("AGT_SECRET") {
-        let digest = sha256::digest(v.as_str());
-        store.commit("secret_digest", digest)?;
-        println!("✓ Loaded AGT_SECRET (hashed to 32 bytes)");
     }
     if let Ok(v) = std::env::var("AGT_CLIENT_CONTROL_URL") {
         store.commit("client_control_url", v.as_str())?;
@@ -128,36 +143,69 @@ fn load_from_environment(store: &KVStore) -> Result<(), Box<dyn std::error::Erro
             println!("✓ Loaded AGT_MESSAGE_TIMEOUT_SECS: {v}");
         }
     }
+    let user_key_objuuid = std::env::var("AGT_USER_KEY_OBJUUID").ok();
+    let user_key_passphrase = std::env::var("AGT_USER_KEY_PASSPHRASE").ok();
+    let user_key_agtuuid = std::env::var("AGT_USER_KEY_AGTUUID").ok();
+    match (
+        user_key_objuuid,
+        user_key_passphrase,
+        user_key_agtuuid.as_deref(),
+    ) {
+        (Some(objuuid), Some(passphrase), agtuuid) => {
+            KeyManager::new()?.create_user_key(
+                &objuuid,
+                &passphrase,
+                agtuuid,
+            )?;
+            println!("✓ Loaded passphrase-derived user key");
+        }
+        (None, None, None) => {}
+        _ => {
+            return Err(
+                "AGT_USER_KEY_OBJUUID and AGT_USER_KEY_PASSPHRASE must be set together; AGT_USER_KEY_AGTUUID requires both".into(),
+            )
+        }
+    }
     Ok(())
 }
 
 fn display_config(store: &KVStore) {
     let v = |key: &str| -> String {
-        store.get(key, None)
+        store
+            .get(key, None)
             .ok()
-            .and_then(|j| if j.is_null() { None } else { Some(j.to_string().trim_matches('"').to_string()) })
+            .and_then(|j| {
+                if j.is_null() {
+                    None
+                } else {
+                    Some(j.to_string().trim_matches('"').to_string())
+                }
+            })
             .unwrap_or_else(|| String::from("(not set)"))
     };
     println!("\n{}", "=".repeat(50));
     println!("Current Configuration");
     println!("{}", "=".repeat(50));
     let items = [
-        ("Client Control URL",   v("client_control_url")),
-        ("Agent ID",             v("agtuuid")),
-        ("Socket Host",          v("socket_host")),
-        ("Socket Port",          v("socket_port")),
-        ("Workers",              v("workers")),
-        ("Log Level App",        v("log_level_app")),
-        ("Log Level API",        v("log_level_api")),
-        ("Peer Timeout Secs",    v("peer_timeout_secs")),
-        ("Peer Refresh Secs",    v("peer_refresh_secs")),
-        ("Max Weight",           v("max_weight")),
-        ("Ticket Timeout Secs",  v("ticket_timeout_secs")),
+        ("Client Control URL", v("client_control_url")),
+        ("Agent ID", v("agtuuid")),
+        ("Socket Host", v("socket_host")),
+        ("Socket Port", v("socket_port")),
+        ("Workers", v("workers")),
+        ("Log Level App", v("log_level_app")),
+        ("Log Level API", v("log_level_api")),
+        ("Peer Timeout Secs", v("peer_timeout_secs")),
+        ("Peer Refresh Secs", v("peer_refresh_secs")),
+        ("Max Weight", v("max_weight")),
+        ("Ticket Timeout Secs", v("ticket_timeout_secs")),
         ("Message Timeout Secs", v("message_timeout_secs")),
-        ("Secret Digest",        v("secret_digest")),
     ];
     for (label, value) in &items {
-        let display = if value.len() > 60 { format!("{}...", &value[..60]) } else { value.clone() };
+        let display = if value.len() > 60 {
+            format!("{}...", &value[..60])
+        } else {
+            value.clone()
+        };
         println!("{label:.<25} {display}");
     }
     println!("{}", "=".repeat(50));
@@ -174,11 +222,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if args.load_env {
         println!("Loading configuration from environment variables...");
-        if let Err(error) = load_from_environment(&store) {
-            eprintln!("Error loading from environment: {error}");
-        } else {
-            println!("✓ Successfully loaded configuration from environment variables");
-        }
+        load_from_environment(&store)?;
+        println!("✓ Successfully loaded configuration from environment variables");
         modified = true;
     }
 
@@ -195,12 +240,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Some(v) = args.port {
         store.commit("socket_port", v)?;
         println!("✓ Set Port: {v}");
-        modified = true;
-    }
-    if let Some(v) = args.secret {
-        let digest = sha256::digest(v.as_str());
-        store.commit("secret_digest", digest)?;
-        println!("✓ Set Secret (hashed to 32 bytes)");
         modified = true;
     }
     if let Some(v) = args.client_url {
@@ -259,7 +298,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         modified = true;
     }
     if args.client_local {
-        let port = store.get("socket_port", None)
+        let port = store
+            .get("socket_port", None)
             .ok()
             .and_then(|j| j.as_u64())
             .unwrap_or(8080) as u16;
@@ -267,6 +307,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         store.commit("client_control_url", local_url.as_str())?;
         println!("✓ Set Client Control URL to local: {local_url}");
         modified = true;
+    }
+
+    match (args.user_key_objuuid, args.user_key_passphrase) {
+        (Some(objuuid), Some(passphrase)) => {
+            KeyManager::new()?.create_user_key(
+                &objuuid,
+                &passphrase,
+                args.user_key_agtuuid.as_deref(),
+            )?;
+            println!("✓ Created passphrase-derived user key: {objuuid}");
+            modified = true;
+        }
+        (None, None) if args.user_key_agtuuid.is_none() => {}
+        (None, None) => {
+            return Err(
+                "--user-key-agtuuid requires --user-key-objuuid and --user-key-passphrase".into(),
+            );
+        }
+        _ => {
+            return Err(
+                "--user-key-objuuid and --user-key-passphrase must be provided together".into(),
+            );
+        }
     }
 
     if args.view {
@@ -277,4 +340,3 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
-

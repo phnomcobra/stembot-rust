@@ -329,7 +329,7 @@ impl KeyManager {
                 let parsed = reqwest::Url::parse(&peer_url).ok()?;
                 (parsed.host_str() == target.host_str()
                     && parsed.port_or_known_default() == target.port_or_known_default())
-                .then(|| peer.object.agtuuid)
+                .then_some(peer.object.agtuuid)
                 .flatten()
             })
         };

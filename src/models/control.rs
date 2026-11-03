@@ -638,7 +638,7 @@ mod tests {
     // ── GetPeers ──────────────────────────────────────────────────────────────
 
     const GET_PEERS_EMPTY_JSON: &str =
-        concat!(r#"{"type":"get_peers","error":null,"objuuid":null,"coluuid":null,"peers":[]}"#);
+        r#"{"type":"get_peers","error":null,"objuuid":null,"coluuid":null,"peers":[]}"#;
     const GET_PEERS_DATA_JSON: &str = concat!(
         r#"{"type":"get_peers","error":null,"objuuid":null,"coluuid":null,"#,
         r#""peers":[{"agtuuid":"a2","polling":false,"destroy_time":2000.0,"#,
@@ -682,7 +682,7 @@ mod tests {
     // ── GetRoutes ─────────────────────────────────────────────────────────────
 
     const GET_ROUTES_EMPTY_JSON: &str =
-        concat!(r#"{"type":"get_routes","error":null,"objuuid":null,"coluuid":null,"routes":[]}"#);
+        r#"{"type":"get_routes","error":null,"objuuid":null,"coluuid":null,"routes":[]}"#;
     const GET_ROUTES_DATA_JSON: &str = concat!(
         r#"{"type":"get_routes","error":null,"objuuid":null,"coluuid":null,"#,
         r#""routes":[{"agtuuid":"a2","gtwuuid":"a1","weight":1,"objuuid":null,"coluuid":null}]}"#
@@ -722,9 +722,8 @@ mod tests {
 
     // ── GetConfig ─────────────────────────────────────────────────────────────
 
-    const GET_CONFIG_REQUEST_JSON: &str = concat!(
-        r#"{"type":"get_config","error":null,"objuuid":null,"coluuid":null,"config":null}"#
-    );
+    const GET_CONFIG_REQUEST_JSON: &str =
+        r#"{"type":"get_config","error":null,"objuuid":null,"coluuid":null,"config":null}"#;
     const GET_CONFIG_RESPONSE_JSON: &str = concat!(
         r#"{"type":"get_config","error":null,"objuuid":null,"coluuid":null,"#,
         r#""config":{"agtuuid":"a1","port":8080}}"#

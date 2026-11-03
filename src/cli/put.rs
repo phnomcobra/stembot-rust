@@ -101,11 +101,11 @@ pub async fn cmd_put(
                 eprintln!("{e}");
                 write_error.get_or_insert(e.clone());
             }
-            if let ControlForm::WriteFile(ref f) = ticket.form {
-                if let Some(ref e) = f.error {
-                    eprintln!("{e}");
-                    write_error.get_or_insert(e.clone());
-                }
+            if let ControlForm::WriteFile(ref f) = ticket.form
+                && let Some(ref e) = f.error
+            {
+                eprintln!("{e}");
+                write_error.get_or_insert(e.clone());
             }
         } else {
             println!("Writing to local:{dst_path}...");

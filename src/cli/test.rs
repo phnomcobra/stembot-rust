@@ -47,7 +47,7 @@ pub async fn cmd_test(
             Ok(sent) => {
                 let result = poll_ticket(Arc::clone(&client), sent, timeout).await;
                 record_test_result(
-                    &destination,
+                    destination,
                     0,
                     form_name,
                     false,
@@ -136,7 +136,7 @@ pub async fn cmd_test(
             };
             let result = poll_ticket(Arc::clone(&client), sent, timeout).await;
             record_test_result(
-                &destination,
+                destination,
                 index,
                 form_name,
                 expect_failure,

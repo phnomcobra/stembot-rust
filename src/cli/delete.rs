@@ -17,8 +17,10 @@ pub async fn cmd_delete(
         let result = client
             .send_control_form(ControlForm::DeletePeers(DeletePeers::default()))
             .await?;
-        if let ControlForm::DeletePeers(f) = result {
-            if let Some(e) = f.error { eprintln!("{e}"); }
+        if let ControlForm::DeletePeers(f) = result
+            && let Some(e) = f.error
+        {
+            eprintln!("{e}");
         }
     } else if let Some(id) = agtuuid {
         println!("Deleting agent: {id}");
@@ -28,8 +30,10 @@ pub async fn cmd_delete(
                 ..Default::default()
             }))
             .await?;
-        if let ControlForm::DeletePeers(f) = result {
-            if let Some(e) = f.error { eprintln!("{e}"); }
+        if let ControlForm::DeletePeers(f) = result
+            && let Some(e) = f.error
+        {
+            eprintln!("{e}");
         }
     } else {
         eprintln!("Error: Use --all or --agtuuid <UUID>");

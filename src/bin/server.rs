@@ -18,10 +18,6 @@ use stembot_rust::{
 
 #[actix_web::main]
 async fn main() -> Result<(), std::io::Error> {
-    if std::env::var("RUST_BACKTRACE").is_err() {
-        std::env::set_var("RUST_BACKTRACE", "1");
-    }
-
     let config = config();
 
     init_logger(

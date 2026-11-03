@@ -151,25 +151,25 @@ impl File {
     pub fn new(sequuid: Option<&str>, datastore: Datastore) -> Result<Self> {
         let existing = datastore.find_objuuids(&[("type", "sequence")])?;
 
-        if let Some(sqid) = sequuid {
-            if existing.contains(&sqid.to_string()) {
-                let sequence = get_sequence(&datastore, sqid)?;
-                let chunk_uuid = sequence.chunks[0].clone();
-                let chunk = get_chunk(&datastore, &chunk_uuid)?;
-                return Ok(Self {
-                    position: 0,
-                    chunk_position: 0,
-                    chunk_index: 0,
-                    chunk_changed: false,
-                    end_of_sequence: false,
-                    following_write: false,
-                    sequence_uuid: sqid.to_string(),
-                    sequence,
-                    chunk_uuid,
-                    chunk,
-                    datastore,
-                });
-            }
+        if let Some(sqid) = sequuid
+            && existing.contains(&sqid.to_string())
+        {
+            let sequence = get_sequence(&datastore, sqid)?;
+            let chunk_uuid = sequence.chunks[0].clone();
+            let chunk = get_chunk(&datastore, &chunk_uuid)?;
+            return Ok(Self {
+                position: 0,
+                chunk_position: 0,
+                chunk_index: 0,
+                chunk_changed: false,
+                end_of_sequence: false,
+                following_write: false,
+                sequence_uuid: sqid.to_string(),
+                sequence,
+                chunk_uuid,
+                chunk,
+                datastore,
+            });
         }
 
         let seq_id = sequuid

@@ -85,63 +85,63 @@ fn load_from_environment(store: &KVStore) -> Result<(), Box<dyn std::error::Erro
         store.commit("socket_host", v.as_str())?;
         println!("✓ Loaded AGT_HOST: {v}");
     }
-    if let Ok(v) = std::env::var("AGT_PORT") {
-        if let Ok(port) = v.parse::<u16>() {
-            store.commit("socket_port", port)?;
-            println!("✓ Loaded AGT_PORT: {v}");
-        }
+    if let Ok(v) = std::env::var("AGT_PORT")
+        && let Ok(port) = v.parse::<u16>()
+    {
+        store.commit("socket_port", port)?;
+        println!("✓ Loaded AGT_PORT: {v}");
     }
     if let Ok(v) = std::env::var("AGT_CLIENT_CONTROL_URL") {
         store.commit("client_control_url", v.as_str())?;
         println!("✓ Loaded AGT_CLIENT_CONTROL_URL: {v}");
     }
-    if let Ok(v) = std::env::var("AGT_WORKERS") {
-        if let Ok(w) = v.parse::<u32>() {
-            store.commit("workers", w)?;
-            println!("✓ Loaded AGT_WORKERS: {v}");
-        }
+    if let Ok(v) = std::env::var("AGT_WORKERS")
+        && let Ok(w) = v.parse::<u32>()
+    {
+        store.commit("workers", w)?;
+        println!("✓ Loaded AGT_WORKERS: {v}");
     }
-    if let Ok(v) = std::env::var("AGT_LOG_LEVEL_APP") {
-        if v.to_uppercase().parse::<LogLevel>().is_ok() {
-            store.commit("log_level_app", v.to_uppercase())?;
-            println!("✓ Loaded AGT_LOG_LEVEL_APP: {v}");
-        }
+    if let Ok(v) = std::env::var("AGT_LOG_LEVEL_APP")
+        && v.to_uppercase().parse::<LogLevel>().is_ok()
+    {
+        store.commit("log_level_app", v.to_uppercase())?;
+        println!("✓ Loaded AGT_LOG_LEVEL_APP: {v}");
     }
-    if let Ok(v) = std::env::var("AGT_LOG_LEVEL_API") {
-        if v.to_uppercase().parse::<LogLevel>().is_ok() {
-            store.commit("log_level_api", v.to_uppercase())?;
-            println!("✓ Loaded AGT_LOG_LEVEL_API: {v}");
-        }
+    if let Ok(v) = std::env::var("AGT_LOG_LEVEL_API")
+        && v.to_uppercase().parse::<LogLevel>().is_ok()
+    {
+        store.commit("log_level_api", v.to_uppercase())?;
+        println!("✓ Loaded AGT_LOG_LEVEL_API: {v}");
     }
-    if let Ok(v) = std::env::var("AGT_PEER_TIMEOUT_SECS") {
-        if let Ok(n) = v.parse::<u32>() {
-            store.commit("peer_timeout_secs", n)?;
-            println!("✓ Loaded AGT_PEER_TIMEOUT_SECS: {v}");
-        }
+    if let Ok(v) = std::env::var("AGT_PEER_TIMEOUT_SECS")
+        && let Ok(n) = v.parse::<u32>()
+    {
+        store.commit("peer_timeout_secs", n)?;
+        println!("✓ Loaded AGT_PEER_TIMEOUT_SECS: {v}");
     }
-    if let Ok(v) = std::env::var("AGT_PEER_REFRESH_SECS") {
-        if let Ok(n) = v.parse::<u32>() {
-            store.commit("peer_refresh_secs", n)?;
-            println!("✓ Loaded AGT_PEER_REFRESH_SECS: {v}");
-        }
+    if let Ok(v) = std::env::var("AGT_PEER_REFRESH_SECS")
+        && let Ok(n) = v.parse::<u32>()
+    {
+        store.commit("peer_refresh_secs", n)?;
+        println!("✓ Loaded AGT_PEER_REFRESH_SECS: {v}");
     }
-    if let Ok(v) = std::env::var("AGT_MAX_WEIGHT") {
-        if let Ok(n) = v.parse::<u32>() {
-            store.commit("max_weight", n)?;
-            println!("✓ Loaded AGT_MAX_WEIGHT: {v}");
-        }
+    if let Ok(v) = std::env::var("AGT_MAX_WEIGHT")
+        && let Ok(n) = v.parse::<u32>()
+    {
+        store.commit("max_weight", n)?;
+        println!("✓ Loaded AGT_MAX_WEIGHT: {v}");
     }
-    if let Ok(v) = std::env::var("AGT_TICKET_TIMEOUT_SECS") {
-        if let Ok(n) = v.parse::<u32>() {
-            store.commit("ticket_timeout_secs", n)?;
-            println!("✓ Loaded AGT_TICKET_TIMEOUT_SECS: {v}");
-        }
+    if let Ok(v) = std::env::var("AGT_TICKET_TIMEOUT_SECS")
+        && let Ok(n) = v.parse::<u32>()
+    {
+        store.commit("ticket_timeout_secs", n)?;
+        println!("✓ Loaded AGT_TICKET_TIMEOUT_SECS: {v}");
     }
-    if let Ok(v) = std::env::var("AGT_MESSAGE_TIMEOUT_SECS") {
-        if let Ok(n) = v.parse::<u32>() {
-            store.commit("message_timeout_secs", n)?;
-            println!("✓ Loaded AGT_MESSAGE_TIMEOUT_SECS: {v}");
-        }
+    if let Ok(v) = std::env::var("AGT_MESSAGE_TIMEOUT_SECS")
+        && let Ok(n) = v.parse::<u32>()
+    {
+        store.commit("message_timeout_secs", n)?;
+        println!("✓ Loaded AGT_MESSAGE_TIMEOUT_SECS: {v}");
     }
     let user_key_objuuid = std::env::var("AGT_USER_KEY_OBJUUID").ok();
     let user_key_passphrase = std::env::var("AGT_USER_KEY_PASSPHRASE").ok();

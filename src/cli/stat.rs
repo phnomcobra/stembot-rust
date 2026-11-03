@@ -69,8 +69,10 @@ pub async fn cmd_stat(
     for ticket in [&config_ticket, &peers_ticket, &routes_ticket, &keys_ticket] {
         if let Some(ref e) = ticket.error { eprintln!("{e}"); }
     }
-    if let ControlForm::GetKeyMetadata(f) = &keys_ticket.form {
-        if let Some(ref e) = f.error { eprintln!("{e}"); }
+    if let ControlForm::GetKeyMetadata(f) = &keys_ticket.form
+        && let Some(ref e) = f.error
+    {
+        eprintln!("{e}");
     }
     let key_metadata = match &keys_ticket.form {
         ControlForm::GetKeyMetadata(f) => f.metadata.clone().unwrap_or_default(),

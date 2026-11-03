@@ -138,10 +138,10 @@ pub fn pull_filtered_network_messages(
             break;
         }
         filtered.extend(filter_network_messages(request, messages)?);
-        if let Some(limit) = request.limit {
-            if filtered.len() as u64 >= limit {
-                break;
-            }
+        if let Some(limit) = request.limit
+            && filtered.len() as u64 >= limit
+        {
+            break;
         }
     }
     Ok(filtered)
@@ -246,18 +246,18 @@ pub async fn forward_network_message(message: NetworkMessage) -> Result<()> {
 
     // ── Try direct delivery ───────────────────────────────────────────────────
     let direct = peers.find(&[("agtuuid", dest.as_str()), ("url", "$!eq:null")])?;
-    if let Some(peer_obj) = direct.first() {
-        if let Some(url) = peer_obj.object.url.clone() {
-            let client = AgentClient::new(url.clone());
-            match client.send_network_message(message.clone()).await {
-                Ok(resp) => log_ack_error(&resp),
-                Err(e) => {
-                    log::error!("Failed to send to {}: {}", url, e);
-                    push_network_message(message)?;
-                }
+    if let Some(peer_obj) = direct.first()
+        && let Some(url) = peer_obj.object.url.clone()
+    {
+        let client = AgentClient::new(url.clone());
+        match client.send_network_message(message.clone()).await {
+            Ok(resp) => log_ack_error(&resp),
+            Err(e) => {
+                log::error!("Failed to send to {}: {}", url, e);
+                push_network_message(message)?;
             }
-            return Ok(());
         }
+        return Ok(());
     }
 
     // ── Find best gateway ─────────────────────────────────────────────────────
@@ -273,18 +273,18 @@ pub async fn forward_network_message(message: NetworkMessage) -> Result<()> {
 
     if let Some(ref gtwuuid) = best_gtwuuid {
         let gtw_peers = peers.find(&[("agtuuid", gtwuuid.as_str()), ("url", "$!eq:null")])?;
-        if let Some(peer_obj) = gtw_peers.first() {
-            if let Some(url) = peer_obj.object.url.clone() {
-                let client = AgentClient::new(url.clone());
-                match client.send_network_message(message.clone()).await {
-                    Ok(resp) => log_ack_error(&resp),
-                    Err(e) => {
-                        log::error!("Failed to send to gateway {}: {}", url, e);
-                        push_network_message(message)?;
-                    }
+        if let Some(peer_obj) = gtw_peers.first()
+            && let Some(url) = peer_obj.object.url.clone()
+        {
+            let client = AgentClient::new(url.clone());
+            match client.send_network_message(message.clone()).await {
+                Ok(resp) => log_ack_error(&resp),
+                Err(e) => {
+                    log::error!("Failed to send to gateway {}: {}", url, e);
+                    push_network_message(message)?;
                 }
-                return Ok(());
             }
+            return Ok(());
         }
     }
 
@@ -326,10 +326,10 @@ fn dest_of(msg: &NetworkMessage) -> String {
 
 /// Log the error field if the response is an Acknowledgement with an error.
 fn log_ack_error(resp: &NetworkMessage) {
-    if let NetworkMessage::Acknowledgement(ack) = resp {
-        if let Some(ref err) = ack.error {
-            log::error!("acknowledgement error: {}", err);
-        }
+    if let NetworkMessage::Acknowledgement(ack) = resp
+        && let Some(ref err) = ack.error
+    {
+        log::error!("acknowledgement error: {}", err);
     }
 }
 

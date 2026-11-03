@@ -13,6 +13,39 @@ pub const DEFAULT_CONNECTION_STR: &str = "default.sqlite";
 /// Mirrors Python's `RESERVED_ATTRIBUTES_NAMES` in `stembot/dao/document.py`.
 pub const RESERVED_ATTRIBUTES: &[&str] = &["limit"];
 
+// ── SQL statements ────────────────────────────────────────────────────────────
+//
+// Kept as standalone `.sql` files under `sql/` (rather than inline string
+// literals) so the schema and queries can be read, linted, and edited as SQL.
+// Statements reused by more than one function share a single file/constant.
+
+const SQL_SCHEMA: &str = include_str!("sql/schema.sql");
+const SQL_VACUUM: &str = include_str!("sql/vacuum.sql");
+
+const SQL_OBJECT_INSERT: &str = include_str!("sql/object_insert.sql");
+const SQL_OBJECT_UPSERT: &str = include_str!("sql/object_upsert.sql");
+const SQL_OBJECT_SELECT_VALUE: &str = include_str!("sql/object_select_value.sql");
+const SQL_OBJECT_SELECT_ALL_BY_COLLECTION: &str =include_str!("sql/object_select_all_by_collection.sql");
+const SQL_OBJECT_DELETE: &str = include_str!("sql/object_delete.sql");
+
+const SQL_ATTRIBUTE_SELECT_BY_COLLECTION: &str = include_str!("sql/attribute_select_by_collection.sql");
+const SQL_ATTRIBUTE_INSERT: &str = include_str!("sql/attribute_insert.sql");
+const SQL_ATTRIBUTE_DELETE: &str = include_str!("sql/attribute_delete.sql");
+
+const SQL_INDEX_UPSERT: &str = include_str!("sql/index_upsert.sql");
+const SQL_INDEX_SELECT_EQ: &str = include_str!("sql/index_select_eq.sql");
+const SQL_INDEX_SELECT_NOT_EQ: &str = include_str!("sql/index_select_not_eq.sql");
+const SQL_INDEX_SELECT_LIKE: &str = include_str!("sql/index_select_like.sql");
+const SQL_INDEX_SELECT_NOT_LIKE: &str = include_str!("sql/index_select_not_like.sql");
+const SQL_INDEX_SELECT_ALL_BY_ATTRIBUTE: &str = include_str!("sql/index_select_all_by_attribute.sql");
+const SQL_INDEX_DELETE_BY_ATTRIBUTE: &str = include_str!("sql/index_delete_by_attribute.sql");
+const SQL_INDEX_ENTRIES_SELECT: &str = include_str!("sql/index_entries_select.sql");
+
+const SQL_COLLECTION_INSERT: &str = include_str!("sql/collection_insert.sql");
+const SQL_COLLECTION_DELETE: &str = include_str!("sql/collection_delete.sql");
+const SQL_COLLECTION_SELECT_ALL: &str = include_str!("sql/collection_select_all.sql");
+const SQL_COLLECTION_OBJUUIDS_SELECT: &str = include_str!("sql/collection_objuuids_select.sql");
+
 /// Core SQLite-backed storage layer.  Every Collection and Object obtains a
 /// clone of a Document so they all share the same `Arc<Mutex<Connection>>`.
 #[derive(Clone)]
@@ -35,38 +68,7 @@ impl Document {
             Connection::open(connection_str)?
         };
 
-        conn.execute_batch("PRAGMA foreign_keys = ON;")?;
-        conn.execute_batch(
-        "CREATE TABLE IF NOT EXISTS TBL_COLLECTIONS (
-                COLUUID VARCHAR(36),
-                NAME    VARCHAR(64) UNIQUE NOT NULL,
-                PRIMARY KEY (COLUUID)
-             );
-             CREATE TABLE IF NOT EXISTS TBL_OBJECTS (
-                OBJUUID VARCHAR(36),
-                COLUUID VARCHAR(36),
-                VALUE   TEXT NOT NULL,
-                PRIMARY KEY (OBJUUID),
-                FOREIGN KEY (COLUUID) REFERENCES TBL_COLLECTIONS(COLUUID) ON DELETE CASCADE
-             );
-             CREATE TABLE IF NOT EXISTS TBL_ATTRIBUTES (
-                COLUUID   VARCHAR(36),
-                ATTRIBUTE VARCHAR(64),
-                PATH      VARCHAR(64),
-                PRIMARY KEY (COLUUID, ATTRIBUTE),
-                FOREIGN KEY (COLUUID) REFERENCES TBL_COLLECTIONS(COLUUID) ON DELETE CASCADE
-             );
-             CREATE TABLE IF NOT EXISTS TBL_INDEX (
-                OBJUUID   VARCHAR(36),
-                COLUUID   VARCHAR(36),
-                ATTRIBUTE VARCHAR(64),
-                VALUE     VARCHAR(64),
-                PRIMARY KEY (OBJUUID, ATTRIBUTE),
-                FOREIGN KEY (OBJUUID) REFERENCES TBL_OBJECTS(OBJUUID) ON DELETE CASCADE,
-                FOREIGN KEY (COLUUID, ATTRIBUTE)
-                    REFERENCES TBL_ATTRIBUTES(COLUUID, ATTRIBUTE) ON DELETE CASCADE
-             );",
-        )?;
+        conn.execute_batch(SQL_SCHEMA)?;
 
         Ok(Self {
             connection_str: connection_str.to_string(),
@@ -97,9 +99,7 @@ impl Document {
     // ── Maintenance ───────────────────────────────────────────────────────────
 
     pub fn vacuum(&self) -> Result<()> {
-        self.connection.lock().unwrap().execute_batch(
-            "VACUUM; PRAGMA shrink_memory;"
-        )?;
+        self.connection.lock().unwrap().execute_batch(SQL_VACUUM)?;
         Ok(())
     }
 
@@ -119,10 +119,7 @@ impl Document {
             map.insert("coluuid".into(), Value::String(coluuid.into()));
         }
         let conn = self.connection.lock().unwrap();
-        conn.execute(
-            "INSERT INTO TBL_OBJECTS (COLUUID, OBJUUID, VALUE) VALUES (?1, ?2, ?3);",
-            params![coluuid, objuuid, &obj.to_string()],
-        )?;
+        conn.execute(SQL_OBJECT_INSERT, params![coluuid, objuuid, &obj.to_string()],)?;
         Ok(())
     }
 
@@ -136,16 +133,11 @@ impl Document {
         let serialized = obj.to_string();
         let conn = self.connection.lock().unwrap();
 
-        conn.execute(
-            "INSERT OR REPLACE INTO TBL_OBJECTS (COLUUID, OBJUUID, VALUE) VALUES (?1, ?2, ?3);",
-            params![coluuid, objuuid, &serialized],
-        )?;
+        conn.execute(SQL_OBJECT_UPSERT, params![coluuid, objuuid, &serialized],)?;
 
         // Rebuild index
         let attributes: Vec<(String, String)> = {
-            let mut stmt = conn.prepare(
-                "SELECT ATTRIBUTE, PATH FROM TBL_ATTRIBUTES WHERE COLUUID = ?1;",
-            )?;
+            let mut stmt = conn.prepare(SQL_ATTRIBUTE_SELECT_BY_COLLECTION)?;
             let x: Vec<(String, String)> = stmt
                 .query_map(params![coluuid], |row| Ok((row.get(0)?, row.get(1)?)))?
                 .filter_map(|r| r.ok())
@@ -161,8 +153,7 @@ impl Document {
                         other => other.to_string(),
                     };
                     let _ = conn.execute(
-                        "INSERT OR REPLACE INTO TBL_INDEX \
-                         (OBJUUID, COLUUID, ATTRIBUTE, VALUE) VALUES (?1, ?2, ?3, ?4);",
+                        SQL_INDEX_UPSERT,
                         params![objuuid, coluuid, attribute, &val_str],
                     );
                 }
@@ -178,8 +169,7 @@ impl Document {
 
     pub fn get_object_value(&self, objuuid: &str) -> Result<Value> {
         let conn = self.connection.lock().unwrap();
-        let mut stmt =
-            conn.prepare("SELECT VALUE FROM TBL_OBJECTS WHERE OBJUUID = ?1;")?;
+        let mut stmt = conn.prepare(SQL_OBJECT_SELECT_VALUE)?;
         match stmt.query_row(params![objuuid], |row| row.get::<_, String>(0)) {
             Ok(text) => Ok(serde_json::from_str(&text)?),
             Err(rusqlite::Error::QueryReturnedNoRows) => {
@@ -191,10 +181,7 @@ impl Document {
 
     pub fn delete_object(&self, objuuid: &str) -> Result<()> {
         let conn = self.connection.lock().unwrap();
-        conn.execute(
-            "DELETE FROM TBL_OBJECTS WHERE OBJUUID = ?1;",
-            params![objuuid],
-        )?;
+        conn.execute(SQL_OBJECT_DELETE, params![objuuid])?;
         Ok(())
     }
 
@@ -215,10 +202,10 @@ impl Document {
         queries: &[(&str, &str)],
         limit: Option<usize>,
     ) -> Result<Vec<String>> {
-        if let Some(n) = limit {
-            if n < 1 {
-                return Err(anyhow!("limit must be >= 1, got {}", n));
-            }
+        if let Some(n) = limit
+            && n < 1
+        {
+            return Err(anyhow!("limit must be >= 1, got {}", n));
         }
 
         // Filter out reserved attribute names from queries
@@ -245,11 +232,9 @@ impl Document {
             let ids: Vec<String> = match operator {
                 Operator::Eq => {
                     let sql = if negation {
-                        "SELECT OBJUUID FROM TBL_INDEX \
-                         WHERE ATTRIBUTE = ?1 AND VALUE != ?2 AND COLUUID = ?3;"
+                        SQL_INDEX_SELECT_NOT_EQ
                     } else {
-                        "SELECT OBJUUID FROM TBL_INDEX \
-                         WHERE ATTRIBUTE = ?1 AND VALUE = ?2 AND COLUUID = ?3;"
+                        SQL_INDEX_SELECT_EQ
                     };
                     let mut stmt = conn.prepare(sql)?;
                     let ids: Vec<String> = stmt
@@ -261,11 +246,9 @@ impl Document {
                 Operator::Contains => {
                     let pat = format!("%{}%", subject);
                     let sql = if negation {
-                        "SELECT OBJUUID FROM TBL_INDEX \
-                         WHERE ATTRIBUTE = ?1 AND VALUE NOT LIKE ?2 AND COLUUID = ?3;"
+                        SQL_INDEX_SELECT_NOT_LIKE
                     } else {
-                        "SELECT OBJUUID FROM TBL_INDEX \
-                         WHERE ATTRIBUTE = ?1 AND VALUE LIKE ?2 AND COLUUID = ?3;"
+                        SQL_INDEX_SELECT_LIKE
                     };
                     let mut stmt = conn.prepare(sql)?;
                     let ids: Vec<String> = stmt
@@ -277,11 +260,9 @@ impl Document {
                 Operator::Startswith => {
                     let pat = format!("{}%", subject);
                     let sql = if negation {
-                        "SELECT OBJUUID FROM TBL_INDEX \
-                         WHERE ATTRIBUTE = ?1 AND VALUE NOT LIKE ?2 AND COLUUID = ?3;"
+                        SQL_INDEX_SELECT_NOT_LIKE
                     } else {
-                        "SELECT OBJUUID FROM TBL_INDEX \
-                         WHERE ATTRIBUTE = ?1 AND VALUE LIKE ?2 AND COLUUID = ?3;"
+                        SQL_INDEX_SELECT_LIKE
                     };
                     let mut stmt = conn.prepare(sql)?;
                     let ids: Vec<String> = stmt
@@ -293,11 +274,9 @@ impl Document {
                 Operator::Endswith => {
                     let pat = format!("%{}", subject);
                     let sql = if negation {
-                        "SELECT OBJUUID FROM TBL_INDEX \
-                         WHERE ATTRIBUTE = ?1 AND VALUE NOT LIKE ?2 AND COLUUID = ?3;"
+                        SQL_INDEX_SELECT_NOT_LIKE
                     } else {
-                        "SELECT OBJUUID FROM TBL_INDEX \
-                         WHERE ATTRIBUTE = ?1 AND VALUE LIKE ?2 AND COLUUID = ?3;"
+                        SQL_INDEX_SELECT_LIKE
                     };
                     let mut stmt = conn.prepare(sql)?;
                     let ids: Vec<String> = stmt
@@ -308,10 +287,7 @@ impl Document {
                 }
                 // GT, GTE, LT, LTE, Inside, Regex — fetch all and filter in Rust
                 _ => {
-                    let mut stmt = conn.prepare(
-                        "SELECT OBJUUID, VALUE FROM TBL_INDEX \
-                         WHERE ATTRIBUTE = ?1 AND COLUUID = ?2;",
-                    )?;
+                    let mut stmt = conn.prepare(SQL_INDEX_SELECT_ALL_BY_ATTRIBUTE)?;
                     let rows: Vec<(String, String)> = stmt
                         .query_map(params![attribute, coluuid], |row| {
                             Ok((row.get(0)?, row.get(1)?))
@@ -373,8 +349,7 @@ impl Document {
 
     pub fn list_attributes(&self, coluuid: &str) -> Result<Vec<(String, String)>> {
         let conn = self.connection.lock().unwrap();
-        let mut stmt = conn
-            .prepare("SELECT ATTRIBUTE, PATH FROM TBL_ATTRIBUTES WHERE COLUUID = ?1;")?;
+        let mut stmt = conn.prepare(SQL_ATTRIBUTE_SELECT_BY_COLLECTION)?;
         let result = stmt
             .query_map(params![coluuid], |row| Ok((row.get(0)?, row.get(1)?)))?
             .filter_map(|r| r.ok())
@@ -391,14 +366,13 @@ impl Document {
         }
         let conn = self.connection.lock().unwrap();
         conn.execute(
-            "INSERT INTO TBL_ATTRIBUTES (COLUUID, ATTRIBUTE, PATH) VALUES (?1, ?2, ?3);",
+            SQL_ATTRIBUTE_INSERT,
             params![coluuid, attribute, path],
         )?;
 
         // Index all existing objects for this new attribute
         let rows: Vec<(String, String)> = {
-            let mut stmt = conn
-                .prepare("SELECT OBJUUID, VALUE FROM TBL_OBJECTS WHERE COLUUID = ?1;")?;
+            let mut stmt = conn.prepare(SQL_OBJECT_SELECT_ALL_BY_COLLECTION)?;
             let x: Vec<(String, String)> = stmt
                 .query_map(params![coluuid], |row| Ok((row.get(0)?, row.get(1)?)))?
                 .filter_map(|r| r.ok())
@@ -407,18 +381,14 @@ impl Document {
         };
 
         for (objuuid, value_text) in rows {
-            if let Ok(value) = serde_json::from_str::<Value>(&value_text) {
-                if let Some(v) = read_key_at_path(path, &value) {
-                    let val_str = match &v {
-                        Value::String(s) => s.clone(),
-                        other => other.to_string(),
-                    };
-                    let _ = conn.execute(
-                        "INSERT OR REPLACE INTO TBL_INDEX \
-                         (OBJUUID, COLUUID, ATTRIBUTE, VALUE) VALUES (?1, ?2, ?3, ?4);",
-                        params![&objuuid, coluuid, attribute, &val_str],
-                    );
-                }
+            if let Ok(value) = serde_json::from_str::<Value>(&value_text)
+                && let Some(v) = read_key_at_path(path, &value)
+            {
+                let val_str = match &v {
+                    Value::String(s) => s.clone(),
+                    other => other.to_string(),
+                };
+                let _ = conn.execute(SQL_INDEX_UPSERT, params![&objuuid, coluuid, attribute, &val_str],);
             }
         }
         Ok(())
@@ -432,14 +402,8 @@ impl Document {
             ));
         }
         let conn = self.connection.lock().unwrap();
-        conn.execute(
-            "DELETE FROM TBL_ATTRIBUTES WHERE COLUUID = ?1 AND ATTRIBUTE = ?2;",
-            params![coluuid, attribute],
-        )?;
-        conn.execute(
-            "DELETE FROM TBL_INDEX WHERE ATTRIBUTE = ?1 AND COLUUID = ?2;",
-            params![attribute, coluuid],
-        )?;
+        conn.execute(SQL_ATTRIBUTE_DELETE, params![coluuid, attribute])?;
+        conn.execute(SQL_INDEX_DELETE_BY_ATTRIBUTE, params![attribute, coluuid])?;
         Ok(())
     }
 
@@ -448,25 +412,19 @@ impl Document {
     pub fn create_collection(&self, name: &str) -> Result<String> {
         let coluuid = Self::get_uuid();
         let conn = self.connection.lock().unwrap();
-        conn.execute(
-            "INSERT INTO TBL_COLLECTIONS (COLUUID, NAME) VALUES (?1, ?2);",
-            params![&coluuid, name],
-        )?;
+        conn.execute(SQL_COLLECTION_INSERT, params![&coluuid, name])?;
         Ok(coluuid)
     }
 
     pub fn delete_collection(&self, coluuid: &str) -> Result<()> {
         let conn = self.connection.lock().unwrap();
-        conn.execute(
-            "DELETE FROM TBL_COLLECTIONS WHERE COLUUID = ?1;",
-            params![coluuid],
-        )?;
+        conn.execute(SQL_COLLECTION_DELETE, params![coluuid])?;
         Ok(())
     }
 
     pub fn list_collections(&self) -> Result<HashMap<String, String>> {
         let conn = self.connection.lock().unwrap();
-        let mut stmt = conn.prepare("SELECT NAME, COLUUID FROM TBL_COLLECTIONS;")?;
+        let mut stmt = conn.prepare(SQL_COLLECTION_SELECT_ALL)?;
         let result = stmt
             .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
             .filter_map(|r| r.ok())
@@ -476,10 +434,21 @@ impl Document {
 
     pub fn list_collection_objects(&self, coluuid: &str) -> Result<Vec<String>> {
         let conn = self.connection.lock().unwrap();
-        let mut stmt =
-            conn.prepare("SELECT OBJUUID FROM TBL_OBJECTS WHERE COLUUID = ?1;")?;
+        let mut stmt = conn.prepare(SQL_COLLECTION_OBJUUIDS_SELECT)?;
         let result = stmt
             .query_map(params![coluuid], |row| row.get(0))?
+            .filter_map(|r| r.ok())
+            .collect();
+        Ok(result)
+    }
+
+    // ── Indexes ───────────────────────────────────────────────────────────────
+
+    pub fn list_index_entries(&self, coluuid: &str, attribute: &str) -> Result<Vec<(String, String)>> {
+        let conn = self.connection.lock().unwrap();
+        let mut stmt = conn.prepare(SQL_INDEX_ENTRIES_SELECT)?;
+        let result = stmt
+            .query_map(params![coluuid, attribute], |row| Ok((row.get(0)?, row.get(1)?)))?
             .filter_map(|r| r.ok())
             .collect();
         Ok(result)

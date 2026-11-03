@@ -173,12 +173,20 @@ impl<T: Serialize + DeserializeOwned + Default> Collection<T> {
         Ok(objects)
     }
 
+    /// Returns the object UUIDs matching the given queries.
     pub fn find_objuuids(&self, queries: &[(&str, &str)]) -> Result<Vec<String>> {
         self.document.find_objuuids(&self.coluuid, queries)
     }
 
+    /// Returns all object UUIDs in the collection.
     pub fn list_objuuids(&self) -> Result<Vec<String>> {
         self.document.list_collection_objects(&self.coluuid)
+    }
+
+    /// Returns all index entries for the given attribute in the collection.
+    /// Each entry is a tuple of `(object UUID, value)`.
+    pub fn list_index_entries(&self, attribute: &str) -> Result<Vec<(String, String)>> {
+        self.document.list_index_entries(&self.coluuid, attribute)
     }
 
     // ── Raw value access (used by the datastore module) ───────────────────────
@@ -202,6 +210,7 @@ impl<T: Serialize + DeserializeOwned + Default> Collection<T> {
 mod tests {
     use super::*;
     use serde::{Deserialize, Serialize};
+    use std::collections::HashMap;
 
     /// Mirrors the Python test `Item` / fruit fixture.
     #[derive(Debug, Serialize, Deserialize, Default, Clone)]
@@ -411,5 +420,42 @@ mod tests {
             None,
         ).unwrap();
         assert_eq!(items.len(), 2);
+    }
+
+    // ── Index entries ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_list_index_entries_returns_value_per_object() {
+        let col = make_collection();
+        let items = col.find(&[]).unwrap();
+        let expected: HashMap<String, String> = items
+            .iter()
+            .map(|item| (item.object.objuuid.clone().unwrap(), item.object.color.clone()))
+            .collect();
+
+        let entries = col.list_index_entries("color").unwrap();
+        assert_eq!(entries.len(), 4);
+
+        let actual: HashMap<String, String> = entries.into_iter().collect();
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_list_index_entries_numeric_attribute() {
+        let col = make_collection();
+        let mut values: Vec<String> = col
+            .list_index_entries("size")
+            .unwrap()
+            .into_iter()
+            .map(|(_, value)| value)
+            .collect();
+        values.sort();
+        assert_eq!(values, vec!["1", "2", "2", "4"]);
+    }
+
+    #[test]
+    fn test_list_index_entries_unindexed_attribute_is_empty() {
+        let col = make_collection();
+        assert!(col.list_index_entries("nonexistent").unwrap().is_empty());
     }
 }

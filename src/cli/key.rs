@@ -45,10 +45,10 @@ pub async fn cmd_set_user_key(
     if let Some(error) = ticket.error {
         return Err(anyhow!("{error}"));
     }
-    if let ControlForm::CreateUserKey(form) = ticket.form {
-        if let Some(error) = form.error {
-            return Err(anyhow!("{error}"));
-        }
+    if let ControlForm::CreateUserKey(form) = ticket.form
+        && let Some(error) = form.error
+    {
+        return Err(anyhow!("{error}"));
     }
     println!("User key '{objuuid}' set on agent {dst_agtuuid}");
     Ok(())

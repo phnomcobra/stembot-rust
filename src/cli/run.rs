@@ -35,8 +35,10 @@ pub async fn cmd_run(
     if let ControlForm::SyncProcess(ref f) = ticket.form {
         if let Some(ref out) = f.stdout { print!("{}", out.trim_end_matches('\n')); }
         if let Some(ref err) = f.stderr { eprint!("{}", err.trim_end_matches('\n')); }
-        if let Some(status) = f.status {
-            if status != 0 { process::exit(status as i32); }
+        if let Some(status) = f.status
+            && status != 0
+        {
+            process::exit(status as i32);
         }
     }
 

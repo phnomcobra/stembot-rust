@@ -155,13 +155,16 @@ async fn bench_run(
     };
     let (out_elapsed, out_ok, out_bw) = calculate(&out_checks);
     let (in_elapsed, in_ok, in_bw) = calculate(&in_checks);
+    let elapsed_col = format!("{out_elapsed:.3}s / {in_elapsed:.3}s");
+    let ok_col = format!("{out_ok}:{concurrency} / {in_ok}:{concurrency}");
+    let bandwidth_col = format!("{} / {}", format_bandwidth(out_bw), format_bandwidth(in_bw));
     println!(
         "   {:<23} {:<12} {:<17} {:<10} {}",
-        format!("{out_elapsed:.3}s / {in_elapsed:.3}s"),
+        elapsed_col,
         format_bytes(((out_ok + in_ok) * size) as f64),
-        format!("{out_ok}:{concurrency} / {in_ok}:{concurrency}"),
+        ok_col,
         format_bytes(size as f64),
-        format!("{} / {}", format_bandwidth(out_bw), format_bandwidth(in_bw)),
+        bandwidth_col,
     );
 }
 
@@ -178,7 +181,7 @@ pub async fn cmd_bench(client: Arc<AgentClient>, agtuuid: String, timeout: u64) 
     );
     println!("{}", "-".repeat(76));
 
-    let sizes: Vec<usize> = (0..21).map(|x| (1 * KB) << x).collect();
+    let sizes: Vec<usize> = (0..21).map(|x| KB << x).collect();
     let concurrencies: Vec<usize> = (0..5).map(|x| 1 << x).collect();
 
     for size in &sizes {

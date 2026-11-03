@@ -69,10 +69,10 @@ pub fn sync_process(mut form: SyncProcess) -> SyncProcess {
 
     let watchdog = thread::spawn(move || {
         thread::sleep(Duration::from_secs_f64(timeout_secs));
-        if let Ok(mut guard) = child_arc_watchdog.lock() {
-            if let Some(ref mut c) = *guard {
-                let _ = c.kill();
-            }
+        if let Ok(mut guard) = child_arc_watchdog.lock()
+            && let Some(ref mut c) = *guard
+        {
+            let _ = c.kill();
         }
     });
 

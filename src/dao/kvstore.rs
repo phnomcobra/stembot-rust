@@ -133,8 +133,8 @@ mod tests {
     #[test]
     fn test_commit_and_get_float() {
         let store = make_store();
-        store.commit("key", json!(3.14)).unwrap();
-        assert_eq!(store.get("key", None).unwrap(), json!(3.14));
+        store.commit("key", json!(2.5)).unwrap();
+        assert_eq!(store.get("key", None).unwrap(), json!(2.5));
     }
 
     #[test]

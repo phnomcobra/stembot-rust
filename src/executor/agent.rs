@@ -16,9 +16,10 @@
 
 use aes::Aes256;
 use anyhow::{anyhow, Result};
-use eax::aead::{Aead, AeadCore, KeyInit};
+use eax::aead::array::Array;
+use eax::aead::{Aead, KeyInit};
 use eax::Eax;
-use rand::rngs::OsRng;
+use rand::Rng;
 
 use crate::models::control::{ControlForm, ControlFormTicket};
 use crate::models::network::NetworkMessage;
@@ -35,7 +36,9 @@ type Aes256Eax = Eax<Aes256>;
 pub(crate) fn encrypt(key: &[u8; 32], plaintext: &[u8]) -> Result<([u8; 16], Vec<u8>, Vec<u8>)> {
     let cipher = Aes256Eax::new_from_slice(key).map_err(|e| anyhow!("bad key length: {e:?}"))?;
 
-    let nonce = Aes256Eax::generate_nonce(&mut OsRng);
+    let mut nonce_arr = [0u8; 16];
+    rand::rng().fill_bytes(&mut nonce_arr);
+    let nonce = Array::from(nonce_arr);
 
     // RustCrypto AEAD trait appends the 16-byte MAC tag to the ciphertext.
     let ct_and_tag = cipher
@@ -43,9 +46,6 @@ pub(crate) fn encrypt(key: &[u8; 32], plaintext: &[u8]) -> Result<([u8; 16], Vec
         .map_err(|e| anyhow!("encryption failed: {e:?}"))?;
 
     let (ct, tag) = ct_and_tag.split_at(ct_and_tag.len() - 16);
-
-    let mut nonce_arr = [0u8; 16];
-    nonce_arr.copy_from_slice(&nonce);
 
     Ok((nonce_arr, tag.to_vec(), ct.to_vec()))
 }
@@ -65,9 +65,10 @@ pub(crate) fn decrypt(
     let mut ct_with_tag = ciphertext.to_vec();
     ct_with_tag.extend_from_slice(tag);
 
-    let nonce_ga = eax::aead::generic_array::GenericArray::from_slice(nonce);
+    let nonce_ga =
+        Array::try_from(nonce).map_err(|_| anyhow!("invalid nonce length: expected 16 bytes"))?;
     cipher
-        .decrypt(nonce_ga, ct_with_tag.as_slice())
+        .decrypt(&nonce_ga, ct_with_tag.as_slice())
         .map_err(|_| anyhow!("decryption or MAC verification failed"))
 }
 

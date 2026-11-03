@@ -321,7 +321,7 @@ impl File {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::RngCore;
+    use rand::Rng;
 
     fn make_datastore() -> Datastore {
         let conn = format!("file:{}?mode=memory&cache=shared", uuid::Uuid::new_v4());
@@ -344,7 +344,7 @@ mod tests {
     #[test]
     fn test_file_write_read_16b() {
         let mut data_in = vec![0u8; 16];
-        rand::thread_rng().fill_bytes(&mut data_in);
+        rand::rng().fill_bytes(&mut data_in);
         let data_out = round_trip(&data_in);
         assert_eq!(sha256::digest(data_in.as_slice()), sha256::digest(data_out.as_slice()));
     }
@@ -352,7 +352,7 @@ mod tests {
     #[test]
     fn test_file_write_read_chunk_size() {
         let mut data_in = vec![0u8; CHUNK_SIZE];
-        rand::thread_rng().fill_bytes(&mut data_in);
+        rand::rng().fill_bytes(&mut data_in);
         let data_out = round_trip(&data_in);
         assert_eq!(sha256::digest(data_in.as_slice()), sha256::digest(data_out.as_slice()));
     }
@@ -360,7 +360,7 @@ mod tests {
     #[test]
     fn test_file_write_read_70k() {
         let mut data_in = vec![0u8; 70 * 1024];
-        rand::thread_rng().fill_bytes(&mut data_in);
+        rand::rng().fill_bytes(&mut data_in);
         let data_out = round_trip(&data_in);
         assert_eq!(sha256::digest(data_in.as_slice()), sha256::digest(data_out.as_slice()));
     }
@@ -368,7 +368,7 @@ mod tests {
     #[test]
     fn test_file_write_read_1m() {
         let mut data_in = vec![0u8; 1024 * 1024];
-        rand::thread_rng().fill_bytes(&mut data_in);
+        rand::rng().fill_bytes(&mut data_in);
         let data_out = round_trip(&data_in);
         assert_eq!(sha256::digest(data_in.as_slice()), sha256::digest(data_out.as_slice()));
     }

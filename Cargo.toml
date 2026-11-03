@@ -25,21 +25,21 @@ log = "0.4.35"
 reqwest = { version = "0.13.5", default-features = false }
 serde = { version = "1.0.229", features = ["derive"] }
 tokio = { version = "1.54.1", features = ["macros", "rt-multi-thread", "time"] }
-rand = "0.8.6"
+rand = "0.10.3"
 sha256 = "1.6.0"
-sha2 = "0.10"
-pbkdf2 = "0.12"
+sha2 = "0.11.1"
+pbkdf2 = "0.13.0"
 tracing-actix-web = "0.7.25"
 serde_json = "1.0.154"
 anyhow = "1.0.104"
-rusqlite = { version = "0.39.0", features = ["bundled"] }
+rusqlite = { version = "0.41.1", features = ["bundled"] }
 regex = "1.13.1"
 uuid = { version = "1.29.0", default-features = false, features = ["v4", "fast-rng", "std"] }
-base64 = "0.22"
+base64 = "0.23.1"
 flate2 = "1.1.10"
 md5 = "0.8.1"
-aes = "0.8"
-eax = "0.5"
+aes = "0.9.4"
+eax = "0.6.1"
 hex = "0.4.3"
 keyring = "4.2.0"
 

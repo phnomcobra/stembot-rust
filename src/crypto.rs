@@ -16,7 +16,7 @@ use std::{
 use anyhow::{anyhow, Context, Result};
 use base64::Engine;
 use pbkdf2::pbkdf2_hmac;
-use rand::{rngs::OsRng, RngCore};
+use rand::Rng;
 use sha2::Sha256;
 
 use crate::{
@@ -108,7 +108,7 @@ impl KeyManager {
     /// Automatic keys are valid for 90 days.
     pub fn create_auto_key(&self) -> Result<String> {
         let mut raw_key = [0u8; 32];
-        OsRng.fill_bytes(&mut raw_key);
+        rand::rng().fill_bytes(&mut raw_key);
         let object = self.keys.get_object(None)?;
         let id = object.objuuid.clone();
         self.store_key(&id, raw_key, KeyType::Auto, None, AUTO_KEY_LIFETIME_SECS)?;
@@ -400,7 +400,7 @@ fn load_or_create_file_master_key_at(path: &Path) -> Result<[u8; 32]> {
     }
 
     let mut key = [0u8; 32];
-    OsRng.fill_bytes(&mut key);
+    rand::rng().fill_bytes(&mut key);
     let mut options = OpenOptions::new();
     options.write(true).create_new(true);
     #[cfg(unix)]

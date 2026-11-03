@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.2] - 2026-11-03
+
+### Changed
+- Resolved all `cargo clippy` lints across the crate: collapsed nested `if let` chains using edition 2024 let-chains, removed needless borrows and an unnecessary `bool::then` closure, replaced `format!` nested in `println!` with pre-formatted locals, dropped a no-op `1 * KB` identity operation, and replaced three single-literal `concat!` macro uses with plain string literals.
+- Upgraded non-breaking dependencies to their latest compatible releases: `clap`, `env_logger`, `log`, `reqwest`, `serde`, `tokio`, `tracing-actix-web`, `serde_json`, `anyhow`, `regex`, `uuid`, `flate2`, `md5`, and `hex`.
+- Upgraded breaking (pre-1.0, semver-incompatible) dependencies: `rand` 0.8 → 0.10, `sha2` 0.10 → 0.11, `pbkdf2` 0.12 → 0.13, `rusqlite` 0.39 → 0.41, `base64` 0.22 → 0.23, `aes` 0.8 → 0.9, and `eax` 0.5 → 0.6. Migrated key/nonce generation off the removed `rand::rngs::OsRng` and `eax`/`aes` `generic-array` APIs onto `rand::rng()` and `eax::aead::array::Array`; verified unchanged wire-level crypto behavior (AES-256-EAX ciphertext/tag layout, PBKDF2-HMAC-SHA256 key derivation) against existing cross-implementation test fixtures.
+
 ## [3.0.1] - 2026-10-23
 
 ### Fixed
